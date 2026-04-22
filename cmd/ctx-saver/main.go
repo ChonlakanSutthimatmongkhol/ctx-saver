@@ -23,7 +23,10 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -72,10 +75,17 @@ func run() error {
 	}
 	defer st.Close()
 
+	// ── Signal-aware context ───────────────────────────────────────────────────
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
 	// Clean up expired outputs at startup (non-fatal if it fails).
-	if err := st.Cleanup(context.Background(), projectPath, cfg.Storage.RetentionDays); err != nil {
-		slog.Warn("cleanup failed", "error", err)
+	if err := st.Cleanup(ctx, projectPath, cfg.Storage.RetentionDays); err != nil {
+		slog.Warn("startup cleanup failed", "error", err)
 	}
+
+	// ── Auto-cleanup background goroutine ──────────────────────────────────────
+	go runPeriodicCleanup(ctx, st, projectPath, cfg.Storage.RetentionDays)
 
 	// ── Sandbox ────────────────────────────────────────────────────────────────
 	sb := sandbox.NewSubprocess(cfg.DenyCommands)
@@ -85,10 +95,28 @@ func run() error {
 
 	slog.Info("ctx-saver starting", "project", projectPath, "data_dir", cfg.Storage.DataDir)
 
-	if err := srv.Run(context.Background(), &mcp.StdioTransport{}); err != nil {
+	if err := srv.Run(ctx, &mcp.StdioTransport{}); err != nil {
 		return fmt.Errorf("MCP server error: %w", err)
 	}
 	return nil
+}
+
+// runPeriodicCleanup deletes expired outputs every hour until ctx is cancelled.
+func runPeriodicCleanup(ctx context.Context, st store.Store, projectPath string, retentionDays int) {
+	ticker := time.NewTicker(time.Hour)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if err := st.Cleanup(ctx, projectPath, retentionDays); err != nil {
+				slog.Warn("periodic cleanup failed", "error", err)
+			} else {
+				slog.Debug("periodic cleanup completed")
+			}
+		}
+	}
 }
 
 // setupLogger configures structured logging to the file specified in cfg.
