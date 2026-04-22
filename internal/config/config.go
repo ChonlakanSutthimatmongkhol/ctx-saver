@@ -8,6 +8,18 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// ResolveDataDir turns a relative DataDir into an absolute path anchored at
+// projectPath and fills in the log file default when not set by the user.
+// Call this in main.go after both cfg and projectPath are known.
+func ResolveDataDir(cfg *Config, projectPath string) {
+	if !filepath.IsAbs(cfg.Storage.DataDir) {
+		cfg.Storage.DataDir = filepath.Join(projectPath, cfg.Storage.DataDir)
+	}
+	if cfg.Logging.File == "" {
+		cfg.Logging.File = filepath.Join(cfg.Storage.DataDir, "server.log")
+	}
+}
+
 // Config holds all runtime configuration for ctx-saver.
 type Config struct {
 	Sandbox      SandboxConfig  `yaml:"sandbox"`
@@ -45,9 +57,10 @@ type LoggingConfig struct {
 }
 
 // Default returns a Config populated with safe defaults.
+// DataDir defaults to ".ctx-saver" — a relative path resolved against the project
+// working directory at startup (see main.go).  Set an absolute path in
+// ~/.config/ctx-saver/config.yaml to revert to a central store.
 func Default() *Config {
-	home, _ := os.UserHomeDir()
-	dataDir := filepath.Join(home, ".local", "share", "ctx-saver")
 	return &Config{
 		Sandbox: SandboxConfig{
 			Type:           "subprocess",
@@ -55,7 +68,7 @@ func Default() *Config {
 			UseSRT:         false,
 		},
 		Storage: StorageConfig{
-			DataDir:         dataDir,
+			DataDir:         ".ctx-saver",
 			RetentionDays:   14,
 			MaxOutputSizeMB: 50,
 		},
@@ -66,7 +79,7 @@ func Default() *Config {
 		},
 		Logging: LoggingConfig{
 			Level: "info",
-			File:  filepath.Join(dataDir, "server.log"),
+			File:  "", // resolved to <DataDir>/server.log after projectPath is known
 		},
 		DenyCommands: []string{
 			"rm -rf /",

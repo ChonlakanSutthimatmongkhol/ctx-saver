@@ -51,8 +51,16 @@ func NewSQLiteStore(dataDir, projectPath string) (*SQLiteStore, error) {
 	return &SQLiteStore{db: db}, nil
 }
 
-// dbPath returns the SQLite file path for a project, derived from a SHA-256 of projectPath.
+// dbPath returns the SQLite file path.
+// When dataDir is already project-specific (the default .ctx-saver/ layout) the
+// file is simply outputs.db.  A central shared store (absolute dataDir shared
+// across projects) uses a SHA-256-derived name to avoid collisions.
 func dbPath(dataDir, projectPath string) string {
+	// Heuristic: if the directory itself encodes the project (i.e. its basename is
+	// ".ctx-saver"), use a human-readable filename.
+	if filepath.Base(dataDir) == ".ctx-saver" {
+		return filepath.Join(dataDir, "outputs.db")
+	}
 	h := sha256.Sum256([]byte(projectPath))
 	name := hex.EncodeToString(h[:8]) + ".db" // 16 hex chars
 	return filepath.Join(dataDir, name)

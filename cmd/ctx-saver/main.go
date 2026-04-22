@@ -68,6 +68,9 @@ func run() error {
 		return fmt.Errorf("determining working directory: %w", err)
 	}
 
+	// Resolve relative DataDir (default: .ctx-saver) against the project root.
+	config.ResolveDataDir(cfg, projectPath)
+
 	// ── Storage ────────────────────────────────────────────────────────────────
 	st, err := store.NewSQLiteStore(cfg.Storage.DataDir, projectPath)
 	if err != nil {
