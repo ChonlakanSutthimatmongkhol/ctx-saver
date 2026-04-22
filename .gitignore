@@ -1,0 +1,11 @@
+# Build output
+bin/
+
+# Per-project ctx-saver data (SQLite DB + logs)
+.ctx-saver/
+
+# Test coverage
+coverage.out
+
+# macOS
+.DS_Store
