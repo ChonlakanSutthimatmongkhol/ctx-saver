@@ -3,7 +3,7 @@
 #
 # Usage:
 #   ./scripts/install-hooks.sh claude    # → ~/.claude/settings.json
-#   ./scripts/install-hooks.sh copilot  # → .vscode/mcp.json  (current dir)
+#   ./scripts/install-hooks.sh copilot  # → .vscode/mcp.json (server only; current dir)
 #
 # Requirements: jq  (brew install jq / apt-get install jq)
 set -euo pipefail
@@ -97,24 +97,13 @@ case "$PLATFORM" in
     PATCH=$(jq -n --arg bin "$CTX_BIN" '{
       "servers": {
         "ctx-saver": {"command": $bin}
-      },
-      "hooks": {
-        "SessionStart": [
-          {
-            "hooks": [{"type": "command", "command": ($bin + " hook sessionstart")}]
-          }
-        ],
-        "PostToolUse": [
-          {
-            "matcher": ".*",
-            "hooks": [{"type": "command", "command": ($bin + " hook posttooluse")}]
-          }
-        ]
       }
     }')
-    echo "Installing ctx-saver hooks for VS Code Copilot → $TARGET"
+    echo "Installing ctx-saver MCP server for VS Code Copilot → $TARGET"
     merge_json "$PATCH" "$TARGET"
-    echo "Done. Reload VS Code to activate the hooks."
+    echo "Done. Reload VS Code to activate the MCP server."
+    echo "Note: VS Code mcp.json schema currently does not allow a top-level 'hooks' key."
+    echo "      Use Claude Code for PreToolUse/PostToolUse/SessionStart hook execution."
     ;;
 
   *)

@@ -3,7 +3,7 @@
 #
 # Usage:
 #   ./scripts/uninstall-hooks.sh claude    # → removes hooks from ~/.claude/settings.json
-#   ./scripts/uninstall-hooks.sh copilot  # → removes hooks from .vscode/mcp.json
+#   ./scripts/uninstall-hooks.sh copilot  # → no-op for hooks (schema does not support hooks)
 #
 # Requirements: jq  (brew install jq / apt-get install jq)
 set -euo pipefail
@@ -40,10 +40,8 @@ case "$PLATFORM" in
     echo "Done."
     ;;
   copilot)
-    TARGET="${PWD}/.vscode/mcp.json"
-    echo "Removing ctx-saver hooks from VS Code Copilot → $TARGET"
-    remove_hooks "$TARGET"
-    echo "Done."
+    echo "VS Code Copilot mcp.json does not support a top-level 'hooks' key."
+    echo "Nothing to remove for hooks on Copilot."
     ;;
   *)
     echo "Usage: $0 <platform>"

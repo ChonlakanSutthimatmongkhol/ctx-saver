@@ -3,28 +3,5 @@
     "ctx-saver": {
       "command": "ctx-saver"
     }
-  },
-  "hooks": {
-    "SessionStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "ctx-saver hook sessionstart"
-          }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": ".*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "ctx-saver hook posttooluse"
-          }
-        ]
-      }
-    ]
   }
 }

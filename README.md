@@ -79,7 +79,7 @@ Hooks enable automatic routing of large-output commands and session history rest
 # Claude Code
 ./scripts/install-hooks.sh claude
 
-# VS Code Copilot (run from your project root)
+# VS Code Copilot (run from your project root; installs MCP server only)
 ./scripts/install-hooks.sh copilot
 ```
 
@@ -92,7 +92,7 @@ git clone --depth 1 https://github.com/ChonlakanSutthimatmongkhol/ctx-saver.git 
 # Claude Code hooks
 "$tmp/scripts/install-hooks.sh" claude
 
-# VS Code Copilot hooks (run in your project root)
+# VS Code Copilot server entry (run in your project root)
 cd /path/to/your/project
 "$tmp/scripts/install-hooks.sh" copilot
 
@@ -100,6 +100,15 @@ rm -rf "$tmp"
 ```
 
 The script detects the binary path automatically, backs up your existing config, and merges the hooks JSON — it will not overwrite unrelated settings. `jq` is required (`brew install jq` / `apt-get install jq`).
+
+For VS Code Copilot, `.vscode/mcp.json` currently accepts `servers` but rejects a top-level `hooks` key.
+
+In short:
+- Copilot can use `ctx-saver` MCP tools normally
+- Copilot does not run lifecycle hooks automatically (`pretooluse`, `posttooluse`, `sessionstart`)
+- Automatic hooks are currently supported via Claude Code only (`~/.claude/settings.json`)
+
+Note: You can still run `ctx-saver hook <event>` manually for one-off testing.
 
 To remove hooks:
 ```bash
