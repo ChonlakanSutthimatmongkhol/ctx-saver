@@ -170,9 +170,8 @@ Retrieve the complete text of a stored output, optionally restricted to a line r
 ## Storage Location
 
 ```
-<project-root>/.ctx-saver/
-├── outputs.db    ← SQLite DB (all outputs + FTS5 index)
-└── server.log
+~/.local/share/ctx-saver/<project-hash>.db   ← SQLite DB (all outputs + FTS5 index)
+~/.local/share/ctx-saver/server.log
 ```
 
-Delete all stored outputs: `rm -rf .ctx-saver/`
+Delete all stored outputs: `rm -rf ~/.local/share/ctx-saver/`

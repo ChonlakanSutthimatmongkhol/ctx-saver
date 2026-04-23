@@ -123,12 +123,11 @@ Fetch via `ctx_execute` with the `atlassian` CLI, then search the stored result:
 
 Data is stored per-project at:
 ```
-<project-root>/.ctx-saver/
-├── outputs.db    ← SQLite (all stored outputs + FTS5 index)
-└── server.log
+~/.local/share/ctx-saver/<project-hash>.db   ← SQLite (all stored outputs + FTS5 index)
+~/.local/share/ctx-saver/server.log
 ```
 
-Delete with `rm -rf .ctx-saver/` to clear all stored outputs.
+Delete a project's DB with `rm ~/.local/share/ctx-saver/<hash>.db` or wipe all with `rm -rf ~/.local/share/ctx-saver/`.
 
 ---
 
