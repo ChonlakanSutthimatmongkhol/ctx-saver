@@ -83,6 +83,22 @@ Hooks enable automatic routing of large-output commands and session history rest
 ./scripts/install-hooks.sh copilot
 ```
 
+If you installed via `go install` and did not clone this repository, use a temporary shallow clone to run the hook installer:
+
+```bash
+tmp="$(mktemp -d)"
+git clone --depth 1 https://github.com/ChonlakanSutthimatmongkhol/ctx-saver.git "$tmp"
+
+# Claude Code hooks
+"$tmp/scripts/install-hooks.sh" claude
+
+# VS Code Copilot hooks (run in your project root)
+cd /path/to/your/project
+"$tmp/scripts/install-hooks.sh" copilot
+
+rm -rf "$tmp"
+```
+
 The script detects the binary path automatically, backs up your existing config, and merges the hooks JSON — it will not overwrite unrelated settings. `jq` is required (`brew install jq` / `apt-get install jq`).
 
 To remove hooks:
