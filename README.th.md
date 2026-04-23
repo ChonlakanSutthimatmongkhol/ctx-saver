@@ -58,6 +58,9 @@ claude mcp add ctx-saver -- $(go env GOPATH)/bin/ctx-saver
 }
 ```
 
+> **ผู้ใช้ตัวเลือก A** (`go install`): เปลี่ยน path ด้านบนเป็น `$(go env GOPATH)/bin/ctx-saver`
+> หรือจะรัน `./scripts/install-hooks.sh copilot` ก็ได้ — script จะตรวจหา path ที่ถูกต้องอัตโนมัติ
+
 หรือตั้งค่าแบบ global ใน VS Code `settings.json`:
 ```json
 {

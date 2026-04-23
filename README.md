@@ -58,6 +58,9 @@ claude mcp add ctx-saver -- $(go env GOPATH)/bin/ctx-saver
 }
 ```
 
+> **Option A users** (`go install`): replace the path above with `$(go env GOPATH)/bin/ctx-saver`.
+> Alternatively, run `./scripts/install-hooks.sh copilot` — it detects the correct path automatically.
+
 Or globally in VS Code `settings.json`:
 ```json
 {
