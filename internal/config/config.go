@@ -55,8 +55,8 @@ type StorageConfig struct {
 type SummaryConfig struct {
 	HeadLines               int      `yaml:"head_lines"`
 	TailLines               int      `yaml:"tail_lines"`
-	AutoIndexThresholdBytes int      `yaml:"auto_index_threshold_bytes"` // outputs larger than this are stored
-	SmartFormat             bool     `yaml:"smart_format"`               // enable format-aware summariser (default: true)
+	AutoIndexThresholdBytes int      `yaml:"auto_index_threshold_bytes"`   // outputs larger than this are stored
+	SmartFormat             bool     `yaml:"smart_format"`                 // enable format-aware summariser (default: true)
 	EnabledFormatters       []string `yaml:"enabled_formatters,omitempty"` // nil = all enabled
 }
 
