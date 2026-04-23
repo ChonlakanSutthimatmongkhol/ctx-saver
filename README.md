@@ -61,6 +61,27 @@ Or globally in VS Code `settings.json`:
 
 Verify: Command Palette → **MCP: List Servers** — should show `ctx-saver` with 5 tools.
 
+### Install hooks (optional but recommended)
+
+Hooks enable automatic routing of large-output commands and session history restoration.
+
+```bash
+# Claude Code
+./scripts/install-hooks.sh claude
+
+# VS Code Copilot (run from your project root)
+./scripts/install-hooks.sh copilot
+```
+
+The script detects the binary path automatically, backs up your existing config, and merges the hooks JSON — it will not overwrite unrelated settings. `jq` is required (`brew install jq` / `apt-get install jq`).
+
+To remove hooks:
+```bash
+./scripts/uninstall-hooks.sh claude   # or copilot
+```
+
+See [Hook behaviour](#hooks) below for what each hook does.
+
 ## Tools
 
 | Tool | Purpose |
@@ -110,11 +131,38 @@ logging:
   level: info
   file: ~/.local/share/ctx-saver/server.log
 
+hooks:
+  session_history_limit: 10   # max events injected into SessionStart context
+
 deny_commands:
   - "rm -rf /"
   - "sudo *"
   - "dd if=*"
 ```
+
+## Hooks
+
+Hooks run as lightweight subprocesses alongside the AI agent.  They share the same binary (`ctx-saver hook <event>`) so no extra installation is needed after `make install`.
+
+| Hook | Event | What it does |
+|------|-------|-------------|
+| PreToolUse | Before any shell/bash tool call | Blocks dangerous commands (`rm -rf`, pipe-to-shell, `eval`, `sudo -s`); redirects large-output commands (`curl`, `wget`, `cat *.log`, `find`, `journalctl`) to equivalent `ctx_execute` calls |
+| PostToolUse | After every tool call | Records a summary of the tool call to the per-project SQLite DB for session restoration |
+| SessionStart | At the start of every session | Injects routing rules and recent session history (up to `hooks.session_history_limit` deduplicated events) into the model's context |
+
+### Safe curl variants
+
+`curl --version`, `curl -I`, `curl --head`, and `curl -o /dev/null` are **not** redirected — only requests that are likely to return large bodies are sent through `ctx_execute`.
+
+### Dangerous command patterns blocked by PreToolUse
+
+- `rm -rf` / `rm -fr` / any `rm -[rRfF]+` variant
+- `find / … -delete`
+- Redirect to raw disk (`> /dev/sda`, `> /dev/nvme0`)
+- Pipe to shell interpreter (`curl … | bash`, `wget … | sh`, `| zsh`, …)
+- Any form of `eval`
+- `sudo -s`, `sudo rm`, `sudo dd`
+- Reads of credential files (`.env`, `id_rsa`, `.pem`, `.key`)
 
 ## Build
 
@@ -144,14 +192,15 @@ internal/sandbox/              execution interface (subprocess + srt stub)
 internal/store/                SQLite + FTS5 storage layer
 internal/summary/              head+tail+stats summariser
 internal/handlers/             one file per MCP tool
+internal/hooks/                PreToolUse / PostToolUse / SessionStart hooks
 internal/server/               MCP server wiring
 tests/                         integration tests + testdata
-scripts/                       install.sh, benchmark.sh
-configs/                       setup guides per platform
+scripts/                       install.sh, install-hooks.sh, uninstall-hooks.sh, benchmark.sh
+configs/                       setup guides and hook config templates per platform
 ```
 
 ## Roadmap
 
-- **Phase 1 (current):** subprocess sandbox, SQLite FTS5, 5 MCP tools
+- **Phase 1:** subprocess sandbox, SQLite FTS5, 5 MCP tools
 - **Phase 2:** Anthropic `srt` OS-level sandbox (toggle via `sandbox.use_srt: true`)
-- **Phase 3:** Secret scanner hook, encrypted SQLite option
+- **Phase 3 (current):** Lifecycle hooks — routing enforcement, session capture, context restoration

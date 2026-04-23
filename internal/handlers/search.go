@@ -12,9 +12,9 @@ import (
 
 // SearchInput is the typed input for ctx_search.
 type SearchInput struct {
-	Queries           []string `json:"queries"                      jsonschema:"list of search queries to run against indexed outputs"`
-	OutputID          string   `json:"output_id,omitempty"          jsonschema:"optional output ID to limit search to a specific output"`
-	MaxResultsPerQuery int     `json:"max_results_per_query,omitempty" jsonschema:"maximum results per query (default: 5)"`
+	Queries            []string `json:"queries"                      jsonschema:"list of search queries to run against indexed outputs"`
+	OutputID           string   `json:"output_id,omitempty"          jsonschema:"optional output ID to limit search to a specific output"`
+	MaxResultsPerQuery int      `json:"max_results_per_query,omitempty" jsonschema:"maximum results per query (default: 5)"`
 }
 
 // SearchMatch is a single FTS hit.

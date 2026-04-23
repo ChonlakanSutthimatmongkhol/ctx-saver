@@ -76,6 +76,14 @@ func runHook(event string) error {
 	}
 	config.ResolveDataDir(cfg, projectPath)
 
+	// Set up logging so hook subprocesses can emit slog warnings.
+	if logger, logCloser, lerr := setupLogger(cfg); lerr == nil {
+		slog.SetDefault(logger)
+		if logCloser != nil {
+			defer logCloser()
+		}
+	}
+
 	st, err := store.NewSQLiteStore(cfg.Storage.DataDir, projectPath)
 	if err != nil {
 		// If the store is unavailable, still try to emit a valid hook response.
@@ -85,16 +93,13 @@ func runHook(event string) error {
 		defer st.Close()
 	}
 
-	ctx := context.Background()
-	_ = ctx // used by store calls inside hook runners
-
 	switch event {
 	case "pretooluse":
 		return hooks.RunPreToolUse(st, os.Stdin, os.Stdout)
 	case "posttooluse":
 		return hooks.RunPostToolUse(st, os.Stdin, os.Stdout)
 	case "sessionstart":
-		return hooks.RunSessionStart(st, os.Stdin, os.Stdout)
+		return hooks.RunSessionStart(st, os.Stdin, os.Stdout, cfg.Hooks.SessionHistoryLimit)
 	default:
 		return fmt.Errorf("unknown hook event %q (want: pretooluse | posttooluse | sessionstart)", event)
 	}

@@ -14,24 +14,21 @@ import (
 // the model routes large-output commands through ctx-saver MCP tools.
 const routingInstructions = `## ctx-saver routing rules
 
-You have access to ctx-saver MCP tools that keep large outputs out of the
-context window.  Always prefer them over raw shell commands when the output
-could exceed ~2 KB.
+Use ctx-saver MCP tools instead of raw shell when output may exceed ~2 KB:
+- For HTTP fetches → ctx_execute (lang=shell) with curl/wget
+- For file reads → ctx_read_file
+- For find/grep/jq on large data → ctx_execute (lang=shell or python)
+- For git log/diff (large) → ctx_execute (lang=shell)
 
-| Instead of                            | Use                              |
-|---------------------------------------|----------------------------------|
-| Shell: curl <URL>                     | ctx_execute (lang=shell)         |
-| Shell: cat <file>                     | ctx_read_file                    |
-| Shell: find / grep / jq on large data | ctx_execute (lang=shell/python)  |
-| Shell: git log / diff (large)         | ctx_execute (lang=shell)         |
-
-Dangerous commands (rm -rf /, curl|bash, eval, sudo -s) are automatically
-blocked by the PreToolUse hook and must not be attempted.`
+Dangerous commands are blocked by the PreToolUse hook:
+"rm -rf", pipe-to-shell (curl/wget piped to sh/bash), eval, "sudo -s".
+`
 
 // RunSessionStart reads a Codex CLI SessionStart JSON payload from r,
 // retrieves recent session events from the store, builds a context-restoration
 // directive, and writes it to w as additionalContext.
-func RunSessionStart(st store.Store, r io.Reader, w io.Writer) error {
+// limit is the maximum number of recent events to include (from config).
+func RunSessionStart(st store.Store, r io.Reader, w io.Writer, limit int) error {
 	input, err := readInput(r)
 	if err != nil {
 		// Still emit routing instructions even if we cannot read session history.
@@ -48,13 +45,24 @@ func RunSessionStart(st store.Store, r io.Reader, w io.Writer) error {
 
 	// Try to restore the most recent session state.
 	if st != nil {
-		events, err := st.ListProjectSessionEvents(ctx, projectPath, 30)
+		events, err := st.ListProjectSessionEvents(ctx, projectPath, limit)
 		if err == nil && len(events) > 0 {
-			additionalContext.WriteString("\n\n## Session history (last ")
-			additionalContext.WriteString(fmt.Sprintf("%d events)\n\n", len(events)))
+			// Deduplicate by tool name + first word of summary to avoid noise.
+			seen := make(map[string]bool)
+			var deduped []*store.SessionEvent
 			for _, e := range events {
-				ts := e.CreatedAt.Format(time.TimeOnly)
-				additionalContext.WriteString(fmt.Sprintf("- [%s] %s\n", ts, e.Summary))
+				key := e.ToolName + "|" + firstWord(e.Summary)
+				if !seen[key] {
+					seen[key] = true
+					deduped = append(deduped, e)
+				}
+			}
+			if len(deduped) > 0 {
+				additionalContext.WriteString(fmt.Sprintf("\n\n## Session history (last %d events)\n\n", len(deduped)))
+				for _, e := range deduped {
+					ts := e.CreatedAt.Format(time.TimeOnly)
+					additionalContext.WriteString(fmt.Sprintf("- [%s] %s\n", ts, e.Summary))
+				}
 			}
 		}
 
@@ -69,6 +77,15 @@ func RunSessionStart(st store.Store, r io.Reader, w io.Writer) error {
 	}
 
 	return writeSessionStartOutput(w, additionalContext.String())
+}
+
+// firstWord returns the first whitespace-delimited word of s, or s if there
+// is no whitespace.  Used for deduplication keying.
+func firstWord(s string) string {
+	if i := strings.IndexByte(s, ' '); i >= 0 {
+		return s[:i]
+	}
+	return s
 }
 
 func writeSessionStartOutput(w io.Writer, additionalContext string) error {

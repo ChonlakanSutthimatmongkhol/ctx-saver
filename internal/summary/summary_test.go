@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/summary"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestSummarize_EmptyInput(t *testing.T) {

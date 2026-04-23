@@ -22,11 +22,19 @@ func ResolveDataDir(cfg *Config, projectPath string) {
 
 // Config holds all runtime configuration for ctx-saver.
 type Config struct {
-	Sandbox      SandboxConfig  `yaml:"sandbox"`
-	Storage      StorageConfig  `yaml:"storage"`
-	Summary      SummaryConfig  `yaml:"summary"`
-	Logging      LoggingConfig  `yaml:"logging"`
-	DenyCommands []string       `yaml:"deny_commands"`
+	Sandbox      SandboxConfig `yaml:"sandbox"`
+	Storage      StorageConfig `yaml:"storage"`
+	Summary      SummaryConfig `yaml:"summary"`
+	Logging      LoggingConfig `yaml:"logging"`
+	Hooks        HooksConfig   `yaml:"hooks"`
+	DenyCommands []string      `yaml:"deny_commands"`
+}
+
+// HooksConfig controls the behaviour of the PreToolUse / PostToolUse / SessionStart hooks.
+type HooksConfig struct {
+	// SessionHistoryLimit is the maximum number of recent session events injected
+	// into additionalContext by the SessionStart hook.  Defaults to 10.
+	SessionHistoryLimit int `yaml:"session_history_limit"`
 }
 
 // SandboxConfig controls how commands are executed.
@@ -80,6 +88,9 @@ func Default() *Config {
 		Logging: LoggingConfig{
 			Level: "info",
 			File:  "", // resolved to <DataDir>/server.log after projectPath is known
+		},
+		Hooks: HooksConfig{
+			SessionHistoryLimit: 10,
 		},
 		DenyCommands: []string{
 			"rm -rf /",
@@ -161,6 +172,9 @@ func validate(cfg *Config) error {
 	}
 	if cfg.Summary.AutoIndexThresholdBytes <= 0 {
 		return fmt.Errorf("summary.auto_index_threshold_bytes must be > 0, got %d", cfg.Summary.AutoIndexThresholdBytes)
+	}
+	if cfg.Hooks.SessionHistoryLimit < 1 {
+		return fmt.Errorf("hooks.session_history_limit must be >= 1, got %d", cfg.Hooks.SessionHistoryLimit)
 	}
 	return nil
 }

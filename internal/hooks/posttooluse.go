@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/store"
 )
@@ -34,16 +36,18 @@ func RunPostToolUse(st store.Store, r io.Reader, w io.Writer) error {
 		ProjectPath: projectPath,
 		EventType:   "posttooluse",
 		ToolName:    input.ToolName,
-		ToolInput:   toolInputJSON,
+		ToolInput:   truncate(toolInputJSON, maxFieldBytes),
 		ToolOutput:  truncate(toolOutputStr, 512),
 		Summary:     summary,
 		CreatedAt:   time.Now().UTC(),
 	}
 
 	ctx := context.Background()
-	// Swallow store errors so a DB issue never stalls the agent.
+	// Log but never block the agent on store errors.
 	if st != nil {
-		_ = st.SaveSessionEvent(ctx, event)
+		if err := st.SaveSessionEvent(ctx, event); err != nil {
+			slog.Warn("hook: failed to save session event", "error", err, "event_type", "posttooluse")
+		}
 	}
 
 	_, _ = fmt.Fprintln(w, "{}")
@@ -104,9 +108,16 @@ func marshalJSON(v any) string {
 	return string(b)
 }
 
+// maxFieldBytes is the maximum byte length stored for ToolInput / ToolOutput fields.
+const maxFieldBytes = 1024
+
 func truncate(s string, max int) string {
 	if len(s) <= max {
 		return s
+	}
+	// Walk back to a valid UTF-8 rune boundary before slicing.
+	for max > 0 && !utf8.RuneStart(s[max]) {
+		max--
 	}
 	return s[:max] + "…"
 }

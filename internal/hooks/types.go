@@ -42,7 +42,7 @@ type CodexHookOutput struct {
 
 // CodexSpecificOutput carries the per-event-type payload inside the envelope.
 type CodexSpecificOutput struct {
-	HookEventName    string `json:"hookEventName"`
+	HookEventName string `json:"hookEventName"`
 	// PermissionDecision is set to "deny" by PreToolUse when a tool call
 	// must be blocked.  It is omitted for allow decisions.
 	PermissionDecision string `json:"permissionDecision,omitempty"`

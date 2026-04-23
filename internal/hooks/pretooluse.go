@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"strings"
 
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/store"
 )
@@ -15,7 +14,8 @@ import (
 // Codex CLI PreToolUse only supports "deny" — additionalContext and
 // "allow" are ignored by codex-rs output_parser.rs.  We therefore emit
 // either a deny decision or an empty passthrough object.
-func RunPreToolUse(_ store.Store, r io.Reader, w io.Writer) error {	input, err := readInput(r)
+func RunPreToolUse(_ store.Store, r io.Reader, w io.Writer) error {
+	input, err := readInput(r)
 	if err != nil {
 		return allowPassthrough(w, "PreToolUse")
 	}
@@ -45,14 +45,8 @@ func extractCmd(input map[string]any) string {
 			}
 		}
 	}
-	// Fallback: join all string values.
-	var parts []string
-	for _, v := range input {
-		if s, ok := v.(string); ok {
-			parts = append(parts, s)
-		}
-	}
-	return strings.Join(parts, " ")
+	// No known shell field → return empty so routing defaults to allow.
+	return ""
 }
 
 // allowPassthrough emits the minimal Codex-compatible passthrough object.

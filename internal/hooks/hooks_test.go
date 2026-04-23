@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/store"
 )
@@ -41,6 +43,11 @@ func TestRoutePreToolUse(t *testing.T) {
 
 		// Redirect: curl (soft deny with MCP suggestion).
 		{"curl redirect", "Shell", "curl https://api.example.com/data.json", false},
+
+		// Safe curl variants — must be allowed even though curl matches redirect pattern.
+		{"curl --version", "Shell", "curl --version", true},
+		{"curl -I", "Shell", "curl -I https://example.com", true},
+		{"curl --head", "Shell", "curl --head https://example.com", true},
 
 		// Redirect: large log file cat.
 		{"cat log redirect", "Shell", "cat /var/log/app.log", false},
@@ -161,7 +168,7 @@ func TestRunSessionStart_InjectsRoutingRules(t *testing.T) {
 	input := HookInput{SessionID: "sess-2", Cwd: "/tmp/proj"}
 	b, _ := json.Marshal(input)
 	var buf bytes.Buffer
-	if err := RunSessionStart(st, bytes.NewBuffer(b), &buf); err != nil {
+	if err := RunSessionStart(st, bytes.NewBuffer(b), &buf, 10); err != nil {
 		t.Fatalf("RunSessionStart: %v", err)
 	}
 	var out CodexHookOutput
@@ -189,7 +196,7 @@ func TestRunSessionStart_IncludesHistory(t *testing.T) {
 	input := HookInput{SessionID: "sess-3", Cwd: "/tmp/proj"}
 	b, _ := json.Marshal(input)
 	var buf bytes.Buffer
-	if err := RunSessionStart(st, bytes.NewBuffer(b), &buf); err != nil {
+	if err := RunSessionStart(st, bytes.NewBuffer(b), &buf, 10); err != nil {
 		t.Fatalf("RunSessionStart: %v", err)
 	}
 	var out CodexHookOutput
@@ -218,7 +225,7 @@ func (m *memStore) Search(_ context.Context, _, _ string, _ int) ([]*store.Match
 	return nil, nil
 }
 func (m *memStore) Cleanup(_ context.Context, _ string, _ int) error { return nil }
-func (m *memStore) Close() error                                      { return nil }
+func (m *memStore) Close() error                                     { return nil }
 
 func (m *memStore) SaveSessionEvent(_ context.Context, e *store.SessionEvent) error {
 	m.events = append(m.events, e)
@@ -243,4 +250,48 @@ func (m *memStore) ListProjectSessionEvents(_ context.Context, projectPath strin
 		}
 	}
 	return out, nil
+}
+
+// ── Additional unit tests ──────────────────────────────────────────────────
+
+func TestExtractOutputText_ContentBlocks(t *testing.T) {
+	input := []any{
+		map[string]any{"text": "hello"},
+		map[string]any{"text": "world"},
+	}
+	got := extractOutputText(input)
+	if got != "hello\nworld" {
+		t.Errorf("extractOutputText content blocks = %q, want %q", got, "hello\nworld")
+	}
+}
+
+func TestTruncate_UTF8(t *testing.T) {
+	// Thai string: each rune is 3 UTF-8 bytes
+	s := "สวัสดีชาวโลก" // 12 runes = 36 bytes
+	result := truncate(s, 10)
+	// Result must be valid UTF-8 (no split runes) and shorter than the input.
+	if !utf8.ValidString(result) {
+		t.Errorf("truncate produced invalid UTF-8: %q", result)
+	}
+	if len(result) >= len(s) {
+		t.Errorf("truncate did not shorten string: len=%d", len(result))
+	}
+}
+
+func TestRunSessionStart_RoutingInstructions(t *testing.T) {
+	st := newMemStore()
+	input := HookInput{SessionID: "sess-ri", Cwd: "/tmp/proj"}
+	b, _ := json.Marshal(input)
+	var buf bytes.Buffer
+	if err := RunSessionStart(st, bytes.NewBuffer(b), &buf, 10); err != nil {
+		t.Fatalf("RunSessionStart: %v", err)
+	}
+	var out CodexHookOutput
+	if err := json.Unmarshal(buf.Bytes(), &out); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	ac := out.HookSpecificOutput.AdditionalContext
+	if !strings.Contains(ac, "ctx_execute") {
+		t.Errorf("AdditionalContext missing 'ctx_execute': %q", ac)
+	}
 }
