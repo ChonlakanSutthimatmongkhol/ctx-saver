@@ -24,11 +24,14 @@ Run a shell or script command. Large outputs are stored and summarised.
 | `direct_output` | output ≤ threshold | Full raw output returned directly |
 | `output_id` | output > threshold | ID for later retrieval |
 | `summary` | output > threshold | head + tail excerpt |
+| `format` | output > threshold | Summary format used: `flutter_test`, `go_test`, `json`, `git_log`, or `generic` |
 | `search_hint` | output > threshold | Hint to use `ctx_search` with this `output_id` |
 | `stats.lines` | always | Total line count |
 | `stats.size_bytes` | always | Output size in bytes |
 | `stats.exit_code` | always | Process exit code |
 | `stats.duration_ms` | always | Execution time in milliseconds |
+
+`ctx_execute` uses format-aware summarization when enabled by config (`summary.smart_format: true`).
 
 **Example**
 ```json
@@ -214,8 +217,6 @@ Each entry:
 
 ---
 
----
-
 ## ctx_stats
 
 Report aggregate statistics for the current project.
@@ -277,8 +278,10 @@ Report aggregate statistics for the current project.
 ## Storage Location
 
 ```
-~/.local/share/ctx-saver/<project-hash>.db   ← SQLite DB (all outputs + FTS5 index)
-~/.local/share/ctx-saver/server.log
+<project-root>/.ctx-saver/outputs.db   ← default SQLite DB (all outputs + FTS5 index)
+<project-root>/.ctx-saver/server.log   ← default log file
 ```
 
-Delete all stored outputs: `rm -rf ~/.local/share/ctx-saver/`
+If `storage.data_dir` is set, files are stored there instead.
+
+Delete all stored outputs for the current project (default path): `rm -rf .ctx-saver/`

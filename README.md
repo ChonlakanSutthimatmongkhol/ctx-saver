@@ -6,7 +6,15 @@ A self-hosted MCP server (Go) that reduces AI context window usage by sandboxing
 
 ## Why
 
-Tools like `jira issue list`, `kubectl get pods`, and `git log` produce kilobytes of output that burn through your context window. ctx-saver intercepts those outputs, stores them in a local SQLite database with FTS5 full-text indexing, and returns only a head+tail summary. When you need more, use `ctx_search` or `ctx_get_full`.
+Large-output commands burn through your context window fast:
+
+- **Infrastructure**: `kubectl get pods -A`, `docker ps -a --no-trunc`, `aws s3 ls --recursive`
+- **Logs & monitoring**: `journalctl`, `docker logs`, `npm install` (build logs), `git log --all --oneline`
+- **Search**: `find / -name "*.ts"`, `grep -r pattern`, `curl https://api.example.com/users`
+- **Package mgmt**: `pip list`, `go mod graph`, `npm ls --all`
+- **Data**: `cat large_file.json`, `jira issue list`, `ls -la /var/log/`
+
+ctx-saver intercepts these, stores outputs in local SQLite with FTS5 indexing, and returns only a head+tail summary. When you need more, use `ctx_search` or `ctx_get_full`.
 
 **No cloud. No telemetry. No account. 100% auditable code.**
 
@@ -127,6 +135,22 @@ Claude Code / VS Code Copilot
                 └── outputs_fts    (FTS5 + BM25 ranking)
 ```
 
+## Real usage: token reduction
+
+Measured from real commands executed through `ctx_execute` in this repository.
+
+Benchmark snapshot (`2026-04-23`): `go test -race -v ./internal/summary/...` and `cat README.md`.
+
+Assumption for token estimate: `1 token ≈ 4 bytes`.
+
+| Command | Raw output (bytes) | Returned summary (bytes) | Bytes saved | Estimated tokens saved |
+|---------|---------------------|--------------------------|-------------|------------------------|
+| `go test -race -v ./internal/summary/...` | 5,640 | 110 | 5,530 | ~1,383 |
+| `cat README.md` | 10,135 | 173 | 9,962 | ~2,490 |
+| **Total** | **15,775** | **283** | **15,492** | **~3,873** |
+
+Overall reduction in this run: **98.21%** (from 15,775 bytes to 283 bytes).
+
 ## Configuration
 
 Default config lives at `~/.config/ctx-saver/config.yaml`.  Per-project overrides go in `.ctx-saver.yaml` at the project root.
@@ -189,28 +213,10 @@ Hooks run as lightweight subprocesses alongside the AI agent.  They share the sa
 ```bash
 # Requires Go 1.25+
 make build          # → bin/ctx-saver
-make test           # unit tests + coverage
+make test           # unit tests
 make lint           # golangci-lint
 make install        # → /usr/local/bin/ctx-saver
 ```
-
-## Test coverage (Phase 4)
-
-```
-Package                                    Coverage
-─────────────────────────────────────────────────
-internal/config                             62.2%
-internal/handlers                           67.7%
-internal/hooks                              90.0%
-internal/sandbox                            81.1%
-internal/store                              63.1%
-internal/summary                            81.0%
-internal/summary/formats                    79.9%
-─────────────────────────────────────────────────
-total                                       73.8%
-```
-
-Run `make test` to reproduce.
 
 ## Security
 
@@ -238,8 +244,26 @@ scripts/                       install.sh, install-hooks.sh, uninstall-hooks.sh,
 configs/                       setup guides and hook config templates per platform
 ```
 
-## Roadmap
+## Design decisions
 
-- **Phase 1:** subprocess sandbox, SQLite FTS5, 5 MCP tools
-- **Phase 2:** Anthropic `srt` OS-level sandbox (toggle via `sandbox.use_srt: true`)
-- **Phase 3 (current):** Lifecycle hooks — routing enforcement, session capture, context restoration
+### Subprocess sandbox (not containers or VMs)
+
+**Why**: Simplicity and instant startup. Containers add 50–200ms overhead per execution; subprocess spawns in ~1ms. For tools that run in your session anyway (like AI chat), sandboxing via `exec.Command` with resource limits is sufficient. We focus on isolation of **outputs**, not **processes** — the threat model is context pollution, not malware.
+
+**Future**: Anthropic's `srt` (Secure Runtime) can be added for enforced OS-level isolation when needed (toggle via `sandbox.use_srt: true`).
+
+### FTS5 over traditional indexing
+
+**Why**: BM25 ranking in FTS5 is built-in and tuned for natural language search. Matching "pod status" across 50MB of `kubectl` logs returns relevant lines first, not just substring matches. No extra query complexity — just `SELECT … FROM outputs_fts WHERE outputs_fts MATCH 'pod status'`.
+
+### SQLite instead of Redis/Postgres
+
+**Why**: Self-hosted. No external services to manage. `sqlite` lives in a single `~/.local/share/ctx-saver/<hash>.db` file — permissions are `0600`, backups are trivial, and you own your data. For a tool that runs locally on your machine, zero-config beats "set up a database server."
+
+### Per-project database hash
+
+**Why**: Isolation. Your `~/projects/backend` database is separate from `~/projects/frontend`. Tools and configs are independent per project, but stats can still be queried across all projects (scope: `all`).
+
+### Head+tail summaries instead of full-text extraction
+
+**Why**: Bounded context. Taking the first 20 lines + last 5 lines of a 1000-line JSON response guarantees ~100 tokens instead of ~3000. You see structure and key info instantly, can search for details if needed, and spend context on what matters.

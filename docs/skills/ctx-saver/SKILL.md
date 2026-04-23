@@ -10,7 +10,7 @@ argument-hint: 'Describe the command or file you want to run/read'
 
 # ctx-saver Workflow
 
-ctx-saver is an MCP server that stores large command outputs in SQLite and returns a compact head+tail summary — reducing context window usage by 60–98%.
+ctx-saver is an MCP server that stores large command outputs in SQLite and returns a compact summary. For ctx_execute, summaries are format-aware (flutter_test, go_test, json, git_log, generic).
 
 ## When to Use
 
@@ -48,7 +48,7 @@ Use `ctx_execute` instead of a raw shell command whenever output may be large.
 
 **After receiving the response:**
 - If `direct_output` is set → output was small, use it directly
-- If `output_id` is set → output was stored; read `summary` for overview, then use `ctx_search` or `ctx_get_full` if more detail is needed
+- If `output_id` is set → output was stored; check `format` + read `summary` for overview, then use `ctx_search` or `ctx_get_full` if more detail is needed
 
 ### 2. Reading a large file
 
@@ -137,11 +137,12 @@ Fetch via `ctx_execute` with the `atlassian` CLI, then search the stored result:
 
 Data is stored per-project at:
 ```
-~/.local/share/ctx-saver/<project-hash>.db   ← SQLite (all stored outputs + FTS5 index)
-~/.local/share/ctx-saver/server.log
+<project-root>/.ctx-saver/outputs.db         ← default SQLite location (all stored outputs + FTS5 index)
+<project-root>/.ctx-saver/server.log          ← default log location
 ```
 
-Delete a project's DB with `rm ~/.local/share/ctx-saver/<hash>.db` or wipe all with `rm -rf ~/.local/share/ctx-saver/`.
+If you configured `storage.data_dir`, files are stored under that directory instead.
+Delete a project's default DB with `rm -rf .ctx-saver/` from project root.
 
 ---
 

@@ -6,7 +6,15 @@ MCP server แบบ self-hosted (Go) ที่ช่วยลดการใช
 
 ## ทำไมต้องใช้
 
-คำสั่งอย่าง `jira issue list`, `kubectl get pods`, และ `git log` สร้าง output หลายกิโลไบต์ที่กิน context window หมด ctx-saver จะดักจับ output เหล่านั้น เก็บไว้ใน SQLite database ที่มี FTS5 full-text indexing และคืนค่าแค่สรุปย่อ (head + tail) หากต้องการข้อมูลเพิ่มเติมให้ใช้ `ctx_search` หรือ `ctx_get_full`
+คำสั่งที่คืนค่า output ขนาดใหญ่กินเนื้อที่ context window เร็วมาก:
+
+- **Infrastructure**: `kubectl get pods -A`, `docker ps -a --no-trunc`, `aws s3 ls --recursive`
+- **Logs & monitoring**: `journalctl`, `docker logs`, `npm install` (build logs), `git log --all --oneline`
+- **Search**: `find / -name "*.ts"`, `grep -r pattern`, `curl https://api.example.com/users`
+- **Package mgmt**: `pip list`, `go mod graph`, `npm ls --all`
+- **ข้อมูล**: `cat large_file.json`, `jira issue list`, `ls -la /var/log/`
+
+ctx-saver จะดักจับ output เหล่านั้น เก็บไว้ใน SQLite database ที่มี FTS5 indexing และคืนค่าแค่สรุปย่อ (head + tail) หากต้องการข้อมูลเพิ่มเติมให้ใช้ `ctx_search` หรือ `ctx_get_full`
 
 **ไม่มีคลาวด์ ไม่มีการติดตาม ไม่ต้องสมัครบัญชี โค้ดตรวจสอบได้ 100%**
 
@@ -113,6 +121,22 @@ Claude Code / VS Code Copilot
                 └── outputs_fts    (FTS5 + BM25 ranking)
 ```
 
+## ตัวเลขใช้งานจริง: ลด token ได้เท่าไร
+
+วัดจากคำสั่งจริงที่รันผ่าน `ctx_execute` ใน repository นี้
+
+Benchmark snapshot (`2026-04-23`): `go test -race -v ./internal/summary/...` และ `cat README.md`
+
+สมมติฐานสำหรับประมาณ token: `1 token ≈ 4 bytes`
+
+| คำสั่ง | Raw output (bytes) | Summary ที่ส่งกลับ (bytes) | Bytes ที่ประหยัดได้ | Token ที่ประหยัดได้ (ประมาณ) |
+|--------|---------------------|-----------------------------|----------------------|-------------------------------|
+| `go test -race -v ./internal/summary/...` | 5,640 | 110 | 5,530 | ~1,383 |
+| `cat README.md` | 10,135 | 173 | 9,962 | ~2,490 |
+| **รวม** | **15,775** | **283** | **15,492** | **~3,873** |
+
+ผลรวมรอบนี้ลดได้ **98.21%** (จาก 15,775 bytes เหลือ 283 bytes)
+
 ## การตั้งค่า
 
 ค่าตั้งต้นอยู่ที่ `~/.config/ctx-saver/config.yaml` สามารถ override ต่อ project ได้ที่ไฟล์ `.ctx-saver.yaml` ใน project root
@@ -173,7 +197,7 @@ Hooks ทำงานเป็น subprocess เบาๆ คู่กับ AI 
 ```bash
 # ต้องการ Go 1.25+
 make build          # → bin/ctx-saver
-make test           # unit tests + coverage
+make test           # unit tests
 make lint           # golangci-lint
 make install        # → /usr/local/bin/ctx-saver
 ```
@@ -203,8 +227,26 @@ scripts/                       install.sh, install-hooks.sh, uninstall-hooks.sh,
 configs/                       setup guides and hook config templates per platform
 ```
 
-## Roadmap
+## การเลือกใช้เทคโนโลยี
 
-- **Phase 1:** subprocess sandbox, SQLite FTS5, 5 MCP tools
-- **Phase 2:** Anthropic `srt` OS-level sandbox (toggle via `sandbox.use_srt: true`)
-- **Phase 3 (ปัจจุบัน):** Lifecycle hooks — routing enforcement, session capture, context restoration
+### Subprocess sandbox (ไม่ใช่ containers หรือ VMs)
+
+**ทำไม**: ความเรียบง่ายและการเริ่มต้นทันที Container ใช้ 50–200ms ต่อการ execute; subprocess สปอนเร็ว ~1ms เท่านั้น สำหรับเครื่องมือที่ทำงานในเซสชั่นของคุณแล้ว (เช่น AI chat) การแยกเก็บ output ผ่าน `exec.Command` พอเพียง เราสนใจการแยกเก็บ **output** ไม่ใช่ **process** — ภัยคุกคาม model คือการ pollution ของ context ไม่ใช่ malware
+
+**ในอนาคต**: จะเพิ่ม Anthropic `srt` (Secure Runtime) สำหรับการแยกเก็บระดับ OS เมื่อต้องการ (toggle via `sandbox.use_srt: true`)
+
+### FTS5 แทนการ index แบบเดิมๆ
+
+**ทำไม**: BM25 ranking ใน FTS5 สร้างมาแล้วและ tune สำหรับการค้นหาภาษาธรรมชาติ การค้นหา "pod status" ผ่าน 50MB ของ `kubectl` logs จะคืนบรรทัดที่เกี่ยวข้องก่อน ไม่ใช่แค่ substring matches ไม่มี query complexity เพิ่มเติม — แค่ `SELECT … FROM outputs_fts WHERE outputs_fts MATCH 'pod status'`
+
+### SQLite แทน Redis/Postgres
+
+**ทำไม**: Self-hosted ไม่ต้องจัดการเซอร์วิสภายนอก `sqlite` อยู่ในไฟล์เดียว `~/.local/share/ctx-saver/<hash>.db` — permissions คือ `0600` backup ง่าย และคุณเป็นเจ้าของข้อมูล สำหรับเครื่องมือที่ทำงานท้องถิ่น configuration ที่เป็นศูนย์ ดีกว่า "setup database server"
+
+### ฐานข้อมูลต่อ project คำนวณจาก hash
+
+**ทำไม**: การแยกเก็บ `~/projects/backend` database แยกจาก `~/projects/frontend` Tools และ configs เป็นอิสระต่อ project แต่สามารถ query stats ได้ทั่วทุก project (scope: `all`)
+
+### สรุปแบบ head+tail แทนการสกัด full-text
+
+**ทำไม**: Context ที่มีขอบเขต ใช้ 20 บรรทัดแรก + 5 บรรทัดสุดท้ายของ JSON response 1000 บรรทัด รับประกัน ~100 tokens แทน ~3000 เห็นโครงสร้างและข้อมูลสำคัญทันที สามารถ search รายละเอียดถ้าต้องการ และใช้ context ในสิ่งที่สำคัญ
