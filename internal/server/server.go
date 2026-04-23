@@ -4,10 +4,10 @@ package server
 import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/chonlakan/ctx-saver/internal/config"
-	"github.com/chonlakan/ctx-saver/internal/handlers"
-	"github.com/chonlakan/ctx-saver/internal/sandbox"
-	"github.com/chonlakan/ctx-saver/internal/store"
+	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/config"
+	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/handlers"
+	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/sandbox"
+	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/store"
 )
 
 const (

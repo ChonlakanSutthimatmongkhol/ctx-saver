@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/chonlakan/ctx-saver/internal/summary"
+	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/summary"
 )
 
 func TestSummarize_EmptyInput(t *testing.T) {
