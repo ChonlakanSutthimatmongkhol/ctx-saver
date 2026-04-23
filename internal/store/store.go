@@ -50,6 +50,26 @@ type SessionEvent struct {
 	CreatedAt   time.Time
 }
 
+// Stats holds aggregate statistics for stored outputs and hook activity.
+type Stats struct {
+	OutputsStored    int
+	RawBytes         int64
+	LargestBytes     int64
+	AvgDurationMs    int64
+	TopCommands      []CommandStat
+	LargestOutputs   []*OutputMeta
+	DangerousBlocked int
+	RedirectedToMCP  int
+	EventsCaptured   int
+}
+
+// CommandStat is the aggregate for one command bucket.
+type CommandStat struct {
+	Command    string
+	Count      int
+	TotalBytes int64
+}
+
 // Store is the repository interface for stored outputs.
 // Implementations must be safe for concurrent use.
 type Store interface {
@@ -78,6 +98,11 @@ type Store interface {
 	// ListProjectSessionEvents returns recent events across all sessions for
 	// a project (newest last), useful for SessionStart context restoration.
 	ListProjectSessionEvents(ctx context.Context, projectPath string, limit int) ([]*SessionEvent, error)
+
+	// GetStats returns aggregate statistics for outputs and session events
+	// belonging to projectPath created at or after since.
+	// A zero since means no time filter (all time).
+	GetStats(ctx context.Context, projectPath string, since time.Time) (*Stats, error)
 
 	// Close releases database resources.
 	Close() error

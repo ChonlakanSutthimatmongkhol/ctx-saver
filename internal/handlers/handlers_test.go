@@ -88,6 +88,10 @@ func (m *mockStore) ListProjectSessionEvents(_ context.Context, _ string, _ int)
 	return nil, nil
 }
 
+func (m *mockStore) GetStats(_ context.Context, _ string, _ time.Time) (*store.Stats, error) {
+	return &store.Stats{}, nil
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────
 
 func defaultCfg() *config.Config {

@@ -226,6 +226,9 @@ func (m *memStore) Search(_ context.Context, _, _ string, _ int) ([]*store.Match
 }
 func (m *memStore) Cleanup(_ context.Context, _ string, _ int) error { return nil }
 func (m *memStore) Close() error                                     { return nil }
+func (m *memStore) GetStats(_ context.Context, _ string, _ time.Time) (*store.Stats, error) {
+	return &store.Stats{}, nil
+}
 
 func (m *memStore) SaveSessionEvent(_ context.Context, e *store.SessionEvent) error {
 	m.events = append(m.events, e)
