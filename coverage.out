@@ -315,6 +315,14 @@ github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/sandbox/subprocess.go:1
 github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/sandbox/subprocess.go:123.2,123.37 1 4
 github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/sandbox/subprocess.go:123.37,126.3 2 2
 github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/sandbox/subprocess.go:128.2,128.62 1 2
+github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/summary/detector.go:18.62,19.41 1 0
+github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/summary/detector.go:19.41,20.32 1 0
+github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/summary/detector.go:20.32,22.4 1 0
+github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/summary/detector.go:24.2,24.63 1 0
+github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/summary/detector.go:28.98,29.41 1 0
+github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/summary/detector.go:29.41,30.32 1 0
+github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/summary/detector.go:30.32,32.4 1 0
+github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/summary/detector.go:34.2,34.78 1 0
 github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/summary/summary.go:23.71,24.22 1 4
 github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/summary/summary.go:24.22,31.3 1 1
 github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/summary/summary.go:34.2,39.20 5 3
