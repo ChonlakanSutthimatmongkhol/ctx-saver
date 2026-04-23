@@ -12,7 +12,7 @@ import (
 
 const (
 	serverName    = "ctx-saver"
-	serverVersion = "0.1.0"
+	serverVersion = "0.1.4"
 )
 
 // New constructs a fully configured *mcp.Server with all five ctx-saver tools registered.
@@ -65,4 +65,11 @@ func registerTools(srv *mcp.Server, cfg *config.Config, sb sandbox.Sandbox, st s
 		Description: "Retrieve the complete text of a stored output, optionally restricted to a line range. " +
 			"Use this as an escape hatch when the summary is insufficient.",
 	}, getFullH.Handle)
+
+	outlineH := handlers.NewOutlineHandler(st)
+	mcp.AddTool(srv, &mcp.Tool{
+		Name: "ctx_outline",
+		Description: "Extract a table of contents from a stored output — Markdown headings (##, ###, ####) and table headers. " +
+			"Use this before ctx_search to discover section names and avoid guessing search terms.",
+	}, outlineH.Handle)
 }

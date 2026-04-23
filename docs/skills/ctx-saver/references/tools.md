@@ -78,6 +78,7 @@ Full-text search (SQLite FTS5 + BM25 ranking) across all stored outputs. All que
 | `queries` | string[] | Y | One or more search terms |
 | `output_id` | string | N | Limit search to a specific stored output |
 | `max_results_per_query` | int | N | Max matches per query (default: 5) |
+| `context_lines` | int | N | Lines of surrounding context before/after each match, like `grep -C` (default: 0) |
 
 **Output**
 ```json
@@ -90,7 +91,12 @@ Full-text search (SQLite FTS5 + BM25 ranking) across all stored outputs. All que
           "output_id": "out_20260422_76b3de65",
           "line": 42,
           "snippet": "--- FAIL: TestLogin (0.03s)",
-          "score": 1.0
+          "score": 1.0,
+          "context": [
+            "=== RUN   TestLogin",
+            "    login_test.go:38: unexpected status 401",
+            "--- FAIL: TestLogin (0.03s)"
+          ]
         }
       ]
     }
@@ -103,7 +109,8 @@ Full-text search (SQLite FTS5 + BM25 ranking) across all stored outputs. All que
 {
   "queries": ["FAIL", "panic", "error"],
   "output_id": "out_20260422_76b3de65",
-  "max_results_per_query": 5
+  "max_results_per_query": 5,
+  "context_lines": 3
 }
 ```
 
@@ -158,6 +165,50 @@ Retrieve the complete text of a stored output, optionally restricted to a line r
 {
   "output_id": "out_20260422_76b3de65",
   "line_range": [100, 150]
+}
+```
+
+---
+
+## ctx_outline
+
+Extract a table of contents from a stored output — Markdown headings and table headers. Use this **before** `ctx_search` to discover section names and avoid guessing search terms.
+
+**Input**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `output_id` | string | Y | ID of the stored output to outline |
+
+**Output**
+| Field | Description |
+|-------|-------------|
+| `output_id` | Echo of the requested ID |
+| `total_lines` | Total lines in the stored output |
+| `entries` | Array of structural entries found |
+
+Each entry:
+| Field | Description |
+|-------|-------------|
+| `line` | 1-based line number |
+| `level` | Heading depth: `1`=`##`, `2`=`###`, `3`=`####`; `0`=table header |
+| `text` | Full text of the heading or table header line |
+
+**Example**
+```json
+{ "output_id": "out_20260422_76b3de65" }
+```
+
+**Response example**
+```json
+{
+  "output_id": "out_20260422_76b3de65",
+  "total_lines": 420,
+  "entries": [
+    { "line": 5,  "level": 1, "text": "## Request" },
+    { "line": 12, "level": 0, "text": "| Field | Type | Required | Description |" },
+    { "line": 28, "level": 1, "text": "## Response" },
+    { "line": 35, "level": 2, "text": "### retirementAges" }
+  ]
 }
 ```
 

@@ -66,12 +66,31 @@ func Summarize(output []byte, headLines, tailLines int) Result {
 		sb.WriteByte('\n')
 	}
 
+	if headings := extractHeadings(lines); len(headings) > 0 {
+		sb.WriteString("\n--- document outline ---\n")
+		for _, h := range headings {
+			sb.WriteString(h)
+			sb.WriteByte('\n')
+		}
+	}
+
 	return Result{
 		Text:       sb.String(),
 		TotalLines: totalLines,
 		TotalBytes: totalBytes,
 		Truncated:  true,
 	}
+}
+
+// extractHeadings returns "L{n}: {text}" for Markdown heading lines (##, ###, ####).
+func extractHeadings(lines []string) []string {
+	var out []string
+	for i, line := range lines {
+		if strings.HasPrefix(line, "## ") || strings.HasPrefix(line, "### ") || strings.HasPrefix(line, "#### ") {
+			out = append(out, fmt.Sprintf("L%d: %s", i+1, line))
+		}
+	}
+	return out
 }
 
 // FormatStats returns a one-line stats string suitable for appending to a summary.

@@ -4,7 +4,7 @@ description: >
   Workflow for running commands and reading files through ctx-saver MCP tools to reduce context window usage.
   Use when: running tests, builds, or any command with large output; reading large files (OpenAPI spec, logs, SQL migrations);
   fetching Confluence/Jira pages; searching previously stored outputs; retrieving full output by ID or line range.
-  Tools: ctx_execute, ctx_read_file, ctx_search, ctx_list_outputs, ctx_get_full.
+  Tools: ctx_execute, ctx_read_file, ctx_search, ctx_list_outputs, ctx_get_full, ctx_outline.
 argument-hint: 'Describe the command or file you want to run/read'
 ---
 
@@ -18,6 +18,7 @@ ctx-saver is an MCP server that stores large command outputs in SQLite and retur
 |-----------|------|
 | Run shell/python/go/node command | `ctx_execute` |
 | Read a large file (spec, log, SQL) | `ctx_read_file` |
+| See document structure before searching | `ctx_outline` |
 | Search in a previously stored output | `ctx_search` |
 | List all stored outputs for this project | `ctx_list_outputs` |
 | Get full output or specific line range | `ctx_get_full` |
@@ -58,7 +59,17 @@ Use `ctx_execute` instead of a raw shell command whenever output may be large.
 }
 ```
 
-### 3. Searching stored output
+### 3. Exploring document structure
+
+Before searching, use `ctx_outline` to see what sections exist so you don't have to guess keywords:
+
+```json
+{ "output_id": "out_20260422_76b3de65" }
+```
+
+Returns headings (`##`, `###`, `####`) and table headers with their line numbers.
+
+### 4. Searching stored output
 
 Use when the summary is not enough and you need specific lines.
 
@@ -66,13 +77,15 @@ Use when the summary is not enough and you need specific lines.
 {
   "queries": ["FAIL", "error", "panic"],
   "output_id": "out_20260422_76b3de65",
-  "max_results_per_query": 5
+  "max_results_per_query": 5,
+  "context_lines": 3
 }
 ```
 
 Multiple queries run in parallel. Each returns matched lines with snippet + line number.
+Add `context_lines` to include N lines of surrounding context (like `grep -C`) — avoids a follow-up `ctx_get_full` call.
 
-### 4. Getting full output or line range
+### 5. Getting full output or line range
 
 ```json
 {
@@ -83,7 +96,7 @@ Multiple queries run in parallel. Each returns matched lines with snippet + line
 
 Omit `line_range` to retrieve all lines.
 
-### 5. Listing stored outputs
+### 6. Listing stored outputs
 
 ```json
 {

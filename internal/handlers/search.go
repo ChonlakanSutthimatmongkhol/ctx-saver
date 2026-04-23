@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -12,17 +13,19 @@ import (
 
 // SearchInput is the typed input for ctx_search.
 type SearchInput struct {
-	Queries            []string `json:"queries"                      jsonschema:"list of search queries to run against indexed outputs"`
-	OutputID           string   `json:"output_id,omitempty"          jsonschema:"optional output ID to limit search to a specific output"`
+	Queries            []string `json:"queries"                         jsonschema:"list of search queries to run against indexed outputs"`
+	OutputID           string   `json:"output_id,omitempty"             jsonschema:"optional output ID to limit search to a specific output"`
 	MaxResultsPerQuery int      `json:"max_results_per_query,omitempty" jsonschema:"maximum results per query (default: 5)"`
+	ContextLines       int      `json:"context_lines,omitempty"         jsonschema:"lines of surrounding context to include before/after each match, like grep -C (default: 0)"`
 }
 
 // SearchMatch is a single FTS hit.
 type SearchMatch struct {
-	OutputID string  `json:"output_id"`
-	Line     int     `json:"line"`
-	Snippet  string  `json:"snippet"`
-	Score    float64 `json:"score"`
+	OutputID string   `json:"output_id"`
+	Line     int      `json:"line"`
+	Snippet  string   `json:"snippet"`
+	Score    float64  `json:"score"`
+	Context  []string `json:"context,omitempty"` // surrounding lines when context_lines > 0
 }
 
 // QueryResult groups matches for one query.
@@ -107,6 +110,42 @@ func (h *SearchHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, inpu
 	}
 	if firstErr != nil {
 		return nil, SearchOutput{}, fmt.Errorf("searching: %w", firstErr)
+	}
+
+	// Attach surrounding context lines if requested.
+	if input.ContextLines > 0 {
+		// Fetch each unique output once.
+		outputLines := make(map[string][]string)
+		for _, matches := range resultMap {
+			for _, m := range matches {
+				if _, ok := outputLines[m.OutputID]; ok {
+					continue
+				}
+				out, err := h.st.Get(ctx, m.OutputID)
+				if err != nil {
+					continue
+				}
+				outputLines[m.OutputID] = strings.Split(strings.TrimRight(out.FullOutput, "\n"), "\n")
+			}
+		}
+		for q, matches := range resultMap {
+			for i, m := range matches {
+				lines, ok := outputLines[m.OutputID]
+				if !ok {
+					continue
+				}
+				start := m.Line - 1 - input.ContextLines
+				if start < 0 {
+					start = 0
+				}
+				end := m.Line + input.ContextLines
+				if end > len(lines) {
+					end = len(lines)
+				}
+				matches[i].Context = lines[start:end]
+			}
+			resultMap[q] = matches
+		}
 	}
 
 	ordered := make([]QueryResult, 0, len(input.Queries))

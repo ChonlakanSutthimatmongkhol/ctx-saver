@@ -61,7 +61,7 @@ Or globally in VS Code `settings.json`:
 }
 ```
 
-Verify: Command Palette → **MCP: List Servers** — should show `ctx-saver` with 5 tools.
+Verify: Command Palette → **MCP: List Servers** — should show `ctx-saver` with 6 tools.
 
 ### Install hooks (optional but recommended)
 
@@ -90,7 +90,8 @@ See [Hook behaviour](#hooks) below for what each hook does.
 |------|---------|
 | `ctx_execute` | Run shell/python/go/node; large output stored + summarised |
 | `ctx_read_file` | Read a file, optionally piped through a processing script |
-| `ctx_search` | FTS5 full-text search across stored outputs |
+| `ctx_outline` | Extract headings / table-of-contents from a stored output |
+| `ctx_search` | FTS5 full-text search across stored outputs (supports `context_lines`) |
 | `ctx_list_outputs` | List all stored outputs for this project |
 | `ctx_get_full` | Retrieve complete output or a specific line range |
 
