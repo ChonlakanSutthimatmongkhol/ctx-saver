@@ -2,6 +2,7 @@ package store_test
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -168,4 +169,112 @@ func TestSQLiteStore_DBFilePermissions(t *testing.T) {
 	require.NoError(t, err)
 	// Should be 0600 (owner rw, no group/other).
 	assert.Equal(t, os.FileMode(0600), info.Mode().Perm())
+}
+
+func TestGetStats_EmptyDB(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+
+	stats, err := st.GetStats(ctx, "/test/project", time.Time{})
+	require.NoError(t, err)
+	assert.Equal(t, 0, stats.OutputsStored)
+	assert.Equal(t, int64(0), stats.RawBytes)
+	assert.Equal(t, int64(0), stats.LargestBytes)
+	assert.Equal(t, int64(0), stats.AvgDurationMs)
+	assert.Empty(t, stats.TopCommands)
+	assert.Empty(t, stats.LargestOutputs)
+	assert.Equal(t, 0, stats.DangerousBlocked)
+	assert.Equal(t, 0, stats.RedirectedToMCP)
+	assert.Equal(t, 0, stats.EventsCaptured)
+}
+
+func TestGetStats_SingleOutput(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+
+	out := sampleOutput("out_stats_001")
+	out.SizeBytes = 1000
+	out.DurationMs = 200
+	require.NoError(t, st.Save(ctx, out))
+
+	stats, err := st.GetStats(ctx, "/test/project", time.Time{})
+	require.NoError(t, err)
+	assert.Equal(t, 1, stats.OutputsStored)
+	assert.Equal(t, int64(1000), stats.RawBytes)
+	assert.Equal(t, int64(1000), stats.LargestBytes)
+	assert.Equal(t, int64(200), stats.AvgDurationMs)
+	require.Len(t, stats.TopCommands, 1)
+	assert.Equal(t, out.Command, stats.TopCommands[0].Command)
+	require.Len(t, stats.LargestOutputs, 1)
+	assert.Equal(t, "out_stats_001", stats.LargestOutputs[0].OutputID)
+}
+
+func TestGetStats_MultipleCommands(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+
+	// 3 outputs with cmd_a, 2 with cmd_b, 1 with cmd_c.
+	for i := range 3 {
+		o := sampleOutput(fmt.Sprintf("out_cmd_a%d", i))
+		o.Command = "[shell] cmd_a"
+		require.NoError(t, st.Save(ctx, o))
+	}
+	for i := range 2 {
+		o := sampleOutput(fmt.Sprintf("out_cmd_b%d", i))
+		o.Command = "[shell] cmd_b"
+		require.NoError(t, st.Save(ctx, o))
+	}
+	o := sampleOutput("out_cmd_c0")
+	o.Command = "[shell] cmd_c"
+	require.NoError(t, st.Save(ctx, o))
+
+	stats, err := st.GetStats(ctx, "/test/project", time.Time{})
+	require.NoError(t, err)
+	assert.Equal(t, 6, stats.OutputsStored)
+	require.GreaterOrEqual(t, len(stats.TopCommands), 3)
+	assert.Equal(t, "[shell] cmd_a", stats.TopCommands[0].Command)
+	assert.Equal(t, 3, stats.TopCommands[0].Count)
+	assert.Equal(t, "[shell] cmd_b", stats.TopCommands[1].Command)
+	assert.Equal(t, 2, stats.TopCommands[1].Count)
+}
+
+func TestGetStats_SinceFilter(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+
+	old := sampleOutput("out_old_stats")
+	old.CreatedAt = time.Now().AddDate(0, 0, -10)
+	old.SizeBytes = 9000
+	require.NoError(t, st.Save(ctx, old))
+
+	recent := sampleOutput("out_recent_stats")
+	recent.SizeBytes = 1000
+	require.NoError(t, st.Save(ctx, recent))
+
+	stats, err := st.GetStats(ctx, "/test/project", time.Now().AddDate(0, 0, -1))
+	require.NoError(t, err)
+	assert.Equal(t, 1, stats.OutputsStored)
+	assert.Equal(t, int64(1000), stats.RawBytes)
+}
+
+func TestGetStats_HookCounts(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+
+	events := []*store.SessionEvent{
+		{SessionID: "s1", ProjectPath: "/test/project", EventType: "pretooluse", Summary: "deny: rm -rf /"},
+		{SessionID: "s1", ProjectPath: "/test/project", EventType: "pretooluse", Summary: "redirect: curl to ctx_execute"},
+		{SessionID: "s1", ProjectPath: "/test/project", EventType: "posttooluse", Summary: "recorded tool call"},
+		{SessionID: "s1", ProjectPath: "/test/project", EventType: "pretooluse", Summary: "deny: sudo rm"},
+	}
+	for _, e := range events {
+		e.CreatedAt = time.Now()
+		require.NoError(t, st.SaveSessionEvent(ctx, e))
+	}
+
+	stats, err := st.GetStats(ctx, "/test/project", time.Time{})
+	require.NoError(t, err)
+	assert.Equal(t, 4, stats.EventsCaptured)
+	assert.Equal(t, 2, stats.DangerousBlocked)
+	assert.Equal(t, 1, stats.RedirectedToMCP)
 }
