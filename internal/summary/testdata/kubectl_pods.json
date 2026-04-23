@@ -1,0 +1,6 @@
+[
+  {"id": "abc-001", "name": "payment-service", "status": "Running", "ready": "2/2", "restarts": 0},
+  {"id": "abc-002", "name": "auth-service",    "status": "Running", "ready": "1/1", "restarts": 1},
+  {"id": "abc-003", "name": "api-gateway",     "status": "Running", "ready": "3/3", "restarts": 0},
+  {"id": "abc-004", "name": "worker-job",      "status": "Pending", "ready": "0/1", "restarts": 0}
+]

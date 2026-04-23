@@ -1,0 +1,23 @@
+{
+  "id": "proj-abc-123456789012",
+  "title": "Payment Processing Service",
+  "version": "2.3.1",
+  "endpoints": [
+    {"method": "POST", "path": "/api/v1/payments"},
+    {"method": "GET",  "path": "/api/v1/payments/{id}"},
+    {"method": "POST", "path": "/api/v1/refunds"}
+  ],
+  "schemas": [
+    {"name": "Payment",  "fields": 8},
+    {"name": "Refund",   "fields": 5},
+    {"name": "Customer", "fields": 12}
+  ],
+  "auth": {
+    "type": "Bearer",
+    "scope": "payments:read payments:write"
+  },
+  "rateLimit": {
+    "requests": 1000,
+    "window": "1m"
+  }
+}

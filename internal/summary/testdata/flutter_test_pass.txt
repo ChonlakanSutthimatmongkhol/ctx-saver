@@ -1,0 +1,16 @@
+Running flutter test...
+Building flutter tool...
+Building package dependencies...
+
+00:00 +0: loading /home/user/project/test/auth_test.dart
+00:01 +1: auth_test: TestLogin
+00:01 +2: auth_test: TestLogout
+00:02 +3: payment_test: TestProcessPayment
+00:02 +4: payment_test: TestRefund
+00:03 +5: api_test: TestRetry
+00:03 +6: api_test: TestTimeout
+00:04 +7: widget_test: TestHomeWidget
+00:04 +8: widget_test: TestLoginWidget
+00:04 +8: All tests passed!
+
+Exited (0) 4.3s

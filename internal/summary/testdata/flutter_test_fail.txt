@@ -1,0 +1,21 @@
+Running flutter test...
+Building flutter tool...
+
+00:00 +0: loading /home/user/project/test/auth_test.dart
+00:01 +1: auth_test: TestLogin
+00:01 +2: auth_test: TestLogout
+00:02 +3: payment_test: TestProcessPayment
+00:03 +3 -1: payment_test: TestRefund [E]
+  Expected: 200
+    Actual: 500
+  test/payment_test.dart:45
+00:04 +3 -1: api_test: TestRetry [E]
+  TimeoutException after 0:00:05.000000: Test timed out after 5 seconds.
+  test/api_test.dart:78
+00:04 +3 ~1 -1: widget_test: TestLoginWidget [S] (skipped)
+00:04 +3 ~1 -2: Some tests failed.
+
+FAILED: test/payment_test.dart:45
+FAILED: test/api_test.dart:78
+
+Exited (1) 4.7s

@@ -1,0 +1,13 @@
+=== RUN   TestSave
+--- PASS: TestSave (0.02s)
+=== RUN   TestGet
+--- PASS: TestGet (0.01s)
+=== RUN   TestProcessPayment
+    payment_test.go:78: expected 100, got 50
+--- FAIL: TestProcessPayment (0.05s)
+=== RUN   TestRetry
+    retry_test.go:22: timeout after 5s
+--- FAIL: TestRetry (0.01s)
+ok  	github.com/example/myapp/internal/store	0.03s	coverage: 88.2% of statements
+FAIL	github.com/example/myapp/internal/payment	0.07s
+FAIL

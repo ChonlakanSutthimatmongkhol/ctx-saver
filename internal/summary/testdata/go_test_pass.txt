@@ -1,0 +1,14 @@
+=== RUN   TestSave
+--- PASS: TestSave (0.02s)
+=== RUN   TestGet
+--- PASS: TestGet (0.01s)
+=== RUN   TestList
+--- PASS: TestList (0.01s)
+=== RUN   TestSearch
+--- PASS: TestSearch (0.03s)
+ok  	github.com/example/myapp/internal/store	0.07s	coverage: 88.2% of statements
+=== RUN   TestExecuteHandler
+--- PASS: TestExecuteHandler (0.05s)
+=== RUN   TestReadFile
+--- PASS: TestReadFile (0.02s)
+ok  	github.com/example/myapp/internal/handlers	0.08s	coverage: 75.0% of statements
