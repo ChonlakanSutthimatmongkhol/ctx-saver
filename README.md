@@ -71,19 +71,20 @@ Or globally in VS Code `settings.json`:
 
 Verify: Command Palette → **MCP: List Servers** — should show `ctx-saver` with 7 tools.
 
-### Install hooks (optional but recommended)
+### Install Claude hooks and Copilot server entry
 
-Hooks enable automatic routing of large-output commands and session history restoration.
+Claude hooks enable automatic routing of large-output commands and session history restoration.
+For VS Code Copilot, this step only registers the `ctx-saver` MCP server entry.
 
 ```bash
 # Claude Code
 ./scripts/install-hooks.sh claude
 
-# VS Code Copilot (run from your project root; installs MCP server only)
+# VS Code Copilot (run from your project root; registers MCP server only)
 ./scripts/install-hooks.sh copilot
 ```
 
-If you installed via `go install` and did not clone this repository, use a temporary shallow clone to run the hook installer:
+If you installed via `go install` and did not clone this repository, use a temporary shallow clone to run the installer:
 
 ```bash
 tmp="$(mktemp -d)"
@@ -99,7 +100,7 @@ cd /path/to/your/project
 rm -rf "$tmp"
 ```
 
-The script detects the binary path automatically, backs up your existing config, and merges the hooks JSON — it will not overwrite unrelated settings. `jq` is required (`brew install jq` / `apt-get install jq`).
+The script detects the binary path automatically, backs up your existing config, and merges JSON safely — it will not overwrite unrelated settings. `jq` is required (`brew install jq` / `apt-get install jq`).
 
 For VS Code Copilot, `.vscode/mcp.json` currently accepts `servers` but rejects a top-level `hooks` key.
 
@@ -110,10 +111,12 @@ In short:
 
 Note: You can still run `ctx-saver hook <event>` manually for one-off testing.
 
-To remove hooks:
+To remove Claude hooks:
 ```bash
-./scripts/uninstall-hooks.sh claude   # or copilot
+./scripts/uninstall-hooks.sh claude
 ```
+
+To remove VS Code Copilot server entry, delete `servers.ctx-saver` from `.vscode/mcp.json`.
 
 See [Hook behaviour](#hooks) below for what each hook does.
 
