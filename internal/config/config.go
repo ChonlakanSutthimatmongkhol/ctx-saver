@@ -53,9 +53,11 @@ type StorageConfig struct {
 
 // SummaryConfig controls how outputs are summarised before returning to the AI.
 type SummaryConfig struct {
-	HeadLines               int `yaml:"head_lines"`
-	TailLines               int `yaml:"tail_lines"`
-	AutoIndexThresholdBytes int `yaml:"auto_index_threshold_bytes"` // outputs larger than this are stored
+	HeadLines               int      `yaml:"head_lines"`
+	TailLines               int      `yaml:"tail_lines"`
+	AutoIndexThresholdBytes int      `yaml:"auto_index_threshold_bytes"` // outputs larger than this are stored
+	SmartFormat             bool     `yaml:"smart_format"`               // enable format-aware summariser (default: true)
+	EnabledFormatters       []string `yaml:"enabled_formatters,omitempty"` // nil = all enabled
 }
 
 // LoggingConfig controls structured logging.
@@ -84,6 +86,8 @@ func Default() *Config {
 			HeadLines:               20,
 			TailLines:               5,
 			AutoIndexThresholdBytes: 5120,
+			SmartFormat:             true,
+			EnabledFormatters:       nil, // nil = all enabled
 		},
 		Logging: LoggingConfig{
 			Level: "info",
