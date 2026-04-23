@@ -88,13 +88,27 @@ See [Hook behaviour](#hooks) below for what each hook does.
 
 | Tool | Purpose |
 |------|---------|
-| `ctx_execute` | Run shell/python/go/node; large output stored + summarised |
+| `ctx_execute` | Run shell/python/go/node; large output stored + summarised (format-aware) |
 | `ctx_read_file` | Read a file, optionally piped through a processing script |
 | `ctx_outline` | Extract headings / table-of-contents from a stored output |
 | `ctx_search` | FTS5 full-text search across stored outputs (supports `context_lines`) |
 | `ctx_list_outputs` | List all stored outputs for this project |
 | `ctx_get_full` | Retrieve complete output or a specific line range |
 | `ctx_stats` | Report storage and hook statistics (scope: `session\|today\|7d\|all`) |
+
+### Smart Summarizer (Phase 4)
+
+`ctx_execute` automatically detects the output format and produces a compact, structured summary:
+
+| Format | Detected when | Summary includes |
+|--------|--------------|------------------|
+| `flutter_test` | command contains `flutter test`, or output has `All tests passed!` / `Some tests failed.` | pass/fail/skip counts, failed test names, duration |
+| `go_test` | command contains `go test`, or output has `=== RUN` + `--- PASS/FAIL` | package pass/fail counts, failed test details, coverage % |
+| `json` | output is valid JSON starting with `{` or `[` | top-level keys + types, array length, sample value |
+| `git_log` | command contains `git log`, or output starts with `commit <hash>` | commit count, newest/oldest commits, top authors |
+| `generic` | fallback for everything else | head + tail lines with omitted-line count |
+
+Set `summary.smart_format: false` in config to always use the generic summariser.
 
 ## How it works
 
@@ -130,6 +144,8 @@ summary:
   head_lines: 20
   tail_lines: 5
   auto_index_threshold_bytes: 5120   # 5 KB
+  smart_format: true                  # format-aware summariser (flutter_test | go_test | json | git_log | generic)
+  enabled_formatters: []              # empty = all enabled; list names to restrict
 
 logging:
   level: info
@@ -178,6 +194,24 @@ make lint           # golangci-lint
 make install        # → /usr/local/bin/ctx-saver
 ```
 
+## Test coverage (Phase 4)
+
+```
+Package                                    Coverage
+─────────────────────────────────────────────────
+internal/config                             62.2%
+internal/handlers                           67.7%
+internal/hooks                              90.0%
+internal/sandbox                            81.1%
+internal/store                              63.1%
+internal/summary                            81.0%
+internal/summary/formats                    79.9%
+─────────────────────────────────────────────────
+total                                       73.8%
+```
+
+Run `make test` to reproduce.
+
 ## Security
 
 - SQLite database permissions: `0600` (owner read/write only)
@@ -194,7 +228,8 @@ cmd/ctx-saver/main.go          entry point
 internal/config/               YAML config loader
 internal/sandbox/              execution interface (subprocess + srt stub)
 internal/store/                SQLite + FTS5 storage layer
-internal/summary/              head+tail+stats summariser
+internal/summary/              smart summariser: format-aware (flutter_test, go_test, json, git_log) + generic fallback
+  internal/summary/formats/      one file per formatter + tests
 internal/handlers/             one file per MCP tool
 internal/hooks/                PreToolUse / PostToolUse / SessionStart hooks
 internal/server/               MCP server wiring
