@@ -1,5 +1,7 @@
 # ctx-saver
 
+**English** | [ภาษาไทย](README.th.md)
+
 A self-hosted MCP server (Go) that reduces AI context window usage by sandboxing large tool outputs and returning compact summaries instead of raw text.
 
 ## Why
