@@ -258,6 +258,92 @@ func (s *SQLiteStore) Cleanup(ctx context.Context, projectPath string, retention
 	return tx.Commit()
 }
 
+// SaveSessionEvent persists one hook lifecycle event.
+func (s *SQLiteStore) SaveSessionEvent(ctx context.Context, event *SessionEvent) error {
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO session_events
+			(session_id, project_path, event_type, tool_name, tool_input,
+			 tool_output, summary, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		event.SessionID,
+		event.ProjectPath,
+		event.EventType,
+		event.ToolName,
+		event.ToolInput,
+		event.ToolOutput,
+		event.Summary,
+		event.CreatedAt.Unix(),
+	)
+	if err != nil {
+		return fmt.Errorf("inserting session event: %w", err)
+	}
+	return nil
+}
+
+// ListSessionEvents returns recent events for a given session (oldest first).
+func (s *SQLiteStore) ListSessionEvents(ctx context.Context, sessionID string, limit int) ([]*SessionEvent, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, session_id, project_path, event_type, tool_name,
+		       tool_input, tool_output, summary, created_at
+		FROM session_events
+		WHERE session_id = ?
+		ORDER BY created_at ASC
+		LIMIT ?`, sessionID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("listing session events: %w", err)
+	}
+	defer rows.Close()
+	return scanSessionEvents(rows)
+}
+
+// ListProjectSessionEvents returns recent events across all sessions for
+// a project (oldest first), for SessionStart context restoration.
+func (s *SQLiteStore) ListProjectSessionEvents(ctx context.Context, projectPath string, limit int) ([]*SessionEvent, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, session_id, project_path, event_type, tool_name,
+		       tool_input, tool_output, summary, created_at
+		FROM session_events
+		WHERE project_path = ?
+		ORDER BY created_at DESC
+		LIMIT ?`, projectPath, limit)
+	if err != nil {
+		return nil, fmt.Errorf("listing project session events: %w", err)
+	}
+	defer rows.Close()
+	events, err := scanSessionEvents(rows)
+	if err != nil {
+		return nil, err
+	}
+	// Reverse to oldest-first for context presentation.
+	for i, j := 0, len(events)-1; i < j; i, j = i+1, j-1 {
+		events[i], events[j] = events[j], events[i]
+	}
+	return events, nil
+}
+
+func scanSessionEvents(rows *sql.Rows) ([]*SessionEvent, error) {
+	var events []*SessionEvent
+	for rows.Next() {
+		var e SessionEvent
+		var createdAt int64
+		if err := rows.Scan(
+			&e.ID, &e.SessionID, &e.ProjectPath, &e.EventType,
+			&e.ToolName, &e.ToolInput, &e.ToolOutput, &e.Summary, &createdAt,
+		); err != nil {
+			return nil, fmt.Errorf("scanning session event: %w", err)
+		}
+		e.CreatedAt = time.Unix(createdAt, 0)
+		events = append(events, &e)
+	}
+	return events, rows.Err()
+}
+
 // Close releases the database connection.
 func (s *SQLiteStore) Close() error {
 	return s.db.Close()

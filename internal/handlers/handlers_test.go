@@ -78,6 +78,16 @@ func (m *mockStore) Search(_ context.Context, _, _ string, _ int) ([]*store.Matc
 func (m *mockStore) Cleanup(_ context.Context, _ string, _ int) error { return nil }
 func (m *mockStore) Close() error                                      { return nil }
 
+func (m *mockStore) SaveSessionEvent(_ context.Context, _ *store.SessionEvent) error {
+	return nil
+}
+func (m *mockStore) ListSessionEvents(_ context.Context, _ string, _ int) ([]*store.SessionEvent, error) {
+	return nil, nil
+}
+func (m *mockStore) ListProjectSessionEvents(_ context.Context, _ string, _ int) ([]*store.SessionEvent, error) {
+	return nil, nil
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────
 
 func defaultCfg() *config.Config {

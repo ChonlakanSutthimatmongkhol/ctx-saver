@@ -37,6 +37,19 @@ type Match struct {
 	Score    float64
 }
 
+// SessionEvent records one hook lifecycle event for session tracking.
+type SessionEvent struct {
+	ID          int64
+	SessionID   string
+	ProjectPath string
+	EventType   string // "pretooluse" | "posttooluse" | "sessionstart"
+	ToolName    string
+	ToolInput   string // JSON string
+	ToolOutput  string // JSON string or plain text
+	Summary     string // human-readable one-liner
+	CreatedAt   time.Time
+}
+
 // Store is the repository interface for stored outputs.
 // Implementations must be safe for concurrent use.
 type Store interface {
@@ -55,6 +68,16 @@ type Store interface {
 
 	// Cleanup deletes outputs older than retentionDays for projectPath.
 	Cleanup(ctx context.Context, projectPath string, retentionDays int) error
+
+	// SaveSessionEvent persists one hook lifecycle event.
+	SaveSessionEvent(ctx context.Context, event *SessionEvent) error
+
+	// ListSessionEvents returns recent events for a session (newest last).
+	ListSessionEvents(ctx context.Context, sessionID string, limit int) ([]*SessionEvent, error)
+
+	// ListProjectSessionEvents returns recent events across all sessions for
+	// a project (newest last), useful for SessionStart context restoration.
+	ListProjectSessionEvents(ctx context.Context, projectPath string, limit int) ([]*SessionEvent, error)
 
 	// Close releases database resources.
 	Close() error

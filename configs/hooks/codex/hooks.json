@@ -1,0 +1,35 @@
+{
+  "description": "ctx-saver hooks — PreToolUse routing enforcement, PostToolUse session capture, SessionStart context restoration",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "ctx-saver hook pretooluse"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "ctx-saver hook posttooluse"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "ctx-saver hook sessionstart"
+          }
+        ]
+      }
+    ]
+  }
+}

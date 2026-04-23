@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-const currentSchemaVersion = 1
+const currentSchemaVersion = 2
 
 // runMigrations applies any pending schema migrations to db.
 // It is idempotent and safe to call on every server start.
@@ -41,6 +41,10 @@ func applyMigration(db *sql.DB, version int) error {
 	switch version {
 	case 1:
 		if err := migration1(tx); err != nil {
+			return err
+		}
+	case 2:
+		if err := migration2(tx); err != nil {
 			return err
 		}
 	default:
@@ -95,4 +99,29 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// migration2 creates the session_events table for hook-based session tracking.
+func migration2(tx *sql.Tx) error {
+	stmts := []string{
+		`CREATE TABLE session_events (
+			id           INTEGER PRIMARY KEY AUTOINCREMENT,
+			session_id   TEXT    NOT NULL,
+			project_path TEXT    NOT NULL,
+			event_type   TEXT    NOT NULL,
+			tool_name    TEXT    NOT NULL DEFAULT '',
+			tool_input   TEXT    NOT NULL DEFAULT '',
+			tool_output  TEXT    NOT NULL DEFAULT '',
+			summary      TEXT    NOT NULL DEFAULT '',
+			created_at   INTEGER NOT NULL
+		)`,
+		`CREATE INDEX idx_session_events_session  ON session_events(session_id, created_at)`,
+		`CREATE INDEX idx_session_events_project  ON session_events(project_path, created_at)`,
+	}
+	for _, stmt := range stmts {
+		if _, err := tx.Exec(stmt); err != nil {
+			return fmt.Errorf("executing %q: %w", stmt[:min(40, len(stmt))], err)
+		}
+	}
+	return nil
 }

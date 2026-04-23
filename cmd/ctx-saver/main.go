@@ -3,7 +3,10 @@
 //
 // Usage:
 //
-//	ctx-saver [--debug]
+//	ctx-saver [--debug]              — start the MCP server (stdio transport)
+//	ctx-saver hook pretooluse        — PreToolUse routing enforcement hook
+//	ctx-saver hook posttooluse       — PostToolUse session capture hook
+//	ctx-saver hook sessionstart      — SessionStart state-restoration hook
 //
 // The server communicates over stdin/stdout using the MCP protocol (stdio transport).
 // All log output goes to the configured log file (default: ~/.local/share/ctx-saver/server.log)
@@ -31,6 +34,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/config"
+	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/hooks"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/sandbox"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/server"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/store"
@@ -45,6 +49,59 @@ func main() {
 }
 
 func run() error {
+	args := os.Args[1:]
+
+	// ── Hook subcommand: ctx-saver hook <event> ────────────────────────────────
+	// Hooks are lightweight — they open the store, run, and exit.
+	// They do NOT start the full MCP server.
+	if len(args) >= 2 && args[0] == "hook" {
+		return runHook(args[1])
+	}
+
+	// ── MCP server mode ────────────────────────────────────────────────────────
+	return runServer()
+}
+
+// runHook handles the `ctx-saver hook <event>` subcommand.
+func runHook(event string) error {
+	projectPath, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("determining working directory: %w", err)
+	}
+
+	cfg, err := config.Load()
+	if err != nil {
+		// Config failure must not block hooks — use defaults.
+		cfg = config.Default()
+	}
+	config.ResolveDataDir(cfg, projectPath)
+
+	st, err := store.NewSQLiteStore(cfg.Storage.DataDir, projectPath)
+	if err != nil {
+		// If the store is unavailable, still try to emit a valid hook response.
+		st = nil
+	}
+	if st != nil {
+		defer st.Close()
+	}
+
+	ctx := context.Background()
+	_ = ctx // used by store calls inside hook runners
+
+	switch event {
+	case "pretooluse":
+		return hooks.RunPreToolUse(st, os.Stdin, os.Stdout)
+	case "posttooluse":
+		return hooks.RunPostToolUse(st, os.Stdin, os.Stdout)
+	case "sessionstart":
+		return hooks.RunSessionStart(st, os.Stdin, os.Stdout)
+	default:
+		return fmt.Errorf("unknown hook event %q (want: pretooluse | posttooluse | sessionstart)", event)
+	}
+}
+
+// runServer starts the full MCP server.
+func runServer() error {
 	// ── Configuration ──────────────────────────────────────────────────────────
 	cfg, err := config.Load()
 	if err != nil {
