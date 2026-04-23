@@ -10,19 +10,56 @@ Tools like `jira issue list`, `kubectl get pods`, and `git log` produce kilobyte
 
 ## Quick start (5 minutes)
 
+### Option A — go install (requires Go 1.25+)
+
 ```bash
-# 1. Build
-make build
+# Install latest release
+go install github.com/ChonlakanSutthimatmongkhol/ctx-saver/cmd/ctx-saver@latest
 
-# 2. Install
-make install        # copies to /usr/local/bin/ctx-saver
-
-# 3a. Claude Code
-claude mcp add ctx-saver -- /usr/local/bin/ctx-saver
-
-# 3b. VS Code Copilot — create .vscode/mcp.json
-echo '{"servers":{"ctx-saver":{"command":"/usr/local/bin/ctx-saver"}}}' > .vscode/mcp.json
+# Or pin to a specific version
+go install github.com/ChonlakanSutthimatmongkhol/ctx-saver/cmd/ctx-saver@v0.1.0
 ```
+
+The binary lands in `$(go env GOPATH)/bin/ctx-saver`.
+
+### Option B — clone and build
+
+```bash
+git clone https://github.com/ChonlakanSutthimatmongkhol/ctx-saver.git
+cd ctx-saver
+make install        # build + copy to /usr/local/bin/ctx-saver
+```
+
+### Configure your AI client
+
+**Claude Code**
+```bash
+claude mcp add ctx-saver -- $(go env GOPATH)/bin/ctx-saver
+```
+
+**VS Code Copilot** — create `.vscode/mcp.json` in any project root:
+```json
+{
+  "servers": {
+    "ctx-saver": {
+      "command": "/usr/local/bin/ctx-saver"
+    }
+  }
+}
+```
+
+Or globally in VS Code `settings.json`:
+```json
+{
+  "mcp.servers": {
+    "ctx-saver": {
+      "command": "/Users/<you>/go/bin/ctx-saver"
+    }
+  }
+}
+```
+
+Verify: Command Palette → **MCP: List Servers** — should show `ctx-saver` with 5 tools.
 
 ## Tools
 

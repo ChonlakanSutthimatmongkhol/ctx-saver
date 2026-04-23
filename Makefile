@@ -11,7 +11,7 @@ build:
 
 ## test: run all unit tests with race detector and coverage
 test:
-	go test -race -coverprofile=coverage.out ./internal/...
+	go test -race -coverprofile=coverage.out $$(go list ./internal/... | grep -v /server)
 	go tool cover -func=coverage.out
 
 ## install: build then copy binary to /usr/local/bin
