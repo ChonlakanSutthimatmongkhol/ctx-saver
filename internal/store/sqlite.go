@@ -344,6 +344,106 @@ func scanSessionEvents(rows *sql.Rows) ([]*SessionEvent, error) {
 	return events, rows.Err()
 }
 
+// GetStats returns aggregate statistics for outputs and session events
+// belonging to projectPath created at or after since.
+// A zero since means no time filter.
+func (s *SQLiteStore) GetStats(ctx context.Context, projectPath string, since time.Time) (*Stats, error) {
+	sinceUnix := int64(0)
+	if !since.IsZero() {
+		sinceUnix = since.Unix()
+	}
+
+	stats := &Stats{}
+
+	// --- outputs aggregates ---
+	row := s.db.QueryRowContext(ctx, `
+		SELECT
+			COUNT(*),
+			COALESCE(SUM(size_bytes), 0),
+			COALESCE(MAX(size_bytes), 0),
+			COALESCE(AVG(duration_ms), 0)
+		FROM outputs
+		WHERE project_path = ? AND (? = 0 OR created_at >= ?)`,
+		projectPath, sinceUnix, sinceUnix)
+	if err := row.Scan(&stats.OutputsStored, &stats.RawBytes, &stats.LargestBytes, &stats.AvgDurationMs); err != nil {
+		return nil, fmt.Errorf("scanning output aggregates: %w", err)
+	}
+
+	// --- top commands ---
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT command, COUNT(*) AS cnt, COALESCE(SUM(size_bytes), 0)
+		FROM outputs
+		WHERE project_path = ? AND (? = 0 OR created_at >= ?)
+		GROUP BY command
+		ORDER BY cnt DESC
+		LIMIT 5`,
+		projectPath, sinceUnix, sinceUnix)
+	if err != nil {
+		return nil, fmt.Errorf("querying top commands: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c CommandStat
+		if err := rows.Scan(&c.Command, &c.Count, &c.TotalBytes); err != nil {
+			return nil, fmt.Errorf("scanning command stat: %w", err)
+		}
+		stats.TopCommands = append(stats.TopCommands, c)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterating command stats: %w", err)
+	}
+
+	// --- largest outputs ---
+	lrows, err := s.db.QueryContext(ctx, `
+		SELECT output_id, command, size_bytes, line_count
+		FROM outputs
+		WHERE project_path = ? AND (? = 0 OR created_at >= ?)
+		ORDER BY size_bytes DESC
+		LIMIT 3`,
+		projectPath, sinceUnix, sinceUnix)
+	if err != nil {
+		return nil, fmt.Errorf("querying largest outputs: %w", err)
+	}
+	defer lrows.Close()
+	for lrows.Next() {
+		m := &OutputMeta{}
+		if err := lrows.Scan(&m.OutputID, &m.Command, &m.SizeBytes, &m.LineCount); err != nil {
+			return nil, fmt.Errorf("scanning largest output: %w", err)
+		}
+		stats.LargestOutputs = append(stats.LargestOutputs, m)
+	}
+	if err := lrows.Err(); err != nil {
+		return nil, fmt.Errorf("iterating largest outputs: %w", err)
+	}
+
+	// --- session event counts ---
+	erow := s.db.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM session_events
+		WHERE project_path = ? AND (? = 0 OR created_at >= ?)`,
+		projectPath, sinceUnix, sinceUnix)
+	if err := erow.Scan(&stats.EventsCaptured); err != nil {
+		return nil, fmt.Errorf("scanning event count: %w", err)
+	}
+
+	drow := s.db.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM session_events
+		WHERE project_path = ? AND (? = 0 OR created_at >= ?) AND summary LIKE '%deny%'`,
+		projectPath, sinceUnix, sinceUnix)
+	if err := drow.Scan(&stats.DangerousBlocked); err != nil {
+		return nil, fmt.Errorf("scanning dangerous-blocked count: %w", err)
+	}
+
+	rrow := s.db.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM session_events
+		WHERE project_path = ? AND (? = 0 OR created_at >= ?) AND summary LIKE '%redirect%'`,
+		projectPath, sinceUnix, sinceUnix)
+	if err := rrow.Scan(&stats.RedirectedToMCP); err != nil {
+		return nil, fmt.Errorf("scanning redirected count: %w", err)
+	}
+
+	return stats, nil
+}
+
 // Close releases the database connection.
 func (s *SQLiteStore) Close() error {
 	return s.db.Close()
