@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/sandbox"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/store"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/summary"
+	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/summary/formats"
 )
 
 // ExecuteInput is the typed input for the ctx_execute MCP tool.
@@ -27,6 +29,7 @@ type ExecuteInput struct {
 type ExecuteOutput struct {
 	OutputID     string      `json:"output_id,omitempty"     jsonschema:"ID assigned to this output (only when output was stored)"`
 	Summary      string      `json:"summary,omitempty"       jsonschema:"head+tail summary (only when output was stored)"`
+	Format       string      `json:"format,omitempty"        jsonschema:"summary format used: flutter_test | go_test | json | git_log | generic"`
 	Stats        OutputStats `json:"stats"                   jsonschema:"execution statistics"`
 	SearchHint   string      `json:"search_hint,omitempty"   jsonschema:"hint on how to search stored output"`
 	DirectOutput string      `json:"direct_output,omitempty" jsonschema:"full output (only when output is small enough to return directly)"`
@@ -105,8 +108,16 @@ func (h *ExecuteHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, inp
 	if input.SummaryLines > 0 {
 		headLines = input.SummaryLines
 	}
-	sum := summary.GenericSummarize(result.Output, headLines, h.cfg.Summary.TailLines)
-	stats.Lines = sum.TotalLines
+	var sumFmt formats.Summary
+	if h.cfg.Summary.SmartFormat {
+		formatter := summary.DetectWithConfig(result.Output, input.Code, headLines, h.cfg.Summary.TailLines)
+		sumFmt = formatter.Summarize(result.Output)
+	} else {
+		r := summary.GenericSummarize(result.Output, headLines, h.cfg.Summary.TailLines)
+		sumFmt = formats.Summary{Text: r.Text, TotalLines: r.TotalLines, TotalBytes: r.TotalBytes, Format: "generic"}
+	}
+	slog.Debug("summary produced", "format", sumFmt.Format, "lines", sumFmt.TotalLines, "bytes", sumFmt.TotalBytes)
+	stats.Lines = sumFmt.TotalLines
 
 	outputID := generateOutputID()
 	// Sanitise the command string before persisting (avoid logging raw secret-bearing args).
@@ -118,7 +129,7 @@ func (h *ExecuteHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, inp
 		Intent:      input.Intent,
 		FullOutput:  string(result.Output),
 		SizeBytes:   int64(len(result.Output)),
-		LineCount:   sum.TotalLines,
+		LineCount:   sumFmt.TotalLines,
 		ExitCode:    result.ExitCode,
 		DurationMs:  result.Duration.Milliseconds(),
 		CreatedAt:   time.Now(),
@@ -128,10 +139,11 @@ func (h *ExecuteHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, inp
 		return nil, ExecuteOutput{}, fmt.Errorf("storing output: %w", err)
 	}
 
-	statsLine := summary.FormatStats(sum.TotalLines, sum.TotalBytes, result.ExitCode, result.Duration.Milliseconds())
+	statsLine := summary.FormatStats(sumFmt.TotalLines, sumFmt.TotalBytes, result.ExitCode, result.Duration.Milliseconds())
 	return nil, ExecuteOutput{
 		OutputID:   outputID,
-		Summary:    sum.Text + "\n" + statsLine,
+		Summary:    sumFmt.Text + "\n" + statsLine,
+		Format:     sumFmt.Format,
 		Stats:      stats,
 		SearchHint: fmt.Sprintf("Use ctx_search with output_id=%q to query this output", outputID),
 	}, nil
