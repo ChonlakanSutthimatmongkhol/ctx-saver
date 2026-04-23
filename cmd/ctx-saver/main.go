@@ -107,6 +107,8 @@ func runHook(event string) error {
 
 // runServer starts the full MCP server.
 func runServer() error {
+	serverStart := time.Now()
+
 	// ── Configuration ──────────────────────────────────────────────────────────
 	cfg, err := config.Load()
 	if err != nil {
@@ -156,7 +158,7 @@ func runServer() error {
 	sb := sandbox.NewSubprocess(cfg.DenyCommands)
 
 	// ── MCP Server ─────────────────────────────────────────────────────────────
-	srv := server.New(cfg, sb, st, projectPath, projectPath)
+	srv := server.New(cfg, sb, st, projectPath, projectPath, serverStart)
 
 	slog.Info("ctx-saver starting", "project", projectPath, "data_dir", cfg.Storage.DataDir)
 

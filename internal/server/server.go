@@ -2,6 +2,8 @@
 package server
 
 import (
+	"time"
+
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/config"
@@ -15,20 +17,20 @@ const (
 	serverVersion = "0.1.4"
 )
 
-// New constructs a fully configured *mcp.Server with all five ctx-saver tools registered.
+// New constructs a fully configured *mcp.Server with all ctx-saver tools registered.
 // All dependencies are injected — no global state is used.
-func New(cfg *config.Config, sb sandbox.Sandbox, st store.Store, projectPath, workdir string) *mcp.Server {
+func New(cfg *config.Config, sb sandbox.Sandbox, st store.Store, projectPath, workdir string, serverStart time.Time) *mcp.Server {
 	srv := mcp.NewServer(&mcp.Implementation{
 		Name:    serverName,
 		Version: serverVersion,
 	}, nil)
 
-	registerTools(srv, cfg, sb, st, projectPath, workdir)
+	registerTools(srv, cfg, sb, st, projectPath, workdir, serverStart)
 	return srv
 }
 
-// registerTools binds all five MCP tool handlers to the server.
-func registerTools(srv *mcp.Server, cfg *config.Config, sb sandbox.Sandbox, st store.Store, projectPath, workdir string) {
+// registerTools binds all MCP tool handlers to the server.
+func registerTools(srv *mcp.Server, cfg *config.Config, sb sandbox.Sandbox, st store.Store, projectPath, workdir string, serverStart time.Time) {
 	execH := handlers.NewExecuteHandler(cfg, sb, st, projectPath, workdir)
 	mcp.AddTool(srv, &mcp.Tool{
 		Name: "ctx_execute",
@@ -72,4 +74,12 @@ func registerTools(srv *mcp.Server, cfg *config.Config, sb sandbox.Sandbox, st s
 		Description: "Extract a table of contents from a stored output — Markdown headings (##, ###, ####) and table headers. " +
 			"Use this before ctx_search to discover section names and avoid guessing search terms.",
 	}, outlineH.Handle)
+
+	statsH := handlers.NewStatsHandler(cfg, st, projectPath, serverStart)
+	mcp.AddTool(srv, &mcp.Tool{
+		Name: "ctx_stats",
+		Description: "Report ctx-saver statistics: outputs stored, bytes saved, top commands, hook activity. " +
+			"Scope: session | today | 7d | all (default: session). " +
+			"Use this to verify ctx-saver is saving context window space effectively.",
+	}, statsH.Handle)
 }
