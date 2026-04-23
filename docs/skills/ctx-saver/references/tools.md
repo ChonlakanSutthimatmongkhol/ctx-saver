@@ -214,6 +214,62 @@ Each entry:
 
 ---
 
+---
+
+## ctx_stats
+
+Report aggregate statistics for the current project.
+
+**Input**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `scope` | string | N | `session` (default), `today`, `7d`, or `all` |
+
+**Output**
+| Field | Description |
+|-------|-------------|
+| `scope` | Echo of the requested scope |
+| `outputs_stored` | Number of outputs stored in the scope |
+| `raw_bytes` | Total raw bytes of all stored outputs |
+| `estimated_summary_bytes` | Estimated bytes ctx-saver returned to the AI (summaries only) |
+| `saving_percent` | Percentage of raw bytes saved by summarisation |
+| `avg_duration_ms` | Average command execution time |
+| `top_commands` | Up to 5 most-run commands with count + total bytes |
+| `largest_outputs` | Up to 3 largest stored outputs |
+| `hook_stats.dangerous_blocked` | Commands blocked by PreToolUse deny list |
+| `hook_stats.redirected_to_mcp` | Commands redirected to ctx_execute by PreToolUse |
+| `hook_stats.events_captured` | Total hook events recorded |
+
+**Example**
+```json
+{ "scope": "session" }
+```
+
+**Response example**
+```json
+{
+  "scope": "session",
+  "outputs_stored": 12,
+  "raw_bytes": 1843200,
+  "estimated_summary_bytes": 26400,
+  "saving_percent": 98.6,
+  "avg_duration_ms": 340,
+  "top_commands": [
+    { "command": "[shell] go test ./...", "count": 4, "total_bytes": 720000 }
+  ],
+  "largest_outputs": [
+    { "output_id": "out_20260423_a1b2c3d4", "command": "[shell] go test ./...", "size_bytes": 240000, "line_count": 4800 }
+  ],
+  "hook_stats": {
+    "dangerous_blocked": 1,
+    "redirected_to_mcp": 3,
+    "events_captured": 45
+  }
+}
+```
+
+---
+
 ## Output ID Format
 
 `out_YYYYMMDD_<8hex>` — e.g. `out_20260422_76b3de65`

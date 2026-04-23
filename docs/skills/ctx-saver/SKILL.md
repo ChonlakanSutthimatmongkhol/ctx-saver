@@ -4,7 +4,7 @@ description: >
   Workflow for running commands and reading files through ctx-saver MCP tools to reduce context window usage.
   Use when: running tests, builds, or any command with large output; reading large files (OpenAPI spec, logs, SQL migrations);
   fetching Confluence/Jira pages; searching previously stored outputs; retrieving full output by ID or line range.
-  Tools: ctx_execute, ctx_read_file, ctx_search, ctx_list_outputs, ctx_get_full, ctx_outline.
+  Tools: ctx_execute, ctx_read_file, ctx_search, ctx_list_outputs, ctx_get_full, ctx_outline, ctx_stats.
 argument-hint: 'Describe the command or file you want to run/read'
 ---
 
@@ -22,6 +22,7 @@ ctx-saver is an MCP server that stores large command outputs in SQLite and retur
 | Search in a previously stored output | `ctx_search` |
 | List all stored outputs for this project | `ctx_list_outputs` |
 | Get full output or specific line range | `ctx_get_full` |
+| Verify ctx-saver is saving context / check hook activity | `ctx_stats` |
 
 ## Core Decision Rule
 

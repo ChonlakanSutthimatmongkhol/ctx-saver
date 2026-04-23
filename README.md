@@ -61,7 +61,7 @@ Or globally in VS Code `settings.json`:
 }
 ```
 
-Verify: Command Palette → **MCP: List Servers** — should show `ctx-saver` with 6 tools.
+Verify: Command Palette → **MCP: List Servers** — should show `ctx-saver` with 7 tools.
 
 ### Install hooks (optional but recommended)
 
@@ -94,6 +94,7 @@ See [Hook behaviour](#hooks) below for what each hook does.
 | `ctx_search` | FTS5 full-text search across stored outputs (supports `context_lines`) |
 | `ctx_list_outputs` | List all stored outputs for this project |
 | `ctx_get_full` | Retrieve complete output or a specific line range |
+| `ctx_stats` | Report storage and hook statistics (scope: `session\|today\|7d\|all`) |
 
 ## How it works
 
