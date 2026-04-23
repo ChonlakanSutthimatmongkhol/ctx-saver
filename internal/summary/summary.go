@@ -18,9 +18,9 @@ type Result struct {
 	Truncated bool
 }
 
-// Summarize returns the first headLines and last tailLines of output, with stats.
+// GenericSummarize returns the first headLines and last tailLines of output, with stats.
 // If the total number of lines is within headLines+tailLines, the full text is returned.
-func Summarize(output []byte, headLines, tailLines int) Result {
+func GenericSummarize(output []byte, headLines, tailLines int) Result {
 	if len(output) == 0 {
 		return Result{
 			Text:       "(empty output)",

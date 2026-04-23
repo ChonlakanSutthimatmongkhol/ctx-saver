@@ -9,7 +9,7 @@ import (
 )
 
 func TestSummarize_EmptyInput(t *testing.T) {
-	r := summary.Summarize([]byte{}, 20, 5)
+	r := summary.GenericSummarize([]byte{}, 20, 5)
 	assert.Equal(t, "(empty output)", r.Text)
 	assert.Equal(t, 0, r.TotalLines)
 	assert.Equal(t, 0, r.TotalBytes)
@@ -18,7 +18,7 @@ func TestSummarize_EmptyInput(t *testing.T) {
 
 func TestSummarize_SmallInput(t *testing.T) {
 	input := "line1\nline2\nline3\n"
-	r := summary.Summarize([]byte(input), 20, 5)
+	r := summary.GenericSummarize([]byte(input), 20, 5)
 	assert.False(t, r.Truncated)
 	assert.Equal(t, 3, r.TotalLines)
 	assert.Equal(t, len(input), r.TotalBytes)
@@ -31,7 +31,7 @@ func TestSummarize_LargeInput_TruncatesCorrectly(t *testing.T) {
 	}
 	input := strings.Join(lines, "\n") + "\n"
 
-	r := summary.Summarize([]byte(input), 10, 3)
+	r := summary.GenericSummarize([]byte(input), 10, 3)
 
 	assert.True(t, r.Truncated)
 	assert.Equal(t, 100, r.TotalLines)
@@ -51,7 +51,7 @@ func TestSummarize_ExactBoundary(t *testing.T) {
 	for i := range lines {
 		lines[i] = "line"
 	}
-	r := summary.Summarize([]byte(strings.Join(lines, "\n")), 20, 5)
+	r := summary.GenericSummarize([]byte(strings.Join(lines, "\n")), 20, 5)
 	assert.False(t, r.Truncated)
 }
 

@@ -131,7 +131,7 @@ func (h *ReadFileHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, in
 		}, nil
 	}
 
-	sum := summary.Summarize(rawOutput, h.cfg.Summary.HeadLines, h.cfg.Summary.TailLines)
+	sum := summary.GenericSummarize(rawOutput, h.cfg.Summary.HeadLines, h.cfg.Summary.TailLines)
 	stats.Lines = sum.TotalLines
 
 	outputID := generateOutputID()

@@ -105,7 +105,7 @@ func (h *ExecuteHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, inp
 	if input.SummaryLines > 0 {
 		headLines = input.SummaryLines
 	}
-	sum := summary.Summarize(result.Output, headLines, h.cfg.Summary.TailLines)
+	sum := summary.GenericSummarize(result.Output, headLines, h.cfg.Summary.TailLines)
 	stats.Lines = sum.TotalLines
 
 	outputID := generateOutputID()
