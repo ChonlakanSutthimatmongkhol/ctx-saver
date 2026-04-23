@@ -21,11 +21,12 @@ run_scenario() {
     local cmd="$2"
 
     # Raw byte count from running the command directly.
-    raw_bytes=$(eval "${cmd}" 2>&1 | wc -c | tr -d ' ')
+    # ||true: suppress exit 141 (SIGPIPE) when a head pipeline closes stdin early.
+    raw_bytes=$(eval "${cmd}" 2>&1 | wc -c | tr -d ' ') || true
 
     # Summary byte count: what ctx_execute would return.
     # We simulate by taking the first 20 lines + last 5 lines.
-    summary_bytes=$(eval "${cmd}" 2>&1 | awk 'NR<=20{print} END{for(i=NR-4;i<=NR;i++) print lines[i]}{lines[NR]=$0}' | wc -c | tr -d ' ')
+    summary_bytes=$(eval "${cmd}" 2>&1 | awk 'NR<=20{print} END{for(i=NR-4;i<=NR;i++) print lines[i]}{lines[NR]=$0}' | wc -c | tr -d ' ') || true
 
     if [ "${raw_bytes}" -gt 0 ]; then
         saving=$(awk "BEGIN{printf \"%.0f%%\", (1 - ${summary_bytes}/${raw_bytes})*100}")
@@ -77,7 +78,7 @@ run_scenario "app.log (2000 lines)" "cat ${LOG_FILE}"
 
 # 5. find output (large directory listing)
 run_scenario "find /usr/local -type f (file listing)" \
-    "find /usr/local -type f 2>/dev/null | head -5000"
+    "find /usr/local -type f 2>/dev/null | head -5000 || true"
 
 echo ""
 echo "Note: 'Summary B' simulates the head-20 + tail-5 strategy."
