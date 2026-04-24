@@ -9,3 +9,6 @@ coverage.out
 
 # macOS
 .DS_Store
+
+# Planning docs
+PHASE*.md

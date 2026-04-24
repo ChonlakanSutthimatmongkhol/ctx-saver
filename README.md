@@ -147,7 +147,7 @@ See [Hook behaviour](#hooks) below for what each hook does.
 
 Set `summary.smart_format: false` in config to always use the generic summariser.
 
-### Search features (Phase 5)
+### Search features
 
 **Auto-escape** — special characters (`#`, `-`, `|`, `:`, `*`, `(`, `)`) in `ctx_search` queries are automatically wrapped as FTS5 phrase literals. You never need to escape them manually.
 
