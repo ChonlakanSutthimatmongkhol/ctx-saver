@@ -258,6 +258,27 @@ Hooks run as lightweight subprocesses alongside the AI agent.  They share the sa
 - `sudo -s`, `sudo rm`, `sudo dd`
 - Reads of credential files (`.env`, `id_rsa`, `.pem`, `.key`)
 
+## For Copilot Enterprise users
+
+If you are using GitHub Copilot in an enterprise context (e.g., at a bank or fintech), see the [Copilot Enterprise Setup Guide](docs/copilot-enterprise-setup.md) for:
+- Required admin policies (MCP server allowlist)
+- Installation steps specific to VS Code Copilot Agent mode
+- Verification procedure (`ctx_session_init` call)
+- Troubleshooting tool-adherence issues
+- How to engage IT/Security for MCP approval
+
+**Quick start:**
+```bash
+# 1. Install ctx-saver binary
+make install
+
+# 2. Add MCP server to VS Code
+./scripts/install-hooks.sh copilot
+
+# 3. Add Copilot instruction rules to your repo
+./scripts/install-hooks.sh copilot-instructions
+```
+
 ## Build
 
 ```bash
