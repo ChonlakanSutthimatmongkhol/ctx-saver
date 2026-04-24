@@ -2,15 +2,46 @@
 # install-hooks.sh — install ctx-saver hooks into Claude Code or VS Code Copilot.
 #
 # Usage:
-#   ./scripts/install-hooks.sh claude    # → ~/.claude/settings.json
-#   ./scripts/install-hooks.sh copilot  # → .vscode/mcp.json (server only; current dir)
+#   ./scripts/install-hooks.sh claude                # → ~/.claude/settings.json
+#   ./scripts/install-hooks.sh copilot              # → .vscode/mcp.json (server only; current dir)
+#   ./scripts/install-hooks.sh copilot-instructions # → .github/copilot-instructions.md (current dir)
 #
-# Requirements: jq  (brew install jq / apt-get install jq)
+# Requirements: jq  (brew install jq / apt-get install jq) — NOT needed for copilot-instructions
 set -euo pipefail
 
 # ── helpers ────────────────────────────────────────────────────────────────
 
 die() { echo "error: $*" >&2; exit 1; }
+
+# ── copilot-instructions (no jq / binary required) ─────────────────────────
+
+if [[ "${1:-}" == "copilot-instructions" ]]; then
+    REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+    TEMPLATE="$REPO_ROOT/configs/copilot-enterprise/copilot-instructions.md"
+    TARGET_DIR="$(pwd)/.github"
+    TARGET_FILE="$TARGET_DIR/copilot-instructions.md"
+
+    [[ -f "$TEMPLATE" ]] || die "template not found: $TEMPLATE"
+
+    mkdir -p "$TARGET_DIR"
+
+    if [[ -f "$TARGET_FILE" ]]; then
+        echo "  $TARGET_FILE already exists."
+        read -r -p "  Append ctx-saver rules? [y/N] " confirm || confirm=""
+        if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
+            echo "  Skipped."
+            exit 0
+        fi
+        { echo ""; echo "---"; echo ""; cat "$TEMPLATE"; } >> "$TARGET_FILE"
+        echo "  Appended ctx-saver rules to $TARGET_FILE"
+    else
+        cp "$TEMPLATE" "$TARGET_FILE"
+        echo "  Created $TARGET_FILE"
+    fi
+
+    echo "Done. Commit .github/copilot-instructions.md to share rules with your team."
+    exit 0
+fi
 
 require_cmd() {
     command -v "$1" >/dev/null 2>&1 || die "'$1' is required but not installed. $2"
@@ -110,11 +141,13 @@ case "$PLATFORM" in
     echo "Usage: $0 <platform>"
     echo ""
     echo "Platforms:"
-    echo "  claude   — Install hooks into ~/.claude/settings.json"
-    echo "  copilot  — Install hooks into .vscode/mcp.json (current directory)"
+    echo "  claude                — Install hooks into ~/.claude/settings.json"
+    echo "  copilot              — Install MCP server into .vscode/mcp.json (current directory)"
+    echo "  copilot-instructions — Install .github/copilot-instructions.md (current directory)"
     echo ""
     echo "Environment:"
     echo "  CTX_SAVER_BIN  Override binary path (default: \$(command -v ctx-saver))"
+    echo "  Note: copilot-instructions does not require jq or ctx-saver binary."
     exit 1
     ;;
 esac
