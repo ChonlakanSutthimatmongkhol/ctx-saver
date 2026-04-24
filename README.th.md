@@ -258,6 +258,22 @@ Hooks ทำงานเป็น subprocess เบาๆ คู่กับ AI 
 - `sudo -s`, `sudo rm`, `sudo dd`
 - อ่านไฟล์ credential (`.env`, `id_rsa`, `.pem`, `.key`)
 
+## สำหรับผู้ใช้ Copilot Enterprise
+
+ถ้าคุณใช้ GitHub Copilot ในบริษัท (เช่น ธนาคารหรือ fintech) ดู [Copilot Enterprise Setup Guide](docs/copilot-enterprise-setup.md) สำหรับ:
+- Policy ที่ admin ต้องเปิด (MCP server allowlist)
+- ขั้นตอนการติดตั้งสำหรับ VS Code Copilot Agent mode
+- การ verify ว่า ctx-saver ทำงานถูกต้อง (เรียก `ctx_session_init`)
+- แก้ปัญหา tool-adherence (Copilot ไม่ใช้ ctx_execute แทน runInTerminal)
+- วิธีพูดคุยกับ IT/Security เพื่อขอ approve MCP
+
+**Quick start:**
+```bash
+make install
+./scripts/install-hooks.sh copilot               # ลง MCP server ใน .vscode/mcp.json
+./scripts/install-hooks.sh copilot-instructions  # ลง Copilot rules ใน .github/
+```
+
 ## Build
 
 ```bash
