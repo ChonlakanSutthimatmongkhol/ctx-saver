@@ -8,6 +8,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/store"
+	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/summary"
 )
 
 // OutlineInput is the typed input for ctx_outline.
@@ -53,21 +54,16 @@ func (h *OutlineHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, inp
 	lines := strings.Split(strings.TrimRight(out.FullOutput, "\n"), "\n")
 	totalLines := len(lines)
 
-	var entries []OutlineEntry
+	heads := summary.ExtractHeadings(lines)
+	entries := make([]OutlineEntry, 0, len(heads))
+	for _, h := range heads {
+		entries = append(entries, OutlineEntry{Line: h.Line, Level: h.Level, Text: h.Raw})
+	}
+
+	// Table headers: current line starts with | and next line is a separator row.
 	for i, line := range lines {
-		lineNo := i + 1
-		switch {
-		case strings.HasPrefix(line, "#### "):
-			entries = append(entries, OutlineEntry{Line: lineNo, Level: 3, Text: line})
-		case strings.HasPrefix(line, "### "):
-			entries = append(entries, OutlineEntry{Line: lineNo, Level: 2, Text: line})
-		case strings.HasPrefix(line, "## "):
-			entries = append(entries, OutlineEntry{Line: lineNo, Level: 1, Text: line})
-		default:
-			// Table header: current line starts with | and next line is a separator row
-			if strings.HasPrefix(line, "|") && i+1 < len(lines) && isTableSeparator(lines[i+1]) {
-				entries = append(entries, OutlineEntry{Line: lineNo, Level: 0, Text: line})
-			}
+		if strings.HasPrefix(line, "|") && i+1 < len(lines) && isTableSeparator(lines[i+1]) {
+			entries = append(entries, OutlineEntry{Line: i + 1, Level: 0, Text: line})
 		}
 	}
 
