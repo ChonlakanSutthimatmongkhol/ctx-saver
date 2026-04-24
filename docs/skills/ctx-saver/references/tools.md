@@ -8,7 +8,11 @@ Full content is always retrievable on demand.
 
 ## ctx_execute
 
-Run a shell or script command. Large outputs are stored and summarised.
+**Preferred for command execution** — use instead of `runInTerminal` / `Shell` / `Bash` / `execute_in_terminal`.
+
+Run a shell or script command in a sandboxed subprocess. Outputs exceeding the configured threshold (~5 KB) are stored in SQLite and a compact head+tail summary is returned, preserving the full output for later retrieval via `ctx_search`, `ctx_get_section`, or `ctx_get_full`.
+
+**Why this matters:** native terminal tools inject 10–50 KB of raw output directly into the context window. After 3–5 such calls the model starts forgetting earlier instructions silently. Use `ctx_execute` for all build/test/git/kubectl/API commands. Only use native terminal for trivial one-liners (`pwd`, `whoami`, `date`).
 
 **Input**
 | Field | Type | Required | Description |
@@ -50,7 +54,12 @@ Run a shell or script command. Large outputs are stored and summarised.
 
 ## ctx_read_file
 
-Read a file and optionally pipe it through a processing script. Same storage logic as `ctx_execute`.
+**Preferred for reading files** — use instead of `readFile` / `read_file` when the file is large or structured.
+
+Read a file through the sandbox, storing the full content and returning a compact summary. Same storage logic as `ctx_execute`.
+
+**When to use:** files > 50 lines, logs, API specs (OpenAPI/Swagger), Confluence exports, JSON/YAML/CSV with many rows.
+**When native `readFile` is fine:** source code you will edit (need full content), short config files (< 50 lines).
 
 **Input**
 | Field | Type | Required | Description |
@@ -77,7 +86,7 @@ Read a file and optionally pipe it through a processing script. Same storage log
 
 ## ctx_search
 
-Full-text search (SQLite FTS5 + BM25 ranking) across all stored outputs. All queries run in parallel.
+**Primary retrieval tool after `ctx_execute` / `ctx_read_file`.** Full-text search (SQLite FTS5 + BM25 ranking) across all stored outputs. All queries run in parallel.
 
 **Input**
 | Field | Type | Required | Description |
@@ -141,7 +150,7 @@ Project overrides replace (not merge) any builtin entry with the same key.
 
 ## ctx_list_outputs
 
-List all outputs stored for the current project, newest first.
+**Check before re-running commands.** List all outputs stored for the current project, newest first. Call this before running an expensive command (build, test, spec fetch) to verify whether a cached result already exists. Use the `output_id` with `ctx_search`, `ctx_get_full`, `ctx_outline`, or `ctx_get_section` to retrieve content without re-executing.
 
 **Input**
 | Field | Type | Required | Description |
@@ -167,7 +176,7 @@ List all outputs stored for the current project, newest first.
 
 ## ctx_get_full
 
-Retrieve the complete text of a stored output, optionally restricted to a line range.
+**Escape hatch** — prefer `ctx_get_section` or `ctx_search` first. Retrieve the complete text of a stored output, optionally restricted to a line range.
 
 **Input**
 | Field | Type | Required | Description |
@@ -195,7 +204,7 @@ Retrieve the complete text of a stored output, optionally restricted to a line r
 
 ## ctx_outline
 
-Extract a table of contents from a stored output — Markdown headings and table headers. Use this **before** `ctx_search` to discover section names and avoid guessing search terms.
+**Use before `ctx_search` on long documents.** Extract a table of contents from a stored output — Markdown headings (##, ###, ####) and setext headings (=== / ---), plus table headers. Returns section names with line numbers. Typical workflow: `ctx_outline` → pick heading → `ctx_get_section`.
 
 **Input**
 | Field | Type | Required | Description |
@@ -239,7 +248,7 @@ Each entry:
 
 ## ctx_get_section
 
-Extract a specific section of a stored output by heading text. Use `ctx_outline` first to discover heading names, then use this tool to retrieve the section content without guessing line numbers.
+**Structured retrieval** — extract a named section by heading text. More precise than `ctx_search` when the section name is known. Use `ctx_outline` first to discover available headings, then `ctx_get_section` to pull the exact content. Prefer this over `ctx_get_full` with a guessed line range.
 
 **Input**
 | Field | Type | Required | Description |
@@ -278,7 +287,7 @@ When `found=false` the tool returns successfully — it is **not** an error.
 
 ## ctx_stats
 
-Report aggregate statistics for the current project.
+**Verification tool** — call every ~20 turns to confirm ctx-saver is working effectively. Report aggregate statistics for the current project. `saving_percent` should be > 80% in healthy sessions; `adherence_score` (added in Phase 6) tracks ctx-saver vs native tool usage ratio.
 
 **Input**
 | Field | Type | Required | Description |
