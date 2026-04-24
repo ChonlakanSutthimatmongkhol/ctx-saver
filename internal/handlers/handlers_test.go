@@ -661,3 +661,81 @@ func TestGetFullHandler_LineRange_ClampedToTotalLines(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 2, out.Returned) // lines 2 and 3
 }
+
+// ── GetSectionHandler tests (Task 5.4) ───────────────────────────────────
+
+func sectionOutput(t *testing.T, content string) *store.SQLiteStore {
+	t.Helper()
+	dir := t.TempDir()
+	st, err := store.NewSQLiteStore(dir, "/proj")
+	require.NoError(t, err)
+	t.Cleanup(func() { st.Close() })
+	out := &store.Output{
+		OutputID: "out_sec_001", Command: "test", FullOutput: content,
+		SizeBytes: int64(len(content)), LineCount: 5,
+		CreatedAt: time.Now(), ProjectPath: "/proj",
+	}
+	require.NoError(t, st.Save(context.Background(), out))
+	return st
+}
+
+func TestGetSectionHandler_Found(t *testing.T) {
+	doc := "# Intro\nintro text\n## Sequence Diagram\ndiagram here\nmore diagram\n## Next\nafter"
+	st := sectionOutput(t, doc)
+	h := handlers.NewGetSectionHandler(st)
+	_, out, err := h.Handle(context.Background(), nil, handlers.GetSectionInput{
+		OutputID: "out_sec_001",
+		Heading:  "Sequence Diagram",
+	})
+	require.NoError(t, err)
+	assert.True(t, out.Found)
+	assert.Equal(t, "out_sec_001", out.OutputID)
+	assert.Greater(t, out.LineCount, 0)
+	assert.NotEmpty(t, out.Lines)
+}
+
+func TestGetSectionHandler_NotFound(t *testing.T) {
+	doc := "## Existing\ncontent"
+	st := sectionOutput(t, doc)
+	h := handlers.NewGetSectionHandler(st)
+	_, out, err := h.Handle(context.Background(), nil, handlers.GetSectionInput{
+		OutputID: "out_sec_001",
+		Heading:  "DoesNotExist",
+	})
+	require.NoError(t, err) // not-found is NOT an error
+	assert.False(t, out.Found)
+	assert.Equal(t, "out_sec_001", out.OutputID)
+}
+
+func TestGetSectionHandler_EmptyHeading(t *testing.T) {
+	h := handlers.NewGetSectionHandler(&mockStore{})
+	_, _, err := h.Handle(context.Background(), nil, handlers.GetSectionInput{
+		OutputID: "out_sec_001",
+		Heading:  "   ",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "heading must not be empty")
+}
+
+func TestGetSectionHandler_EmptyOutputID(t *testing.T) {
+	h := handlers.NewGetSectionHandler(&mockStore{})
+	_, _, err := h.Handle(context.Background(), nil, handlers.GetSectionInput{
+		OutputID: "",
+		Heading:  "Some",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "output_id must not be empty")
+}
+
+func TestGetSectionHandler_Partial(t *testing.T) {
+	doc := "## Sequence Diagram\ndiagram content\n## Next\nafter"
+	st := sectionOutput(t, doc)
+	h := handlers.NewGetSectionHandler(st)
+	_, out, err := h.Handle(context.Background(), nil, handlers.GetSectionInput{
+		OutputID: "out_sec_001",
+		Heading:  "sequence",
+		Partial:  true,
+	})
+	require.NoError(t, err)
+	assert.True(t, out.Found)
+}
