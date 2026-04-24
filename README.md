@@ -56,7 +56,7 @@ claude mcp add ctx-saver -- $(go env GOPATH)/bin/ctx-saver
 ```
 
 > **Option A users** (`go install`): replace the path above with `$(go env GOPATH)/bin/ctx-saver`.
-> Alternatively, run `./scripts/install-hooks.sh copilot` — it detects the correct path automatically.
+> Or run `ctx-saver init copilot` — it detects the binary path automatically (no `jq` required).
 
 Or globally in VS Code `settings.json`:
 ```json
@@ -78,29 +78,15 @@ For VS Code Copilot, this step only registers the `ctx-saver` MCP server entry.
 
 ```bash
 # Claude Code
-./scripts/install-hooks.sh claude
+ctx-saver init claude
 
 # VS Code Copilot (run from your project root; registers MCP server only)
-./scripts/install-hooks.sh copilot
+ctx-saver init copilot
 ```
 
-If you installed via `go install` and did not clone this repository, use a temporary shallow clone to run the installer:
+Both commands detect the binary path automatically, back up your existing config, and merge JSON safely without overwriting unrelated settings. No `jq` required.
 
-```bash
-tmp="$(mktemp -d)"
-git clone --depth 1 https://github.com/ChonlakanSutthimatmongkhol/ctx-saver.git "$tmp"
-
-# Claude Code hooks
-"$tmp/scripts/install-hooks.sh" claude
-
-# VS Code Copilot server entry (run in your project root)
-cd /path/to/your/project
-"$tmp/scripts/install-hooks.sh" copilot
-
-rm -rf "$tmp"
-```
-
-The script detects the binary path automatically, backs up your existing config, and merges JSON safely — it will not overwrite unrelated settings. `jq` is required (`brew install jq` / `apt-get install jq`).
+> **Repo clone users:** `./scripts/install-hooks.sh claude` and `./scripts/install-hooks.sh copilot` also work (require `jq`).
 
 For VS Code Copilot, `.vscode/mcp.json` currently accepts `servers` but rejects a top-level `hooks` key.
 
@@ -271,13 +257,13 @@ If you are using GitHub Copilot in an enterprise context (e.g., at a bank or fin
 **Quick start:**
 ```bash
 # 1. Install ctx-saver binary
-make install
+go install github.com/ChonlakanSutthimatmongkhol/ctx-saver@latest
 
-# 2. Add MCP server to VS Code
-./scripts/install-hooks.sh copilot
+# 2. Add MCP server to VS Code (run from your project directory)
+ctx-saver init copilot
 
 # 3. Add Copilot instruction rules to your repo
-./scripts/install-hooks.sh copilot-instructions
+ctx-saver init copilot-instructions
 ```
 
 ## Build

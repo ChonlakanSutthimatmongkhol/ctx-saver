@@ -56,7 +56,7 @@ claude mcp add ctx-saver -- $(go env GOPATH)/bin/ctx-saver
 ```
 
 > **ผู้ใช้ตัวเลือก A** (`go install`): เปลี่ยน path ด้านบนเป็น `$(go env GOPATH)/bin/ctx-saver`
-> หรือจะรัน `./scripts/install-hooks.sh copilot` ก็ได้ — script จะตรวจหา path ที่ถูกต้องอัตโนมัติ
+> หรือจะรัน `ctx-saver init copilot` ก็ได้ — ตรวจหา binary path อัตโนมัติ (ไม่ต้องใช้ `jq`)
 
 หรือตั้งค่าแบบ global ใน VS Code `settings.json`:
 ```json
@@ -78,29 +78,15 @@ hooks ของ Claude ช่วยให้ระบบ routing คำสั่
 
 ```bash
 # Claude Code
-./scripts/install-hooks.sh claude
+ctx-saver init claude
 
 # VS Code Copilot (รันจาก project root; ลงทะเบียนเฉพาะ MCP server)
-./scripts/install-hooks.sh copilot
+ctx-saver init copilot
 ```
 
-ถ้าติดตั้งผ่าน `go install` และไม่ได้ clone repository นี้ ให้ใช้ shallow clone ชั่วคราวเพื่อเรียกสคริปต์:
+คำสั่งทั้งสองตรวจหา binary path อัตโนมัติ สำรองค่า config เดิม และ merge JSON อย่างปลอดภัยโดยไม่เขียนทับ settings ที่ไม่เกี่ยวข้อง ไม่ต้องใช้ `jq`
 
-```bash
-tmp="$(mktemp -d)"
-git clone --depth 1 https://github.com/ChonlakanSutthimatmongkhol/ctx-saver.git "$tmp"
-
-# ติดตั้ง hooks สำหรับ Claude Code
-"$tmp/scripts/install-hooks.sh" claude
-
-# ติดตั้ง server entry สำหรับ VS Code Copilot (ให้รันจาก project root ของคุณ)
-cd /path/to/your/project
-"$tmp/scripts/install-hooks.sh" copilot
-
-rm -rf "$tmp"
-```
-
-Script จะตรวจหา binary path อัตโนมัติ สำรองค่า config เดิม และ merge JSON อย่างปลอดภัยโดยไม่เขียนทับ settings ที่ไม่เกี่ยวข้อง ต้องการ `jq` (`brew install jq` / `apt-get install jq`)
+> **ผู้ที่ clone repo:** `./scripts/install-hooks.sh claude` และ `./scripts/install-hooks.sh copilot` ยังใช้ได้เช่นเดิม (ต้องการ `jq`)
 
 สำหรับ VS Code Copilot ตอนนี้ `.vscode/mcp.json` รองรับเฉพาะ `servers` และจะไม่ยอมรับ key ระดับบนชื่อ `hooks`
 
@@ -269,9 +255,9 @@ Hooks ทำงานเป็น subprocess เบาๆ คู่กับ AI 
 
 **Quick start:**
 ```bash
-make install
-./scripts/install-hooks.sh copilot               # ลง MCP server ใน .vscode/mcp.json
-./scripts/install-hooks.sh copilot-instructions  # ลง Copilot rules ใน .github/
+go install github.com/ChonlakanSutthimatmongkhol/ctx-saver@latest
+ctx-saver init copilot                # ลง MCP server ใน .vscode/mcp.json
+ctx-saver init copilot-instructions   # ลง Copilot rules ใน .github/
 ```
 
 ## Build

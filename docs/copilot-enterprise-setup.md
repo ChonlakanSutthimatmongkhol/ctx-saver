@@ -11,28 +11,37 @@ This guide covers installing and verifying **ctx-saver** with GitHub Copilot Ent
 | **Copilot Enterprise plan** | Individual / Teams plans do not support MCP servers |
 | **Admin MCP policy enabled** | Ask your IT/Security admin to enable "MCP servers in Copilot" in the GitHub Enterprise settings |
 | **VS Code 1.99+** | Required for MCP server support in Copilot Agent mode |
-| **Go 1.22+** | For building ctx-saver from source |
-| **jq** | Required for `install-hooks.sh claude` and `install-hooks.sh copilot`; not required for `copilot-instructions` |
+| **Go 1.22+** | For `go install` or building from source |
+| **jq** | Required only if using `install-hooks.sh` (not needed for `ctx-saver init`) |
 
 ---
 
 ## 2. Installation
 
-### Step 1 — Build the ctx-saver binary
+### Step 1 — Install the ctx-saver binary
+
+**Option A — via `go install` (recommended; no repo clone required):**
+
+```bash
+go install github.com/ChonlakanSutthimatmongkhol/ctx-saver@latest
+```
+
+**Option B — build from source:**
 
 ```bash
 git clone https://github.com/ChonlakanSutthimatmongkhol/ctx-saver
 cd ctx-saver
 make install   # → /usr/local/bin/ctx-saver
-ctx-saver --version
 ```
 
 ### Step 2 — Register the MCP server in VS Code
 
 ```bash
 # From inside your project directory:
-./scripts/install-hooks.sh copilot
+ctx-saver init copilot
 ```
+
+> Works with both `go install` and source-build users. If you cloned the repo, `./scripts/install-hooks.sh copilot` also works (requires `jq`).
 
 This creates (or updates) `.vscode/mcp.json` in your project with:
 
@@ -52,10 +61,12 @@ This creates (or updates) `.vscode/mcp.json` in your project with:
 
 ```bash
 # From your repo root:
-./scripts/install-hooks.sh copilot-instructions
+ctx-saver init copilot-instructions
 git add .github/copilot-instructions.md
 git commit -m "chore: add ctx-saver Copilot instructions"
 ```
+
+> If you cloned the repo, `./scripts/install-hooks.sh copilot-instructions` also works (no `jq` required).
 
 Committing the file shares the rules with your entire team automatically.
 
@@ -110,7 +121,7 @@ If you see the response, ctx-saver is working correctly.
 
 1. Call `ctx_session_init` — refresh rules at the start of each new session.
 2. Look at `native_shell_count` and `native_read_count` in `ctx_stats` to understand which tools are being over-used.
-3. Verify `.github/copilot-instructions.md` is present and up to date (`./scripts/install-hooks.sh copilot-instructions`).
+3. Verify `.github/copilot-instructions.md` is present and up to date (`ctx-saver init copilot-instructions`).
 4. Check whether the tool descriptions in `.vscode/mcp.json` are loading correctly — in VS Code, go to **Output → Copilot** and look for MCP server errors.
 
 ### "Content exclusion blocks my files"
