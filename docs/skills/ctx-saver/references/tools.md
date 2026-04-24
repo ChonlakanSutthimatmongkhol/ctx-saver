@@ -6,6 +6,38 @@ Full content is always retrievable on demand.
 
 ---
 
+## ctx_session_init ⭐
+
+**Call first in every new session.** Returns project rules, recent session activity, cached output inventory, and active configuration in a single call.
+
+**Input:** none (no parameters required).
+
+**Output**
+| Field | Description |
+|-------|-------------|
+| `project_path` | Resolved project path |
+| `project_rules` | Condensed routing rules (~500 tokens) |
+| `recent_events` | Up to 10 recent tool calls (deduplicated, newest first) |
+| `recent_events[].ago_seconds` | Seconds since the event |
+| `recent_events[].summary` | One-line description of the tool call |
+| `cached_outputs.total_outputs` | Number of outputs stored in last 7 days |
+| `cached_outputs.total_size_bytes` | Total raw bytes stored |
+| `cached_outputs.top_commands` | Up to 5 most-run commands |
+| `cached_outputs.retention_days_left` | Configured retention window |
+| `active_config.sandbox` | Sandbox type (`subprocess` or `srt`) |
+| `active_config.dedup_enabled` | Whether dedup is active |
+| `active_config.dedup_window_minutes` | Dedup window |
+| `active_config.smart_format_enabled` | Whether format-aware summarizer is on |
+| `next_action_hint` | Recommended next step |
+| `server_version` | ctx-saver binary version |
+| `session_start_time` | Server start time (UTC) |
+
+**Session startup behaviour:**
+- **Claude Code** — `SessionStart` hook calls `ctx_session_init` automatically via `~/.claude/settings.json`.
+- **Copilot Enterprise** — agent must call `ctx_session_init` explicitly as its first tool call.
+
+---
+
 ## ctx_execute
 
 **Preferred for command execution** — use instead of `runInTerminal` / `Shell` / `Bash` / `execute_in_terminal`.
