@@ -2,6 +2,7 @@
 package server
 
 import (
+	"log/slog"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -9,6 +10,7 @@ import (
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/config"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/handlers"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/sandbox"
+	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/search"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/store"
 )
 
@@ -47,7 +49,13 @@ func registerTools(srv *mcp.Server, cfg *config.Config, sb sandbox.Sandbox, st s
 			"The same summary/storage logic as ctx_execute applies.",
 	}, readFileH.Handle)
 
-	searchH := handlers.NewSearchHandler(st, projectPath)
+	syns, err := search.Load(projectPath)
+	if err != nil {
+		slog.Warn("synonyms: falling back to builtin only", "error", err)
+		syns, _ = search.Load("")
+	}
+
+	searchH := handlers.NewSearchHandler(st, projectPath, syns)
 	mcp.AddTool(srv, &mcp.Tool{
 		Name: "ctx_search",
 		Description: "Full-text search (SQLite FTS5 + BM25 ranking) across all stored outputs. " +

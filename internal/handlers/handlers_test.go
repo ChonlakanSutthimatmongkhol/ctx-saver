@@ -353,7 +353,7 @@ func TestReadFileHandler_LargeFile_Stored(t *testing.T) {
 // ── SearchHandler tests ───────────────────────────────────────────────────
 
 func TestSearchHandler_EmptyQueries_Error(t *testing.T) {
-	h := handlers.NewSearchHandler(&mockStore{}, "/proj")
+	h := handlers.NewSearchHandler(&mockStore{}, "/proj", nil)
 	_, _, err := h.Handle(context.Background(), nil, handlers.SearchInput{Queries: nil})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "queries must not be empty")
@@ -365,7 +365,7 @@ func TestSearchHandler_ReturnsMatches(t *testing.T) {
 			{OutputID: "out_abc", Line: 5, Snippet: "found it", Score: 1.0},
 		},
 	}
-	h := handlers.NewSearchHandler(st, "/proj")
+	h := handlers.NewSearchHandler(st, "/proj", nil)
 	_, out, err := h.Handle(context.Background(), nil, handlers.SearchInput{
 		Queries: []string{"found"},
 	})
@@ -378,7 +378,7 @@ func TestSearchHandler_ReturnsMatches(t *testing.T) {
 
 func TestSearchHandler_MultipleQueries_AllReturned(t *testing.T) {
 	st := &mockStore{matches: []*store.Match{}}
-	h := handlers.NewSearchHandler(st, "/proj")
+	h := handlers.NewSearchHandler(st, "/proj", nil)
 	_, out, err := h.Handle(context.Background(), nil, handlers.SearchInput{
 		Queries: []string{"q1", "q2", "q3"},
 	})
@@ -388,7 +388,7 @@ func TestSearchHandler_MultipleQueries_AllReturned(t *testing.T) {
 
 func TestSearchHandler_StoreError_ReturnsError(t *testing.T) {
 	st := &mockStore{searchErr: fmt.Errorf("fts broken")}
-	h := handlers.NewSearchHandler(st, "/proj")
+	h := handlers.NewSearchHandler(st, "/proj", nil)
 	_, _, err := h.Handle(context.Background(), nil, handlers.SearchInput{
 		Queries: []string{"q"},
 	})
@@ -397,7 +397,7 @@ func TestSearchHandler_StoreError_ReturnsError(t *testing.T) {
 
 func TestSearchHandler_DefaultMaxResults(t *testing.T) {
 	st := &mockStore{matches: []*store.Match{}}
-	h := handlers.NewSearchHandler(st, "/proj")
+	h := handlers.NewSearchHandler(st, "/proj", nil)
 	// MaxResultsPerQuery = 0 → should default to 5, not error
 	_, out, err := h.Handle(context.Background(), nil, handlers.SearchInput{
 		Queries:            []string{"anything"},
@@ -413,7 +413,7 @@ func TestSearchHandler_SearchMode_FTS5(t *testing.T) {
 			{OutputID: "out_x", Line: 1, Snippet: "hit", Score: 1.0, Mode: "fts5"},
 		},
 	}
-	h := handlers.NewSearchHandler(st, "/proj")
+	h := handlers.NewSearchHandler(st, "/proj", nil)
 	_, out, err := h.Handle(context.Background(), nil, handlers.SearchInput{Queries: []string{"hit"}})
 	require.NoError(t, err)
 	assert.Equal(t, "fts5", out.SearchMode)
@@ -425,7 +425,7 @@ func TestSearchHandler_SearchMode_LikeFallback(t *testing.T) {
 			{OutputID: "out_x", Line: 1, Snippet: "hit", Score: 1.0, Mode: "like_fallback"},
 		},
 	}
-	h := handlers.NewSearchHandler(st, "/proj")
+	h := handlers.NewSearchHandler(st, "/proj", nil)
 	_, out, err := h.Handle(context.Background(), nil, handlers.SearchInput{Queries: []string{"special#char"}})
 	require.NoError(t, err)
 	assert.Equal(t, "like_fallback", out.SearchMode)
@@ -445,7 +445,7 @@ func TestSearchHandler_SearchMode_MultiQuery_FallbackWins(t *testing.T) {
 	}
 	require.NoError(t, realStore.Save(context.Background(), out))
 
-	h := handlers.NewSearchHandler(realStore, "/proj")
+	h := handlers.NewSearchHandler(realStore, "/proj", nil)
 	_, result, err := h.Handle(context.Background(), nil, handlers.SearchInput{
 		Queries: []string{"payment-service", "found"},
 	})

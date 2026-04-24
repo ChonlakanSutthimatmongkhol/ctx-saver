@@ -8,6 +8,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/search"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/store"
 )
 
@@ -36,19 +37,21 @@ type QueryResult struct {
 
 // SearchOutput is the typed output for ctx_search.
 type SearchOutput struct {
-	Results    []QueryResult `json:"results"`
-	SearchMode string        `json:"search_mode,omitempty" jsonschema:"fts5 | like_fallback — indicates which backend served the query"`
+	Results         []QueryResult `json:"results"`
+	SearchMode      string        `json:"search_mode,omitempty"      jsonschema:"fts5 | like_fallback — indicates which backend served the query"`
+	ExpandedQueries []string      `json:"expanded_queries,omitempty" jsonschema:"all queries used after synonym expansion"`
 }
 
 // SearchHandler handles the ctx_search MCP tool.
 type SearchHandler struct {
 	st          store.Store
 	projectPath string
+	synonyms    *search.SynonymTable
 }
 
 // NewSearchHandler creates a SearchHandler.
-func NewSearchHandler(st store.Store, projectPath string) *SearchHandler {
-	return &SearchHandler{st: st, projectPath: projectPath}
+func NewSearchHandler(st store.Store, projectPath string, syns *search.SynonymTable) *SearchHandler {
+	return &SearchHandler{st: st, projectPath: projectPath, synonyms: syns}
 }
 
 // Handle implements the ctx_search tool.
@@ -63,6 +66,12 @@ func (h *SearchHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, inpu
 		maxResults = 5
 	}
 
+	// Expand queries with synonyms when a table is available.
+	expandedQueries := input.Queries
+	if h.synonyms != nil {
+		expandedQueries = h.synonyms.ExpandAll(input.Queries)
+	}
+
 	type result struct {
 		query   string
 		matches []SearchMatch
@@ -70,10 +79,10 @@ func (h *SearchHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, inpu
 		err     error
 	}
 
-	ch := make(chan result, len(input.Queries))
+	ch := make(chan result, len(expandedQueries))
 	var wg sync.WaitGroup
 
-	for _, q := range input.Queries {
+	for _, q := range expandedQueries {
 		wg.Add(1)
 		go func(query string) {
 			defer wg.Done()
@@ -106,7 +115,7 @@ func (h *SearchHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, inpu
 	}()
 
 	// Preserve query order by building a map first.
-	resultMap := make(map[string][]SearchMatch, len(input.Queries))
+	resultMap := make(map[string][]SearchMatch, len(expandedQueries))
 	searchMode := "fts5"
 	var firstErr error
 	for r := range ch {
@@ -158,13 +167,13 @@ func (h *SearchHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, inpu
 		}
 	}
 
-	ordered := make([]QueryResult, 0, len(input.Queries))
-	for _, q := range input.Queries {
+	ordered := make([]QueryResult, 0, len(expandedQueries))
+	for _, q := range expandedQueries {
 		ordered = append(ordered, QueryResult{
 			Query:   q,
 			Matches: resultMap[q],
 		})
 	}
 
-	return nil, SearchOutput{Results: ordered, SearchMode: searchMode}, nil
+	return nil, SearchOutput{Results: ordered, SearchMode: searchMode, ExpandedQueries: expandedQueries}, nil
 }
