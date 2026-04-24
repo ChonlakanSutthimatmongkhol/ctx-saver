@@ -23,11 +23,8 @@ ctx-saver intercepts these, stores outputs in local SQLite with FTS5 indexing, a
 ### Option A — go install (requires Go 1.25+)
 
 ```bash
-# Install latest release
-go install github.com/ChonlakanSutthimatmongkhol/ctx-saver/cmd/ctx-saver@latest
-
-# Or pin to a specific version
-go install github.com/ChonlakanSutthimatmongkhol/ctx-saver/cmd/ctx-saver@v0.1.0
+# Install pinned release
+go install github.com/ChonlakanSutthimatmongkhol/ctx-saver/cmd/ctx-saver@v0.3.0
 ```
 
 The binary lands in `$(go env GOPATH)/bin/ctx-saver`.
