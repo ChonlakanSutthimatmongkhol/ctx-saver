@@ -227,10 +227,10 @@ Each entry:
   "output_id": "out_20260422_76b3de65",
   "total_lines": 420,
   "entries": [
-    { "line": 5,  "level": 1, "text": "## Request" },
+    { "line": 5,  "level": 2, "text": "## Request" },
     { "line": 12, "level": 0, "text": "| Field | Type | Required | Description |" },
-    { "line": 28, "level": 1, "text": "## Response" },
-    { "line": 35, "level": 2, "text": "### retirementAges" }
+    { "line": 28, "level": 2, "text": "## Response" },
+    { "line": 35, "level": 3, "text": "### retirementAges" }
   ]
 }
 ```

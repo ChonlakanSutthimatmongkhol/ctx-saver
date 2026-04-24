@@ -3,8 +3,9 @@ name: ctx-saver
 description: >
   Workflow for running commands and reading files through ctx-saver MCP tools to reduce context window usage.
   Use when: running tests, builds, or any command with large output; reading large files (OpenAPI spec, logs, SQL migrations);
-  fetching Confluence/Jira pages; searching previously stored outputs; retrieving full output by ID or line range.
-  Tools: ctx_execute, ctx_read_file, ctx_search, ctx_list_outputs, ctx_get_full, ctx_outline, ctx_stats.
+  fetching Confluence/Jira pages; searching previously stored outputs; retrieving full output by ID or line range;
+  extracting a specific section from a long document by heading name.
+  Tools: ctx_execute, ctx_read_file, ctx_search, ctx_list_outputs, ctx_get_full, ctx_outline, ctx_get_section, ctx_stats.
 argument-hint: 'Describe the command or file you want to run/read'
 ---
 
@@ -19,6 +20,7 @@ ctx-saver is an MCP server that stores large command outputs in SQLite and retur
 | Run shell/python/go/node command | `ctx_execute` |
 | Read a large file (spec, log, SQL) | `ctx_read_file` |
 | See document structure before searching | `ctx_outline` |
+| Extract a specific section by heading name | `ctx_get_section` |
 | Search in a previously stored output | `ctx_search` |
 | List all stored outputs for this project | `ctx_list_outputs` |
 | Get full output or specific line range | `ctx_get_full` |
@@ -49,6 +51,7 @@ Use `ctx_execute` instead of a raw shell command whenever output may be large.
 **After receiving the response:**
 - If `direct_output` is set → output was small, use it directly
 - If `output_id` is set → output was stored; check `format` + read `summary` for overview, then use `ctx_search` or `ctx_get_full` if more detail is needed
+- If `duplicate_hint` appears → same command already ran recently; prefer `ctx_get_full` or `ctx_search` on `previous_output_id` to reuse the cached result
 
 ### 2. Reading a large file
 
@@ -68,7 +71,23 @@ Before searching, use `ctx_outline` to see what sections exist so you don't have
 { "output_id": "out_20260422_76b3de65" }
 ```
 
-Returns headings (`##`, `###`, `####`) and table headers with their line numbers.
+Returns headings (`#`, `##`, `###`, `####`) and table headers with their line numbers.
+
+### 3.5. Extracting a section by heading
+
+After `ctx_outline` reveals heading names, use `ctx_get_section` to pull the exact section — no need to guess line numbers:
+
+```json
+{
+  "output_id": "out_20260422_76b3de65",
+  "heading": "Sequence Diagram",
+  "partial": false
+}
+```
+
+- `partial: true` allows substring match (e.g. `"Sequence"` matches `"Sequence Diagram"`)
+- Returns `found: false` (not an error) when the heading doesn't exist
+- Prefer this over `ctx_get_full` with a guessed `line_range`
 
 ### 4. Searching stored output
 
@@ -85,6 +104,10 @@ Use when the summary is not enough and you need specific lines.
 
 Multiple queries run in parallel. Each returns matched lines with snippet + line number.
 Add `context_lines` to include N lines of surrounding context (like `grep -C`) — avoids a follow-up `ctx_get_full` call.
+
+**Special characters** (`#`, `-`, `|`, `:`, `*`) are auto-escaped — no manual escaping needed.
+
+**Synonym expansion** — queries like `api_path` automatically expand to `[api_path, endpoint, route, url, path]`. Check `expanded_queries` in the response to see what was actually searched. Add project terms in `.ctx-saver-synonyms.yaml`.
 
 ### 5. Getting full output or line range
 
