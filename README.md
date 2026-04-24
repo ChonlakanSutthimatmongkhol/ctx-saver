@@ -136,7 +136,7 @@ See [Hook behaviour](#hooks) below for what each hook does.
 | `ctx_get_full` | Retrieve complete output or a specific line range |
 | `ctx_stats` | Report storage and hook statistics (scope: `session\|today\|7d\|all`) |
 
-### Smart Summarizer (Phase 4)
+### Smart Summarizer
 
 `ctx_execute` automatically detects the output format and produces a compact, structured summary:
 
