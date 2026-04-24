@@ -35,6 +35,7 @@ type Match struct {
 	Line     int
 	Snippet  string
 	Score    float64
+	Mode     string // "fts5" | "like_fallback"
 }
 
 // SessionEvent records one hook lifecycle event for session tracking.

@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -167,9 +168,34 @@ func (s *SQLiteStore) List(ctx context.Context, projectPath string, limit int) (
 	return metas, rows.Err()
 }
 
-// Search runs a single FTS5 query and returns up to maxResults matches.
-// If outputID is non-empty, results are filtered to that output only.
+// Search runs a FTS5 query with automatic phrase-escaping and LIKE fallback.
+// If FTS5 returns a syntax error the query is retried with LIKE; the Mode field
+// on each returned Match reflects which backend served it.
 func (s *SQLiteStore) Search(ctx context.Context, query, outputID string, maxResults int) ([]*Match, error) {
+	ftsQuery := BuildFTS5PhraseQuery(query)
+	matches, err := s.searchFTS5(ctx, ftsQuery, outputID, maxResults)
+	if err == nil {
+		for _, m := range matches {
+			m.Mode = "fts5"
+		}
+		return matches, nil
+	}
+	if !IsFTS5SyntaxError(err) {
+		return nil, err
+	}
+	slog.Warn("FTS5 failed, falling back to LIKE", "query", query, "error", err)
+	matches, err = s.SearchLike(ctx, query, outputID, maxResults)
+	if err != nil {
+		return nil, err
+	}
+	for _, m := range matches {
+		m.Mode = "like_fallback"
+	}
+	return matches, nil
+}
+
+// searchFTS5 is the raw FTS5 MATCH implementation.
+func (s *SQLiteStore) searchFTS5(ctx context.Context, query, outputID string, maxResults int) ([]*Match, error) {
 	if maxResults <= 0 {
 		maxResults = 5
 	}
