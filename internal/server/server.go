@@ -110,45 +110,78 @@ After calling:
 	searchH := handlers.NewSearchHandler(st, projectPath, syns)
 	mcp.AddTool(srv, &mcp.Tool{
 		Name: "ctx_search",
-		Description: "Full-text search (SQLite FTS5 + BM25 ranking) across all stored outputs. " +
-			"Accepts multiple queries executed in parallel. " +
-			"Results include the matching line number and a highlighted snippet.",
+		Description: `[PRIMARY retrieval tool after ctx_execute / ctx_read_file] Full-text search across stored outputs using SQLite FTS5 with BM25 ranking.
+
+Accepts multiple queries executed in parallel goroutines; results include line number and a highlighted snippet.
+Special characters (#, -, |, :, *, etc.) are auto-escaped — no manual quoting needed.
+Query terms are automatically expanded with synonyms (see .ctx-saver-synonyms.yaml for project overrides).
+Falls back to LIKE if FTS5 is unavailable; search_mode field in response indicates which backend was used.
+
+Use this when you need keyword matches across stored outputs.
+Use ctx_get_section when you already know the heading name.
+Use ctx_outline first to discover heading names before writing keyword queries.
+Use ctx_list_outputs to see all available output IDs.`,
 	}, searchH.Handle)
 
 	listH := handlers.NewListHandler(st, projectPath)
 	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "ctx_list_outputs",
-		Description: "List all outputs stored for the current project, newest first.",
+		Name: "ctx_list_outputs",
+		Description: `[CHECK BEFORE RE-RUNNING COMMANDS] List all outputs stored for this project, newest first.
+
+Call this before running an expensive command (build, test, spec fetch) to check whether a cached result already exists.
+Each entry shows: output_id, command, size_bytes, line_count, created_at.
+Use the output_id with ctx_get_full, ctx_search, ctx_outline, or ctx_get_section to retrieve content without re-executing.`,
 	}, listH.Handle)
 
 	getFullH := handlers.NewGetFullHandler(st)
 	mcp.AddTool(srv, &mcp.Tool{
 		Name: "ctx_get_full",
-		Description: "Retrieve the complete text of a stored output, optionally restricted to a line range. " +
-			"Use this as an escape hatch when the summary is insufficient.",
+		Description: `[ESCAPE HATCH] Retrieve the complete text of a stored output, optionally restricted to a line range.
+
+Use this only when ctx_search and ctx_get_section are insufficient (e.g., you need raw diff output or a region without a heading).
+Prefer ctx_get_section for named sections and ctx_search for keyword retrieval — both return less context than ctx_get_full.
+Parameters: output_id (required), start_line / end_line (optional, 1-based).`,
 	}, getFullH.Handle)
 
 	outlineH := handlers.NewOutlineHandler(st)
 	mcp.AddTool(srv, &mcp.Tool{
 		Name: "ctx_outline",
-		Description: "Extract a table of contents from a stored output — Markdown headings (##, ###, ####) and table headers. " +
-			"Use this before ctx_search to discover section names and avoid guessing search terms.",
+		Description: `[USE BEFORE ctx_search on long docs] Extract a table of contents from a stored output.
+
+Returns Markdown headings (##, ###, ####) and setext headings (=== / ---) with their line numbers.
+Use this to discover section names before searching, instead of guessing keyword queries.
+Pairs with ctx_get_section: outline first → pick heading → extract section.
+
+Typical workflow: ctx_execute → ctx_outline → ctx_get_section → done (no ctx_get_full needed).`,
 	}, outlineH.Handle)
 
 	statsH := handlers.NewStatsHandler(cfg, st, projectPath, serverStart)
 	mcp.AddTool(srv, &mcp.Tool{
 		Name: "ctx_stats",
-		Description: "Report ctx-saver statistics: outputs stored, bytes saved, top commands, hook activity. " +
-			"Scope: session | today | 7d | all (default: session). " +
-			"Use this to verify ctx-saver is saving context window space effectively.",
+		Description: `[VERIFICATION tool] Report ctx-saver statistics: outputs stored, bytes saved, top commands, hook activity, and adherence score.
+
+Scope parameter: session (default) | today | 7d | all
+
+Key fields to watch:
+• saving_percent — percentage of raw bytes NOT injected into context. Should be > 80% in healthy sessions.
+• adherence_score — 0–100 score based on ctx-saver vs native tool usage ratio. Aim for > 80%.
+• adherence_note — plain-English assessment of current adherence level.
+• hook_stats.dangerous_blocked — commands blocked by PreToolUse safety rules.
+• hook_stats.redirected_to_mcp — soft denies recommending ctx_execute instead of native shell.
+
+Call this every ~20 turns to verify ctx-saver is being used effectively.
+If saving_percent or adherence_score is low, native tools are being over-used — re-read ctx_session_init rules.`,
 	}, statsH.Handle)
 
 	getSectionH := handlers.NewGetSectionHandler(st)
 	mcp.AddTool(srv, &mcp.Tool{
 		Name: "ctx_get_section",
-		Description: "Extract a specific section of a stored output by heading text " +
-			"(## Heading, ### Heading, etc.). Use ctx_outline first to discover " +
-			"heading names. Prefer this over ctx_get_full with a guessed line_range " +
-			"when navigating long documents like API specs or Confluence exports.",
+		Description: `[STRUCTURED retrieval] Extract a named section from a stored output by heading text.
+
+More precise than ctx_search when you know the section name; returns only the content under that heading.
+Handles Markdown (## Heading, ### Heading) and setext (underline with === or ---) styles.
+
+Workflow: ctx_outline → pick heading text → ctx_get_section with that heading → done.
+Prefer this over ctx_get_full with a guessed line range when navigating long documents such as API specs or Confluence exports.`,
 	}, getSectionH.Handle)
 }
