@@ -26,12 +26,16 @@ Run a shell or script command. Large outputs are stored and summarised.
 | `summary` | output > threshold | head + tail excerpt |
 | `format` | output > threshold | Summary format used: `flutter_test`, `go_test`, `json`, `git_log`, or `generic` |
 | `search_hint` | output > threshold | Hint to use `ctx_search` with this `output_id` |
+| `duplicate_hint` | same cmd ran recently | Advisory: same command already ran within the dedup window |
+| `previous_output_id` | same cmd ran recently | `output_id` of the previous identical run |
 | `stats.lines` | always | Total line count |
 | `stats.size_bytes` | always | Output size in bytes |
 | `stats.exit_code` | always | Process exit code |
 | `stats.duration_ms` | always | Execution time in milliseconds |
 
 `ctx_execute` uses format-aware summarization when enabled by config (`summary.smart_format: true`).
+
+**Dedup hint:** When `duplicate_hint` appears, the same command was already run within the last 30 minutes (configurable via `dedup.window_minutes`). Prefer `ctx_get_full` or `ctx_search` on `previous_output_id` to reuse the cached result instead of re-executing. The command still runs — the hint is advisory only.
 
 **Example**
 ```json
