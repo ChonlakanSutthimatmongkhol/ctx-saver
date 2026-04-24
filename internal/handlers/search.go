@@ -36,7 +36,8 @@ type QueryResult struct {
 
 // SearchOutput is the typed output for ctx_search.
 type SearchOutput struct {
-	Results []QueryResult `json:"results"`
+	Results    []QueryResult `json:"results"`
+	SearchMode string        `json:"search_mode,omitempty" jsonschema:"fts5 | like_fallback — indicates which backend served the query"`
 }
 
 // SearchHandler handles the ctx_search MCP tool.
@@ -65,6 +66,7 @@ func (h *SearchHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, inpu
 	type result struct {
 		query   string
 		matches []SearchMatch
+		mode    string // "fts5" | "like_fallback"
 		err     error
 	}
 
@@ -81,6 +83,7 @@ func (h *SearchHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, inpu
 				return
 			}
 			sm := make([]SearchMatch, 0, len(matches))
+			mode := "fts5"
 			for _, m := range matches {
 				sm = append(sm, SearchMatch{
 					OutputID: m.OutputID,
@@ -88,8 +91,11 @@ func (h *SearchHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, inpu
 					Snippet:  m.Snippet,
 					Score:    m.Score,
 				})
+				if m.Mode == "like_fallback" {
+					mode = "like_fallback"
+				}
 			}
-			ch <- result{query: query, matches: sm}
+			ch <- result{query: query, matches: sm, mode: mode}
 		}(q)
 	}
 
@@ -101,12 +107,16 @@ func (h *SearchHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, inpu
 
 	// Preserve query order by building a map first.
 	resultMap := make(map[string][]SearchMatch, len(input.Queries))
+	searchMode := "fts5"
 	var firstErr error
 	for r := range ch {
 		if r.err != nil && firstErr == nil {
 			firstErr = r.err
 		}
 		resultMap[r.query] = r.matches
+		if r.mode == "like_fallback" {
+			searchMode = "like_fallback"
+		}
 	}
 	if firstErr != nil {
 		return nil, SearchOutput{}, fmt.Errorf("searching: %w", firstErr)
@@ -156,5 +166,5 @@ func (h *SearchHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, inpu
 		})
 	}
 
-	return nil, SearchOutput{Results: ordered}, nil
+	return nil, SearchOutput{Results: ordered, SearchMode: searchMode}, nil
 }
