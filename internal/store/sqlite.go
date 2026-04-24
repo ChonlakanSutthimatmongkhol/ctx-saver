@@ -431,7 +431,7 @@ func (s *SQLiteStore) GetStats(ctx context.Context, projectPath string, since ti
 			COUNT(*),
 			COALESCE(SUM(size_bytes), 0),
 			COALESCE(MAX(size_bytes), 0),
-			COALESCE(AVG(duration_ms), 0)
+			CAST(COALESCE(AVG(duration_ms), 0) AS INTEGER)
 		FROM outputs
 		WHERE project_path = ? AND (? = 0 OR created_at >= ?)`,
 		projectPath, sinceUnix, sinceUnix)
