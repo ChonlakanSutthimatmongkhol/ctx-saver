@@ -23,16 +23,28 @@ func RunPreToolUse(_ store.Store, r io.Reader, w io.Writer) error {
 	cmd := extractCmd(input.ToolInput)
 	decision := routePreToolUse(input.ToolName, cmd)
 
-	if decision.allow {
-		return allowPassthrough(w, "PreToolUse")
+	if !decision.allow {
+		return writeJSON(w, CodexHookOutput{
+			HookSpecificOutput: CodexSpecificOutput{
+				HookEventName:      "PreToolUse",
+				PermissionDecision: "deny",
+			},
+		})
 	}
 
-	return writeJSON(w, CodexHookOutput{
-		HookSpecificOutput: CodexSpecificOutput{
-			HookEventName:      "PreToolUse",
-			PermissionDecision: "deny",
-		},
-	})
+	// Soft nudge: if a native tool is being used for a large-output command,
+	// emit additionalContext. Claude Code surfaces this to the model; Codex
+	// ignores it (safe — no functional change for Codex).
+	if hint := routeNativeToolUsage(input.ToolName, cmd); hint != "" {
+		return writeJSON(w, CodexHookOutput{
+			HookSpecificOutput: CodexSpecificOutput{
+				HookEventName:     "PreToolUse",
+				AdditionalContext: hint,
+			},
+		})
+	}
+
+	return allowPassthrough(w, "PreToolUse")
 }
 
 // extractCmd pulls the shell command string out of a tool input map.
