@@ -1,0 +1,17 @@
+# Generic software engineering terms used in API specs and code search.
+# Keys are lowercase; values are case-insensitive substring match targets.
+
+api_path: [endpoint, route, url, path]
+api_method: [method, http_method, verb]
+authentication: [auth, login, jwt, oauth, bearer, token]
+authorization: [authz, permission, access_control, rbac]
+validation: [validate, check, verify, rule, constraint, assertion]
+error_handling: [error, exception, fail, catch, handle, recover]
+error_code: [errcode, code, status_code]
+schema: [model, dto, struct, type, shape, structure]
+request: [req, payload, body, input]
+response: [res, resp, output, result, reply]
+database: [db, datastore, repository, repo]
+configuration: [config, settings, env, environment]
+deployment: [deploy, release, rollout]
+testing: [test, spec, assertion]
