@@ -27,6 +27,14 @@ type StatsOutput struct {
 	TopCommands           []CommandStatOut `json:"top_commands,omitempty"`
 	LargestOutputs        []OutputMetaOut  `json:"largest_outputs,omitempty"`
 	HookStats             HookStatsOut     `json:"hook_stats"`
+
+	// Adherence fields — how consistently ctx-saver tools are being used.
+	AdherenceScore   float64 `json:"adherence_score,omitempty"`   // 0–100
+	NativeShellCount int     `json:"native_shell_count,omitempty"` // runInTerminal/Shell/Bash calls
+	NativeReadCount  int     `json:"native_read_count,omitempty"`  // readFile/read_file/Read calls
+	CtxExecuteCount  int     `json:"ctx_execute_count,omitempty"`
+	CtxReadFileCount int     `json:"ctx_read_file_count,omitempty"`
+	AdherenceNote    string  `json:"adherence_note,omitempty"`
 }
 
 // CommandStatOut is the per-command aggregate in StatsOutput.
@@ -93,6 +101,17 @@ func (h *StatsHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, input
 		savingPercent = float64(saved) / float64(stats.RawBytes) * 100
 	}
 
+	// Compute adherence score (0–100).
+	nativeTotal := stats.NativeShellCount + stats.NativeReadCount
+	ctxTotal := stats.CtxExecuteCount + stats.CtxReadFileCount
+	total := nativeTotal + ctxTotal
+	adherenceScore := 0.0
+	if total > 0 {
+		adherenceScore = float64(ctxTotal) / float64(total) * 100
+	}
+
+	adherenceNote := adherenceNote(adherenceScore, total)
+
 	out := StatsOutput{
 		Scope:                 scope,
 		OutputsStored:         stats.OutputsStored,
@@ -105,6 +124,12 @@ func (h *StatsHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, input
 			RedirectedToMCP:  stats.RedirectedToMCP,
 			EventsCaptured:   stats.EventsCaptured,
 		},
+		AdherenceScore:   adherenceScore,
+		NativeShellCount: stats.NativeShellCount,
+		NativeReadCount:  stats.NativeReadCount,
+		CtxExecuteCount:  stats.CtxExecuteCount,
+		CtxReadFileCount: stats.CtxReadFileCount,
+		AdherenceNote:    adherenceNote,
 	}
 	for _, c := range stats.TopCommands {
 		out.TopCommands = append(out.TopCommands, CommandStatOut{
@@ -118,6 +143,25 @@ func (h *StatsHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, input
 		})
 	}
 	return nil, out, nil
+}
+
+// adherenceNote returns a plain-English assessment of the current adherence score.
+// When total is 0, no note is returned (not enough data yet).
+func adherenceNote(score float64, total int) string {
+	if total == 0 {
+		return ""
+	}
+	switch {
+	case score >= 90:
+		return "✅ Excellent adherence. ctx-saver tools are being used consistently."
+	case score >= 70:
+		return "👍 Good adherence. Some native tool usage detected — review tool descriptions if this is Copilot."
+	case score >= 50:
+		return "⚠️  Mixed adherence. Context window is at risk. Re-read ctx_session_init rules."
+	default:
+		return "🚨 Low adherence. Native tools dominating — session may fail early. " +
+			"Call ctx_session_init to refresh rules; ensure .github/copilot-instructions.md is present."
+	}
 }
 
 // resolveSince maps a scope string to the earliest time.Time to include.
