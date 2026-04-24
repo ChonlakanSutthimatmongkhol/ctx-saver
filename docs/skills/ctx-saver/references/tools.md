@@ -319,7 +319,14 @@ When `found=false` the tool returns successfully — it is **not** an error.
 
 ## ctx_stats
 
-**Verification tool** — call every ~20 turns to confirm ctx-saver is working effectively. Report aggregate statistics for the current project. `saving_percent` should be > 80% in healthy sessions; `adherence_score` (added in Phase 6) tracks ctx-saver vs native tool usage ratio.
+**Verification tool** — call every ~20 turns to confirm ctx-saver is working effectively. Report aggregate statistics for the current project.
+
+Key metrics:
+- `saving_percent` — should be > 80% in healthy sessions
+- `adherence_score` — 0–100 score; ctx-saver calls / (ctx-saver + native) * 100. Aim for > 80%
+- `adherence_note` — plain-English assessment: Excellent (≥90), Good (≥70), Mixed (≥50), Low (<50)
+- `native_shell_count` / `native_read_count` — how many times native Shell/Read was used instead of ctx-saver
+- `ctx_execute_count` / `ctx_read_file_count` — ctx-saver tool usage counts
 
 **Input**
 | Field | Type | Required | Description |
@@ -340,6 +347,12 @@ When `found=false` the tool returns successfully — it is **not** an error.
 | `hook_stats.dangerous_blocked` | Commands blocked by PreToolUse deny list |
 | `hook_stats.redirected_to_mcp` | Commands redirected to ctx_execute by PreToolUse |
 | `hook_stats.events_captured` | Total hook events recorded |
+| `adherence_score` | 0–100 — ctx-saver calls / total tracked calls * 100 |
+| `adherence_note` | Plain-English assessment: Excellent / Good / Mixed / Low |
+| `native_shell_count` | runInTerminal / Shell / Bash calls detected (posttooluse) |
+| `native_read_count` | readFile / read_file / Read calls detected (posttooluse) |
+| `ctx_execute_count` | ctx_execute calls in scope |
+| `ctx_read_file_count` | ctx_read_file calls in scope |
 
 **Example**
 ```json
