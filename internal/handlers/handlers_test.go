@@ -15,6 +15,7 @@ import (
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/config"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/handlers"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/sandbox"
+	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/search"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/store"
 )
 
@@ -453,6 +454,80 @@ func TestSearchHandler_SearchMode_MultiQuery_FallbackWins(t *testing.T) {
 	assert.Len(t, result.Results, 2)
 	// Both queries succeed — mode is "fts5" because escaping prevents fallback.
 	assert.Equal(t, "fts5", result.SearchMode)
+}
+
+// ── SearchHandler synonym expansion tests (Task 5.3) ─────────────────────
+
+func TestSearchHandler_WithSynonymExpansion(t *testing.T) {
+	dir := t.TempDir()
+	realStore, err := store.NewSQLiteStore(dir, "/proj")
+	require.NoError(t, err)
+	t.Cleanup(func() { realStore.Close() })
+
+	out := &store.Output{
+		OutputID: "out_syn_001", Command: "test", FullOutput: "endpoint /api/users GET\nroute /health",
+		SizeBytes: 40, LineCount: 2, CreatedAt: time.Now(), ProjectPath: "/proj",
+	}
+	require.NoError(t, realStore.Save(context.Background(), out))
+
+	syns, err := loadTestSynonyms(t, "api_path: [endpoint, route]\n")
+	require.NoError(t, err)
+
+	h := handlers.NewSearchHandler(realStore, "/proj", syns)
+	_, result, err := h.Handle(context.Background(), nil, handlers.SearchInput{
+		Queries: []string{"api_path"},
+	})
+	require.NoError(t, err)
+	// expanded_queries must include api_path + synonyms
+	assert.Contains(t, result.ExpandedQueries, "api_path")
+	assert.Contains(t, result.ExpandedQueries, "endpoint")
+	assert.Contains(t, result.ExpandedQueries, "route")
+}
+
+func TestSearchHandler_ResponseIncludesExpansion(t *testing.T) {
+	syns, err := loadTestSynonyms(t, "mykey: [syn1, syn2]\n")
+	require.NoError(t, err)
+
+	st := &mockStore{matches: []*store.Match{}}
+	h := handlers.NewSearchHandler(st, "/proj", syns)
+	_, out, err := h.Handle(context.Background(), nil, handlers.SearchInput{
+		Queries: []string{"mykey"},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"mykey", "syn1", "syn2"}, out.ExpandedQueries)
+}
+
+func TestSearchHandler_NoSynonymMatch(t *testing.T) {
+	syns, err := loadTestSynonyms(t, "somekey: [a, b]\n")
+	require.NoError(t, err)
+
+	st := &mockStore{matches: []*store.Match{}}
+	h := handlers.NewSearchHandler(st, "/proj", syns)
+	_, out, err := h.Handle(context.Background(), nil, handlers.SearchInput{
+		Queries: []string{"no_match_term"},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"no_match_term"}, out.ExpandedQueries)
+}
+
+func TestSearchHandler_NilSynonyms_NoExpansion(t *testing.T) {
+	st := &mockStore{matches: []*store.Match{}}
+	h := handlers.NewSearchHandler(st, "/proj", nil)
+	_, out, err := h.Handle(context.Background(), nil, handlers.SearchInput{
+		Queries: []string{"anything"},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"anything"}, out.ExpandedQueries)
+}
+
+// loadTestSynonyms writes a temp YAML override and returns the loaded table.
+func loadTestSynonyms(t *testing.T, yamlContent string) (*search.SynonymTable, error) {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, ".ctx-saver-synonyms.yaml"), []byte(yamlContent), 0600); err != nil {
+		return nil, err
+	}
+	return search.Load(dir)
 }
 
 // ── ListHandler tests ─────────────────────────────────────────────────────
