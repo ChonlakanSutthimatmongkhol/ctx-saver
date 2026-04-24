@@ -3,22 +3,24 @@
 //
 // Usage:
 //
-//	ctx-saver [--debug]              — start the MCP server (stdio transport)
-//	ctx-saver hook pretooluse        — PreToolUse routing enforcement hook
-//	ctx-saver hook posttooluse       — PostToolUse session capture hook
-//	ctx-saver hook sessionstart      — SessionStart state-restoration hook
+//	ctx-saver [--debug]                       — start the MCP server (stdio transport)
+//	ctx-saver hook pretooluse                 — PreToolUse routing enforcement hook
+//	ctx-saver hook posttooluse                — PostToolUse session capture hook
+//	ctx-saver hook sessionstart               — SessionStart state-restoration hook
+//	ctx-saver init claude                     — install hooks into ~/.claude/settings.json
+//	ctx-saver init copilot                    — install MCP server into .vscode/mcp.json
+//	ctx-saver init copilot-instructions       — install .github/copilot-instructions.md
 //
 // The server communicates over stdin/stdout using the MCP protocol (stdio transport).
 // All log output goes to the configured log file (default: ~/.local/share/ctx-saver/server.log)
 // so it does not interfere with the protocol stream.
 //
-// Install for Claude Code:
+// Quick-start (works with go install — no repo clone required):
 //
-//	claude mcp add ctx-saver -- /usr/local/bin/ctx-saver
-//
-// Install for VS Code Copilot — add to .vscode/mcp.json:
-//
-//	{"servers": {"ctx-saver": {"command": "/usr/local/bin/ctx-saver"}}}
+//	go install github.com/ChonlakanSutthimatmongkhol/ctx-saver@latest
+//	ctx-saver init claude                     # Claude Code hooks
+//	ctx-saver init copilot                    # VS Code Copilot MCP entry
+//	ctx-saver init copilot-instructions       # Copilot Enterprise instruction rules
 package main
 
 import (
@@ -54,8 +56,17 @@ func run() error {
 	// ── Hook subcommand: ctx-saver hook <event> ────────────────────────────────
 	// Hooks are lightweight — they open the store, run, and exit.
 	// They do NOT start the full MCP server.
-	if len(args) >= 2 && args[0] == "hook" {
+	if len(args) >= 1 && args[0] == "hook" {
+		if len(args) < 2 {
+			return fmt.Errorf("usage: ctx-saver hook <pretooluse|posttooluse|sessionstart>")
+		}
 		return runHook(args[1])
+	}
+
+	// ── Init subcommand: ctx-saver init <platform> ────────────────────────────
+	// One-shot setup that writes config files; does NOT start the MCP server.
+	if len(args) >= 1 && args[0] == "init" {
+		return runInit(args[1:])
 	}
 
 	// ── MCP server mode ────────────────────────────────────────────────────────
