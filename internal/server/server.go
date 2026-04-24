@@ -155,6 +155,27 @@ Pairs with ctx_get_section: outline first → pick heading → extract section.
 Typical workflow: ctx_execute → ctx_outline → ctx_get_section → done (no ctx_get_full needed).`,
 	}, outlineH.Handle)
 
+	sessionInitH := handlers.NewSessionInitHandler(cfg, st, projectPath, serverStart, serverVersion)
+	mcp.AddTool(srv, &mcp.Tool{
+		Name: "ctx_session_init",
+		Description: `[CALL THIS FIRST in every new session] Initialize ctx-saver context and receive project rules.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Returns:
+• Project rules (how to use ctx-saver tools correctly)
+• Recent session activity (what was done before)
+• Cached output inventory (what is already stored and ready for reuse)
+• Active configuration (sandbox, dedup, smart-format settings)
+
+Skipping this tool leads to:
+• Re-running commands whose results are already cached
+• Flooding context with native Shell / readFile output
+• Missing project-specific routing rules
+
+Cost: ~500–1000 tokens. Benefit: saves 10–50× more tokens over the session.
+No arguments required.`,
+	}, sessionInitH.Handle)
+
 	statsH := handlers.NewStatsHandler(cfg, st, projectPath, serverStart)
 	mcp.AddTool(srv, &mcp.Tool{
 		Name: "ctx_stats",
