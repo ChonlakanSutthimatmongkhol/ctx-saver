@@ -118,10 +118,9 @@ func (h *ExecuteHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, inp
 			lines = nil
 		}
 		stats.Lines = len(lines)
-		return nil, ExecuteOutput{
-			Stats:        stats,
-			DirectOutput: string(result.Output),
-		}, nil
+		out.Stats = stats
+		out.DirectOutput = string(result.Output)
+		return nil, out, nil
 	}
 
 	// Large output — store and summarise.

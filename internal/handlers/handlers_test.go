@@ -227,6 +227,81 @@ func TestExecuteHandler_CustomSummaryLines(t *testing.T) {
 	assert.NotEmpty(t, out.Summary)
 }
 
+// ── ExecuteHandler dedup hint tests (Task 5.2) ───────────────────────────
+
+func TestExecuteHandler_DedupHint_Enabled(t *testing.T) {
+	cfg := defaultCfg()
+	cfg.Dedup.Enabled = true
+	cfg.Dedup.WindowMinutes = 30
+
+	prev := &store.OutputMeta{
+		OutputID:  "out_prev_001",
+		Command:   "[shell] flutter test",
+		CreatedAt: time.Now().Add(-5 * time.Minute),
+	}
+	st := &mockStore{dedupMeta: prev}
+	sb := &mockSandbox{output: largeOutput(300)} // 300×2=600 bytes > 512 threshold
+
+	h := handlers.NewExecuteHandler(cfg, sb, st, "/proj", "/proj")
+	_, out, err := h.Handle(context.Background(), nil, handlers.ExecuteInput{
+		Language: "shell",
+		Code:     "flutter test",
+	})
+	require.NoError(t, err)
+	assert.NotEmpty(t, out.DuplicateHint)
+	assert.Equal(t, "out_prev_001", out.PreviousOutputID)
+	assert.Contains(t, out.DuplicateHint, "out_prev_001")
+}
+
+func TestExecuteHandler_DedupHint_Disabled(t *testing.T) {
+	cfg := defaultCfg()
+	cfg.Dedup.Enabled = false
+
+	prev := &store.OutputMeta{OutputID: "out_prev_002", CreatedAt: time.Now()}
+	st := &mockStore{dedupMeta: prev}
+	sb := &mockSandbox{output: largeOutput(200)}
+
+	h := handlers.NewExecuteHandler(cfg, sb, st, "/proj", "/proj")
+	_, out, err := h.Handle(context.Background(), nil, handlers.ExecuteInput{
+		Language: "shell", Code: "go test",
+	})
+	require.NoError(t, err)
+	assert.Empty(t, out.DuplicateHint)
+	assert.Empty(t, out.PreviousOutputID)
+}
+
+func TestExecuteHandler_DedupHint_NoDuplicate(t *testing.T) {
+	cfg := defaultCfg()
+	cfg.Dedup.Enabled = true
+	st := &mockStore{dedupMeta: nil}
+	sb := &mockSandbox{output: largeOutput(200)}
+
+	h := handlers.NewExecuteHandler(cfg, sb, st, "/proj", "/proj")
+	_, out, err := h.Handle(context.Background(), nil, handlers.ExecuteInput{
+		Language: "shell", Code: "make build",
+	})
+	require.NoError(t, err)
+	assert.Empty(t, out.DuplicateHint)
+}
+
+func TestExecuteHandler_DedupStillExecutes(t *testing.T) {
+	cfg := defaultCfg()
+	cfg.Dedup.Enabled = true
+
+	prev := &store.OutputMeta{OutputID: "out_prev_003", CreatedAt: time.Now()}
+	st := &mockStore{dedupMeta: prev}
+	sb := &mockSandbox{output: largeOutput(300)} // 300×2=600 bytes > 512 threshold
+
+	h := handlers.NewExecuteHandler(cfg, sb, st, "/proj", "/proj")
+	_, out, err := h.Handle(context.Background(), nil, handlers.ExecuteInput{
+		Language: "shell", Code: "go build",
+	})
+	require.NoError(t, err)
+	// Hint present AND new output stored (command actually ran).
+	assert.NotEmpty(t, out.DuplicateHint)
+	assert.NotEmpty(t, out.OutputID, "command must still execute and produce a new output_id")
+}
+
 // ── ReadFileHandler tests ─────────────────────────────────────────────────
 
 func TestReadFileHandler_EmptyPath_Error(t *testing.T) {

@@ -284,6 +284,82 @@ func TestSQLiteStore_DBFilePermissions(t *testing.T) {
 	assert.Equal(t, os.FileMode(0600), info.Mode().Perm())
 }
 
+// ── FindRecentSameCommand tests (Task 5.2) ────────────────────────────────
+
+func TestFindRecentSameCommand_Found(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+
+	out := sampleOutput("out_dedup_001")
+	out.Command = "[shell] go test ./..."
+	require.NoError(t, st.Save(ctx, out))
+
+	meta, err := st.FindRecentSameCommand(ctx, "/test/project", "[shell] go test ./...", time.Hour)
+	require.NoError(t, err)
+	require.NotNil(t, meta)
+	assert.Equal(t, "out_dedup_001", meta.OutputID)
+}
+
+func TestFindRecentSameCommand_OutOfWindow(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+
+	out := sampleOutput("out_dedup_old")
+	out.Command = "[shell] go test ./..."
+	out.CreatedAt = time.Now().Add(-2 * time.Hour)
+	require.NoError(t, st.Save(ctx, out))
+
+	meta, err := st.FindRecentSameCommand(ctx, "/test/project", "[shell] go test ./...", time.Hour)
+	require.NoError(t, err)
+	assert.Nil(t, meta, "out-of-window command should not match")
+}
+
+func TestFindRecentSameCommand_DifferentProject(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+
+	out := sampleOutput("out_dedup_proj")
+	out.Command = "[shell] go test ./..."
+	out.ProjectPath = "/other/project"
+	require.NoError(t, st.Save(ctx, out))
+
+	meta, err := st.FindRecentSameCommand(ctx, "/test/project", "[shell] go test ./...", time.Hour)
+	require.NoError(t, err)
+	assert.Nil(t, meta, "different project should not match")
+}
+
+func TestFindRecentSameCommand_Normalization(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+
+	out := sampleOutput("out_dedup_norm")
+	out.Command = store.NormalizeCommand("[shell] go   test ./...")
+	require.NoError(t, st.Save(ctx, out))
+
+	// Query with extra spaces — NormalizeCommand collapses them.
+	meta, err := st.FindRecentSameCommand(ctx, "/test/project", "[shell] go   test ./...", time.Hour)
+	require.NoError(t, err)
+	require.NotNil(t, meta, "whitespace differences should still match after normalisation")
+}
+
+func TestNormalizeCommand(t *testing.T) {
+	cases := []struct {
+		input string
+		want  string
+	}{
+		{"go test", "go test"},
+		{"go   test", "go test"},
+		{"  go test ./...  ", "go test ./..."},
+		{"flutter   test\t--no-pub", "flutter test --no-pub"},
+		{"", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.input, func(t *testing.T) {
+			assert.Equal(t, tc.want, store.NormalizeCommand(tc.input))
+		})
+	}
+}
+
 func TestGetStats_EmptyDB(t *testing.T) {
 	st := newTestStore(t)
 	ctx := context.Background()
