@@ -511,6 +511,44 @@ func (s *SQLiteStore) GetStats(ctx context.Context, projectPath string, since ti
 		return nil, fmt.Errorf("scanning redirected count: %w", err)
 	}
 
+	// --- tool usage adherence counts ---
+	// Count posttooluse events per tool_name so we can compute adherence_score.
+	trows, err := s.db.QueryContext(ctx, `
+		SELECT tool_name, COUNT(*)
+		FROM session_events
+		WHERE project_path = ?
+		  AND (? = 0 OR created_at >= ?)
+		  AND event_type = 'posttooluse'
+		GROUP BY tool_name`,
+		projectPath, sinceUnix, sinceUnix)
+	if err != nil {
+		return nil, fmt.Errorf("querying tool usage counts: %w", err)
+	}
+	defer trows.Close()
+	for trows.Next() {
+		var name string
+		var n int
+		if err := trows.Scan(&name, &n); err != nil {
+			return nil, fmt.Errorf("scanning tool usage row: %w", err)
+		}
+		lower := strings.ToLower(name)
+		switch {
+		case strings.Contains(lower, "terminal") ||
+			strings.Contains(lower, "bash") ||
+			strings.Contains(lower, "shell"):
+			stats.NativeShellCount += n
+		case strings.Contains(lower, "readfile") || lower == "read":
+			stats.NativeReadCount += n
+		case name == "ctx_execute":
+			stats.CtxExecuteCount += n
+		case name == "ctx_read_file":
+			stats.CtxReadFileCount += n
+		}
+	}
+	if err := trows.Err(); err != nil {
+		return nil, fmt.Errorf("iterating tool usage rows: %w", err)
+	}
+
 	return stats, nil
 }
 

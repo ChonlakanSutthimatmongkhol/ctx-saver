@@ -62,6 +62,13 @@ type Stats struct {
 	DangerousBlocked int
 	RedirectedToMCP  int
 	EventsCaptured   int
+
+	// Tool-usage adherence counts (PostToolUse events, scope-filtered).
+	// These are used to compute the adherence_score in ctx_stats.
+	NativeShellCount int // runInTerminal / Shell / Bash calls
+	NativeReadCount  int // readFile / read_file / Read calls
+	CtxExecuteCount  int // ctx_execute calls
+	CtxReadFileCount int // ctx_read_file calls
 }
 
 // CommandStat is the aggregate for one command bucket.
