@@ -467,3 +467,31 @@ func TestGetStats_HookCounts(t *testing.T) {
 	assert.Equal(t, 2, stats.DangerousBlocked)
 	assert.Equal(t, 1, stats.RedirectedToMCP)
 }
+
+func TestGetStats_ToolUsageCounts(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+
+	toolEvents := []*store.SessionEvent{
+		{SessionID: "s1", ProjectPath: "/test/project", EventType: "posttooluse", ToolName: "ctx_execute", Summary: "ran go test"},
+		{SessionID: "s1", ProjectPath: "/test/project", EventType: "posttooluse", ToolName: "ctx_execute", Summary: "ran flutter build"},
+		{SessionID: "s1", ProjectPath: "/test/project", EventType: "posttooluse", ToolName: "ctx_read_file", Summary: "read spec.yaml"},
+		{SessionID: "s1", ProjectPath: "/test/project", EventType: "posttooluse", ToolName: "runInTerminal", Summary: "ran pwd"},
+		{SessionID: "s1", ProjectPath: "/test/project", EventType: "posttooluse", ToolName: "Bash", Summary: "ran ls"},
+		{SessionID: "s1", ProjectPath: "/test/project", EventType: "posttooluse", ToolName: "Read", Summary: "read package.json"},
+		// pretooluse events should NOT be counted in tool usage adherence.
+		{SessionID: "s1", ProjectPath: "/test/project", EventType: "pretooluse", ToolName: "runInTerminal", Summary: "allowed pwd"},
+	}
+	for _, e := range toolEvents {
+		e.CreatedAt = time.Now()
+		require.NoError(t, st.SaveSessionEvent(ctx, e))
+	}
+
+	stats, err := st.GetStats(ctx, "/test/project", time.Time{})
+	require.NoError(t, err)
+
+	assert.Equal(t, 2, stats.CtxExecuteCount, "ctx_execute count")
+	assert.Equal(t, 1, stats.CtxReadFileCount, "ctx_read_file count")
+	assert.Equal(t, 2, stats.NativeShellCount, "native shell count (runInTerminal + Bash)")
+	assert.Equal(t, 1, stats.NativeReadCount, "native read count (Read)")
+}

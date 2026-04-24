@@ -72,6 +72,65 @@ func TestStatsHandler_Populated(t *testing.T) {
 	assert.Equal(t, 10, out.HookStats.EventsCaptured)
 }
 
+func TestAdherenceScore_High(t *testing.T) {
+	// 9 ctx_execute + 1 runInTerminal → score ~90%
+	st := &statsStore{stats: &store.Stats{
+		CtxExecuteCount:  9,
+		NativeShellCount: 1,
+	}}
+	h := handlers.NewStatsHandler(statsCfg(), st, "/proj", time.Now())
+	_, out, err := h.Handle(context.Background(), nil, handlers.StatsInput{})
+	require.NoError(t, err)
+	assert.InDelta(t, 90.0, out.AdherenceScore, 0.01)
+	assert.Contains(t, out.AdherenceNote, "Excellent")
+}
+
+func TestAdherenceScore_Low(t *testing.T) {
+	// 2 ctx_execute + 8 runInTerminal → score ~20%
+	st := &statsStore{stats: &store.Stats{
+		CtxExecuteCount:  2,
+		NativeShellCount: 8,
+	}}
+	h := handlers.NewStatsHandler(statsCfg(), st, "/proj", time.Now())
+	_, out, err := h.Handle(context.Background(), nil, handlers.StatsInput{})
+	require.NoError(t, err)
+	assert.InDelta(t, 20.0, out.AdherenceScore, 0.01)
+	assert.Contains(t, out.AdherenceNote, "Low")
+}
+
+func TestAdherenceNote_Thresholds(t *testing.T) {
+	cases := []struct {
+		ctx int
+		nat int
+		sub string
+	}{
+		{9, 1, "Excellent"},  // 90%
+		{7, 3, "Good"},       // 70%
+		{5, 5, "Mixed"},      // 50%
+		{2, 8, "Low"},        // 20%
+	}
+	for _, c := range cases {
+		st := &statsStore{stats: &store.Stats{
+			CtxExecuteCount:  c.ctx,
+			NativeShellCount: c.nat,
+		}}
+		h := handlers.NewStatsHandler(statsCfg(), st, "/proj", time.Now())
+		_, out, err := h.Handle(context.Background(), nil, handlers.StatsInput{})
+		require.NoError(t, err)
+		assert.Contains(t, out.AdherenceNote, c.sub,
+			"expected %q in note for %d ctx / %d native", c.sub, c.ctx, c.nat)
+	}
+}
+
+func TestAdherenceScore_NoData(t *testing.T) {
+	st := &statsStore{stats: &store.Stats{}}
+	h := handlers.NewStatsHandler(statsCfg(), st, "/proj", time.Now())
+	_, out, err := h.Handle(context.Background(), nil, handlers.StatsInput{})
+	require.NoError(t, err)
+	assert.Equal(t, float64(0), out.AdherenceScore)
+	assert.Empty(t, out.AdherenceNote, "no note when no tool events")
+}
+
 func TestStatsHandler_InvalidScope(t *testing.T) {
 	st := &statsStore{stats: &store.Stats{}}
 	h := handlers.NewStatsHandler(statsCfg(), st, "/proj", time.Now())

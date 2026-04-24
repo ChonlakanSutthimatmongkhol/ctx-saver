@@ -285,6 +285,158 @@ func TestTruncate_UTF8(t *testing.T) {
 	}
 }
 
+// ── Native tool detection + nudge tests ────────────────────────────────────
+
+func TestIsNativeShellTool(t *testing.T) {
+	cases := []struct {
+		name    string
+		want    bool
+	}{
+		{"runInTerminal", true},
+		{"Shell", true},
+		{"Bash", true},
+		{"bash", true},
+		{"TERMINAL", true},
+		{"ctx_execute", false},
+		{"ReadFile", false},
+		{"read", false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := isNativeShellTool(c.name); got != c.want {
+				t.Errorf("isNativeShellTool(%q) = %v, want %v", c.name, got, c.want)
+			}
+		})
+	}
+}
+
+func TestIsNativeReadTool(t *testing.T) {
+	cases := []struct {
+		name string
+		want bool
+	}{
+		{"readFile", true},
+		{"ReadFile", true},
+		{"read_file", true},
+		{"Read", true},
+		{"read", true},
+		{"ctx_read_file", false},
+		{"Shell", false},
+		{"Bash", false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := isNativeReadTool(c.name); got != c.want {
+				t.Errorf("isNativeReadTool(%q) = %v, want %v", c.name, got, c.want)
+			}
+		})
+	}
+}
+
+func TestRouteNativeToolUsage_ShellLargeCmd(t *testing.T) {
+	hint := routeNativeToolUsage("Shell", "go test ./...")
+	if hint == "" {
+		t.Error("expected non-empty hint for Shell + 'go test' command")
+	}
+	if !strings.Contains(hint, "ctx_execute") {
+		t.Errorf("hint should mention ctx_execute, got: %q", hint)
+	}
+}
+
+func TestRouteNativeToolUsage_ShellSmallCmd(t *testing.T) {
+	hint := routeNativeToolUsage("Shell", "pwd")
+	if hint != "" {
+		t.Errorf("expected empty hint for trivial command 'pwd', got: %q", hint)
+	}
+}
+
+func TestRouteNativeToolUsage_ReadTool(t *testing.T) {
+	hint := routeNativeToolUsage("ReadFile", "openapi.yaml")
+	if hint == "" {
+		t.Error("expected non-empty hint for ReadFile tool")
+	}
+	if !strings.Contains(hint, "ctx_read_file") {
+		t.Errorf("hint should mention ctx_read_file, got: %q", hint)
+	}
+}
+
+func TestRouteNativeToolUsage_CtxExecuteSelf(t *testing.T) {
+	hint := routeNativeToolUsage("ctx_execute", "go test ./...")
+	if hint != "" {
+		t.Errorf("ctx_execute should not trigger nudge, got: %q", hint)
+	}
+}
+
+func TestPostToolUse_NativeShellAnnotation(t *testing.T) {
+	st := newMemStore()
+	input := HookInput{
+		SessionID: "s1",
+		Cwd:       "/proj",
+		ToolName:  "Shell",
+		ToolInput: map[string]any{"command": "go test ./..."},
+	}
+	b, _ := json.Marshal(input)
+	var buf bytes.Buffer
+	if err := RunPostToolUse(st, bytes.NewBuffer(b), &buf); err != nil {
+		t.Fatalf("RunPostToolUse: %v", err)
+	}
+	events, _ := st.ListProjectSessionEvents(context.Background(), resolveProjectPath("/proj"), 10)
+	if len(events) == 0 {
+		t.Fatal("expected session event to be saved")
+	}
+	ev := events[0]
+	if !strings.Contains(ev.Summary, "NATIVE_SHELL") {
+		t.Errorf("expected summary to contain NATIVE_SHELL, got: %q", ev.Summary)
+	}
+}
+
+func TestPostToolUse_NativeReadAnnotation(t *testing.T) {
+	st := newMemStore()
+	input := HookInput{
+		SessionID: "s2",
+		Cwd:       "/proj",
+		ToolName:  "ReadFile",
+		ToolInput: map[string]any{"path": "large_spec.yaml"},
+	}
+	b, _ := json.Marshal(input)
+	var buf bytes.Buffer
+	if err := RunPostToolUse(st, bytes.NewBuffer(b), &buf); err != nil {
+		t.Fatalf("RunPostToolUse: %v", err)
+	}
+	events, _ := st.ListProjectSessionEvents(context.Background(), resolveProjectPath("/proj"), 10)
+	if len(events) == 0 {
+		t.Fatal("expected session event to be saved")
+	}
+	ev := events[0]
+	if !strings.Contains(ev.Summary, "NATIVE_READ") {
+		t.Errorf("expected summary to contain NATIVE_READ, got: %q", ev.Summary)
+	}
+}
+
+func TestPreToolUse_SoftNudge_ShellLargeCmd(t *testing.T) {
+	input := HookInput{
+		SessionID: "s3",
+		Cwd:       "/proj",
+		ToolName:  "Shell",
+		ToolInput: map[string]any{"command": "flutter build apk"},
+	}
+	b, _ := json.Marshal(input)
+	var buf bytes.Buffer
+	if err := RunPreToolUse(nil, bytes.NewBuffer(b), &buf); err != nil {
+		t.Fatalf("RunPreToolUse: %v", err)
+	}
+	var out CodexHookOutput
+	if err := json.Unmarshal(buf.Bytes(), &out); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	if out.HookSpecificOutput.AdditionalContext == "" {
+		t.Error("expected additionalContext hint for Shell + large-output command")
+	}
+	if out.HookSpecificOutput.PermissionDecision == "deny" {
+		t.Error("soft nudge should not deny the tool call")
+	}
+}
+
 func TestRunSessionStart_RoutingInstructions(t *testing.T) {
 	st := newMemStore()
 	input := HookInput{SessionID: "sess-ri", Cwd: "/tmp/proj"}

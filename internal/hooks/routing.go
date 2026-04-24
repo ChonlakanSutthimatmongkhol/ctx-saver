@@ -161,9 +161,15 @@ func isNativeShellTool(toolName string) bool {
 }
 
 // isNativeReadTool reports whether toolName looks like a native file reader.
+// ctx-saver tools (prefixed with "ctx_") are excluded.
 func isNativeReadTool(toolName string) bool {
 	lower := strings.ToLower(toolName)
-	return strings.Contains(lower, "readfile") || lower == "read"
+	if strings.HasPrefix(lower, "ctx_") {
+		return false
+	}
+	return strings.Contains(lower, "readfile") ||
+		strings.Contains(lower, "read_file") ||
+		lower == "read"
 }
 
 // looksLargeOutput reports whether cmd is likely to produce output too large
