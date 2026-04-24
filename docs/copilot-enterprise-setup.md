@@ -26,6 +26,12 @@ This guide covers installing and verifying **ctx-saver** with GitHub Copilot Ent
 go install github.com/ChonlakanSutthimatmongkhol/ctx-saver/cmd/ctx-saver@latest
 ```
 
+Make sure `$(go env GOPATH)/bin` is in your `PATH` (add to `~/.zshrc` or `~/.bashrc`):
+
+```bash
+export PATH="$PATH:$(go env GOPATH)/bin"
+```
+
 **Option B — build from source:**
 
 ```bash
