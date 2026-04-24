@@ -45,6 +45,8 @@ type mockStore struct {
 	listErr   error
 	matches   []*store.Match
 	searchErr error
+	dedupMeta *store.OutputMeta
+	dedupErr  error
 }
 
 func (m *mockStore) Save(_ context.Context, o *store.Output) error {
@@ -90,6 +92,10 @@ func (m *mockStore) ListProjectSessionEvents(_ context.Context, _ string, _ int)
 
 func (m *mockStore) GetStats(_ context.Context, _ string, _ time.Time) (*store.Stats, error) {
 	return &store.Stats{}, nil
+}
+
+func (m *mockStore) FindRecentSameCommand(_ context.Context, _, _ string, _ time.Duration) (*store.OutputMeta, error) {
+	return m.dedupMeta, m.dedupErr
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────

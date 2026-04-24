@@ -255,6 +255,10 @@ func (m *memStore) ListProjectSessionEvents(_ context.Context, projectPath strin
 	return out, nil
 }
 
+func (m *memStore) FindRecentSameCommand(_ context.Context, _, _ string, _ time.Duration) (*store.OutputMeta, error) {
+	return nil, nil
+}
+
 // ── Additional unit tests ──────────────────────────────────────────────────
 
 func TestExtractOutputText_ContentBlocks(t *testing.T) {

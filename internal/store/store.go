@@ -105,6 +105,10 @@ type Store interface {
 	// A zero since means no time filter (all time).
 	GetStats(ctx context.Context, projectPath string, since time.Time) (*Stats, error)
 
+	// FindRecentSameCommand returns the most recent output for the same
+	// normalised command within the window. Returns nil, nil if not found.
+	FindRecentSameCommand(ctx context.Context, projectPath, command string, within time.Duration) (*OutputMeta, error)
+
 	// Close releases database resources.
 	Close() error
 }
