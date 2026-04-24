@@ -118,10 +118,19 @@ Full-text search (SQLite FTS5 + BM25 ranking) across all stored outputs. All que
 
 **Special characters are auto-escaped** — characters such as `#`, `-`, `|`, `:`, `*`, `(`, `)` are automatically wrapped into an FTS5 phrase literal before the query is executed. You never need to escape them manually. If FTS5 still fails (e.g. extremely malformed input), the query automatically falls back to a LIKE scan and `search_mode` will be `"like_fallback"`.
 
+**Synonym expansion** — queries are automatically expanded using a built-in synonym dictionary. For example, `api_path` expands to `["api_path", "endpoint", "route", "url", "path"]`. All expanded queries run in parallel. The `expanded_queries` field in the response shows exactly which queries were used.
+
+To add project-specific synonyms, create `.ctx-saver-synonyms.yaml` in your project root:
+```yaml
+payment_flow: [checkout, billing, invoice, transaction]
+user_model: [account, profile, member]
+```
+Project overrides replace (not merge) any builtin entry with the same key.
+
 **Example**
 ```json
 {
-  "queries": ["#API-123", "payment-service", "error | warning"],
+  "queries": ["api_path", "#API-123", "payment-service"],
   "output_id": "out_20260422_76b3de65",
   "max_results_per_query": 5,
   "context_lines": 3

@@ -130,7 +130,7 @@ See [Hook behaviour](#hooks) below for what each hook does.
 | `ctx_execute` | Run shell/python/go/node; large output stored + summarised (format-aware). Shows `duplicate_hint` if the same command ran within the last 30 min. |
 | `ctx_read_file` | Read a file, optionally piped through a processing script |
 | `ctx_outline` | Extract headings / table-of-contents from a stored output |
-| `ctx_search` | FTS5 full-text search across stored outputs (supports `context_lines`). Special characters (`#`, `-`, `\|`, `:`, `*`) are auto-escaped; falls back to LIKE scan on parse errors. |
+| `ctx_search` | FTS5 full-text search across stored outputs (supports `context_lines`). Special characters auto-escaped; LIKE fallback on parse errors. Queries auto-expanded with synonyms (e.g. `api_path` → endpoint, route…). Project synonyms via `.ctx-saver-synonyms.yaml`. |
 | `ctx_list_outputs` | List all stored outputs for this project |
 | `ctx_get_full` | Retrieve complete output or a specific line range |
 | `ctx_stats` | Report storage and hook statistics (scope: `session\|today\|7d\|all`) |
