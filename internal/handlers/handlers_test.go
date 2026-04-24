@@ -326,6 +326,54 @@ func TestSearchHandler_DefaultMaxResults(t *testing.T) {
 	assert.Len(t, out.Results, 1)
 }
 
+func TestSearchHandler_SearchMode_FTS5(t *testing.T) {
+	st := &mockStore{
+		matches: []*store.Match{
+			{OutputID: "out_x", Line: 1, Snippet: "hit", Score: 1.0, Mode: "fts5"},
+		},
+	}
+	h := handlers.NewSearchHandler(st, "/proj")
+	_, out, err := h.Handle(context.Background(), nil, handlers.SearchInput{Queries: []string{"hit"}})
+	require.NoError(t, err)
+	assert.Equal(t, "fts5", out.SearchMode)
+}
+
+func TestSearchHandler_SearchMode_LikeFallback(t *testing.T) {
+	st := &mockStore{
+		matches: []*store.Match{
+			{OutputID: "out_x", Line: 1, Snippet: "hit", Score: 1.0, Mode: "like_fallback"},
+		},
+	}
+	h := handlers.NewSearchHandler(st, "/proj")
+	_, out, err := h.Handle(context.Background(), nil, handlers.SearchInput{Queries: []string{"special#char"}})
+	require.NoError(t, err)
+	assert.Equal(t, "like_fallback", out.SearchMode)
+}
+
+func TestSearchHandler_SearchMode_MultiQuery_FallbackWins(t *testing.T) {
+	// Escaping prevents syntax errors, so both queries go through FTS5.
+	dir := t.TempDir()
+	realStore, err := store.NewSQLiteStore(dir, "/proj")
+	require.NoError(t, err)
+	t.Cleanup(func() { realStore.Close() })
+
+	out := &store.Output{
+		OutputID: "out_mm_001", Command: "test", Intent: "",
+		FullOutput: "payment-service found\nother line",
+		SizeBytes: 30, LineCount: 2, CreatedAt: time.Now(), ProjectPath: "/proj",
+	}
+	require.NoError(t, realStore.Save(context.Background(), out))
+
+	h := handlers.NewSearchHandler(realStore, "/proj")
+	_, result, err := h.Handle(context.Background(), nil, handlers.SearchInput{
+		Queries: []string{"payment-service", "found"},
+	})
+	require.NoError(t, err)
+	assert.Len(t, result.Results, 2)
+	// Both queries succeed — mode is "fts5" because escaping prevents fallback.
+	assert.Equal(t, "fts5", result.SearchMode)
+}
+
 // ── ListHandler tests ─────────────────────────────────────────────────────
 
 func TestListHandler_EmptyStore_ReturnsEmptyList(t *testing.T) {

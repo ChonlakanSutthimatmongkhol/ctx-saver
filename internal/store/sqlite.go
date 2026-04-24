@@ -184,14 +184,7 @@ func (s *SQLiteStore) Search(ctx context.Context, query, outputID string, maxRes
 		return nil, err
 	}
 	slog.Warn("FTS5 failed, falling back to LIKE", "query", query, "error", err)
-	matches, err = s.SearchLike(ctx, query, outputID, maxResults)
-	if err != nil {
-		return nil, err
-	}
-	for _, m := range matches {
-		m.Mode = "like_fallback"
-	}
-	return matches, nil
+	return s.SearchLike(ctx, query, outputID, maxResults)
 }
 
 // searchFTS5 is the raw FTS5 MATCH implementation.
@@ -275,6 +268,7 @@ func (s *SQLiteStore) SearchLike(ctx context.Context, query, outputID string, ma
 			return nil, fmt.Errorf("scanning LIKE row: %w", err)
 		}
 		m.Score = rank
+		m.Mode = "like_fallback"
 		matches = append(matches, &m)
 	}
 	return matches, rows.Err()

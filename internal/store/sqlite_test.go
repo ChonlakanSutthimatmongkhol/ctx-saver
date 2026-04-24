@@ -130,6 +130,119 @@ func TestSQLiteStore_Search_NoMatch(t *testing.T) {
 	assert.Empty(t, matches)
 }
 
+// ── FTS5 escape + fallback tests (Task 5.1) ───────────────────────────────
+
+func TestSearch_SpecialChars_Hash(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+	out := sampleOutput("out_hash_001")
+	out.FullOutput = "found #API-123 in response\nother line"
+	require.NoError(t, st.Save(ctx, out))
+
+	matches, err := st.Search(ctx, "#API-123", "", 5)
+	require.NoError(t, err, "special char query must not return error")
+	require.NotEmpty(t, matches)
+	assert.Equal(t, "out_hash_001", matches[0].OutputID)
+}
+
+func TestSearch_SpecialChars_Pipe(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+	out := sampleOutput("out_pipe_001")
+	out.FullOutput = "log: error | warning detected\nother line"
+	require.NoError(t, st.Save(ctx, out))
+
+	matches, err := st.Search(ctx, "error | warning", "", 5)
+	require.NoError(t, err, "pipe in query must not return error")
+	require.NotEmpty(t, matches)
+}
+
+func TestSearch_SpecialChars_Dash(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+	out := sampleOutput("out_dash_001")
+	out.FullOutput = "connecting to payment-service endpoint\nother line"
+	require.NoError(t, st.Save(ctx, out))
+
+	matches, err := st.Search(ctx, "payment-service", "", 5)
+	require.NoError(t, err, "dash in query must not return error")
+	require.NotEmpty(t, matches)
+}
+
+func TestSearch_SpecialChars_Colon(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+	out := sampleOutput("out_colon_001")
+	out.FullOutput = "config field:value must be set\nother line"
+	require.NoError(t, st.Save(ctx, out))
+
+	matches, err := st.Search(ctx, "field:value", "", 5)
+	require.NoError(t, err, "colon in query must not return error")
+	require.NotEmpty(t, matches)
+}
+
+func TestSearch_ModeIsFTS5_ForNormalQuery(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+	require.NoError(t, st.Save(ctx, sampleOutput("out_mode_001")))
+
+	matches, err := st.Search(ctx, "error", "", 5)
+	require.NoError(t, err)
+	require.NotEmpty(t, matches)
+	for _, m := range matches {
+		assert.Equal(t, "fts5", m.Mode)
+	}
+}
+
+func TestSearchLike_Basic(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+	out := sampleOutput("out_like_001")
+	out.FullOutput = "payment-service timeout error\nother line"
+	require.NoError(t, st.Save(ctx, out))
+
+	matches, err := st.SearchLike(ctx, "payment-service", "", 5)
+	require.NoError(t, err)
+	require.NotEmpty(t, matches)
+	assert.Equal(t, "out_like_001", matches[0].OutputID)
+	assert.Equal(t, "like_fallback", matches[0].Mode)
+}
+
+func TestSearchLike_EscapePercentUnderscore(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+	out := sampleOutput("out_like_esc_001")
+	out.FullOutput = "100% complete\nother line\nstatus_code: 200"
+	require.NoError(t, st.Save(ctx, out))
+
+	// % must be treated as literal, not SQL wildcard.
+	matches, err := st.SearchLike(ctx, "100%", "", 5)
+	require.NoError(t, err)
+	require.NotEmpty(t, matches, "literal %% must match")
+
+	// _ must be treated as literal, not SQL single-char wildcard.
+	matches2, err := st.SearchLike(ctx, "status_code", "", 5)
+	require.NoError(t, err)
+	require.NotEmpty(t, matches2, "literal _ must match")
+}
+
+func TestSearchLike_FilterByOutputID(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+	o1 := sampleOutput("out_like_f_001")
+	o1.FullOutput = "payment-service found\nother"
+	o2 := sampleOutput("out_like_f_002")
+	o2.FullOutput = "payment-service also here\nother"
+	require.NoError(t, st.Save(ctx, o1))
+	require.NoError(t, st.Save(ctx, o2))
+
+	matches, err := st.SearchLike(ctx, "payment-service", "out_like_f_001", 5)
+	require.NoError(t, err)
+	for _, m := range matches {
+		assert.Equal(t, "out_like_f_001", m.OutputID)
+	}
+}
+
 func TestSQLiteStore_Cleanup(t *testing.T) {
 	st := newTestStore(t)
 	ctx := context.Background()
