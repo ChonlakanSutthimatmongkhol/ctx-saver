@@ -146,3 +146,55 @@ func min(a, b int) int {
 	}
 	return b
 }
+
+// ── Native tool detection ─────────────────────────────────────────────────
+// These helpers identify native Shell / Read tool calls that should have
+// used ctx-saver tools instead.  They are used by both PostToolUse (for
+// annotating summaries) and PreToolUse (for soft nudge hints).
+
+// isNativeShellTool reports whether toolName looks like a native terminal.
+func isNativeShellTool(toolName string) bool {
+	lower := strings.ToLower(toolName)
+	return strings.Contains(lower, "terminal") ||
+		strings.Contains(lower, "bash") ||
+		strings.Contains(lower, "shell")
+}
+
+// isNativeReadTool reports whether toolName looks like a native file reader.
+func isNativeReadTool(toolName string) bool {
+	lower := strings.ToLower(toolName)
+	return strings.Contains(lower, "readfile") || lower == "read"
+}
+
+// looksLargeOutput reports whether cmd is likely to produce output too large
+// for the context window.  Used to suppress nudge hints on trivial commands.
+func looksLargeOutput(cmd string) bool {
+	patterns := []string{
+		"build", "test", "log", "diff",
+		"kubectl", "docker", "acli", "jira",
+		"find", "grep", "curl", "wget",
+	}
+	lower := strings.ToLower(cmd)
+	for _, p := range patterns {
+		if strings.Contains(lower, p) {
+			return true
+		}
+	}
+	return false
+}
+
+// routeNativeToolUsage returns a soft-nudge hint when a native shell/read
+// tool is detected that should be using ctx-saver instead.
+// Returns "" when no nudge is needed (e.g., trivial commands or ctx-saver tools).
+func routeNativeToolUsage(toolName, cmd string) string {
+	switch {
+	case isNativeShellTool(toolName):
+		if looksLargeOutput(cmd) {
+			return "💡 Hint: Use ctx_execute instead of " + toolName +
+				" for this command to avoid flooding the context window."
+		}
+	case isNativeReadTool(toolName):
+		return "💡 Hint: For files > 50 lines, use ctx_read_file instead of " + toolName + "."
+	}
+	return ""
+}
