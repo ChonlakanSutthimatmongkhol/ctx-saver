@@ -213,7 +213,7 @@ Each entry:
 | Field | Description |
 |-------|-------------|
 | `line` | 1-based line number |
-| `level` | Heading depth: `1`=`##`, `2`=`###`, `3`=`####`; `0`=table header |
+| `level` | Standard Markdown depth: `1`=`#`, `2`=`##`, `3`=`###`, `4`=`####`; `0`=table header |
 | `text` | Full text of the heading or table header line |
 
 **Example**
@@ -234,6 +234,45 @@ Each entry:
   ]
 }
 ```
+
+---
+
+## ctx_get_section
+
+Extract a specific section of a stored output by heading text. Use `ctx_outline` first to discover heading names, then use this tool to retrieve the section content without guessing line numbers.
+
+**Input**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `output_id` | string | Y | ID of the stored output |
+| `heading` | string | Y | Heading text to match (case-insensitive) |
+| `partial` | bool | N | Allow substring match on heading (default: false) |
+
+**Output**
+| Field | Description |
+|-------|-------------|
+| `found` | `true` if a matching heading was found |
+| `output_id` | Echo of the requested ID |
+| `heading` | Echo of the requested heading |
+| `start_line` | 1-based start line of the section (only when `found=true`) |
+| `end_line` | 1-based inclusive end line (only when `found=true`) |
+| `lines` | Array of lines in the section (only when `found=true`) |
+| `line_count` | Number of lines returned (only when `found=true`) |
+
+The section ends just before the next heading at the same or higher level (e.g. a `##` section ends at the next `##` or `#`). The last section extends to end of file.
+
+When `found=false` the tool returns successfully — it is **not** an error.
+
+**Example**
+```json
+{
+  "output_id": "out_20260422_76b3de65",
+  "heading": "Sequence Diagram",
+  "partial": false
+}
+```
+
+**Navigate long specs:** use `ctx_outline` to discover heading names, then `ctx_get_section` to extract the exact section you need. Prefer this over `ctx_get_full` with a guessed `line_range`.
 
 ---
 
