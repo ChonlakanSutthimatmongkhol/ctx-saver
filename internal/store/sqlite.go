@@ -212,6 +212,56 @@ func (s *SQLiteStore) Search(ctx context.Context, query, outputID string, maxRes
 	return matches, rows.Err()
 }
 
+// SearchLike performs a LIKE-based line scan over the FTS content column.
+// Slower than FTS5 but tolerant of any input (no syntax errors).
+// Returns up to maxResults matches.
+func (s *SQLiteStore) SearchLike(ctx context.Context, query, outputID string, maxResults int) ([]*Match, error) {
+	if maxResults <= 0 {
+		maxResults = 5
+	}
+
+	sqlQuery := `
+		SELECT output_id, line_no,
+		       content AS snip,
+		       1.0 AS rank
+		FROM outputs_fts
+		WHERE content LIKE ? ESCAPE '\'`
+	args := []any{"%" + escapeLikePattern(query) + "%"}
+
+	if outputID != "" {
+		sqlQuery += ` AND output_id = ?`
+		args = append(args, outputID)
+	}
+	sqlQuery += ` LIMIT ?`
+	args = append(args, maxResults)
+
+	rows, err := s.db.QueryContext(ctx, sqlQuery, args...)
+	if err != nil {
+		return nil, fmt.Errorf("LIKE search for %q: %w", query, err)
+	}
+	defer rows.Close()
+
+	var matches []*Match
+	for rows.Next() {
+		var m Match
+		var rank float64
+		if err := rows.Scan(&m.OutputID, &m.Line, &m.Snippet, &rank); err != nil {
+			return nil, fmt.Errorf("scanning LIKE row: %w", err)
+		}
+		m.Score = rank
+		matches = append(matches, &m)
+	}
+	return matches, rows.Err()
+}
+
+// escapeLikePattern escapes %, _, and \ for safe LIKE usage with ESCAPE '\'.
+func escapeLikePattern(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, `%`, `\%`)
+	s = strings.ReplaceAll(s, `_`, `\_`)
+	return s
+}
+
 // Cleanup deletes outputs (and their FTS rows) older than retentionDays.
 func (s *SQLiteStore) Cleanup(ctx context.Context, projectPath string, retentionDays int) error {
 	cutoff := time.Now().AddDate(0, 0, -retentionDays).Unix()
