@@ -27,7 +27,14 @@ type Config struct {
 	Summary      SummaryConfig `yaml:"summary"`
 	Logging      LoggingConfig `yaml:"logging"`
 	Hooks        HooksConfig   `yaml:"hooks"`
+	Dedup        DedupConfig   `yaml:"dedup"`
 	DenyCommands []string      `yaml:"deny_commands"`
+}
+
+// DedupConfig controls command-deduplication hints in ctx_execute responses.
+type DedupConfig struct {
+	Enabled       bool `yaml:"enabled"`        // default true
+	WindowMinutes int  `yaml:"window_minutes"` // default 30
 }
 
 // HooksConfig controls the behaviour of the PreToolUse / PostToolUse / SessionStart hooks.
@@ -95,6 +102,10 @@ func Default() *Config {
 		},
 		Hooks: HooksConfig{
 			SessionHistoryLimit: 10,
+		},
+		Dedup: DedupConfig{
+			Enabled:       true,
+			WindowMinutes: 30,
 		},
 		DenyCommands: []string{
 			"rm -rf /",
