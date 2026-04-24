@@ -90,4 +90,13 @@ func registerTools(srv *mcp.Server, cfg *config.Config, sb sandbox.Sandbox, st s
 			"Scope: session | today | 7d | all (default: session). " +
 			"Use this to verify ctx-saver is saving context window space effectively.",
 	}, statsH.Handle)
+
+	getSectionH := handlers.NewGetSectionHandler(st)
+	mcp.AddTool(srv, &mcp.Tool{
+		Name: "ctx_get_section",
+		Description: "Extract a specific section of a stored output by heading text " +
+			"(## Heading, ### Heading, etc.). Use ctx_outline first to discover " +
+			"heading names. Prefer this over ctx_get_full with a guessed line_range " +
+			"when navigating long documents like API specs or Confluence exports.",
+	}, getSectionH.Handle)
 }
