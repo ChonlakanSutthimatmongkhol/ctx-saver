@@ -72,7 +72,7 @@ Or globally in VS Code `settings.json`:
 }
 ```
 
-Verify: Command Palette → **MCP: List Servers** — should show `ctx-saver` with 7 tools.
+Verify: Command Palette → **MCP: List Servers** — should show `ctx-saver` with 8 tools.
 
 ### Install Claude hooks and Copilot server entry
 
@@ -150,6 +150,23 @@ See [Hook behaviour](#hooks) below for what each hook does.
 
 Set `summary.smart_format: false` in config to always use the generic summariser.
 
+### Search features (Phase 5)
+
+**Auto-escape** — special characters (`#`, `-`, `|`, `:`, `*`, `(`, `)`) in `ctx_search` queries are automatically wrapped as FTS5 phrase literals. You never need to escape them manually.
+
+**LIKE fallback** — if FTS5 still fails (malformed input), the search retries with a LIKE scan automatically. The response includes `search_mode: "fts5"` or `search_mode: "like_fallback"`.
+
+**Synonym expansion** — queries are automatically expanded using a built-in dictionary. `api_path` expands to `[api_path, endpoint, route, url, path]`; `authentication` expands to `[auth, login, jwt, oauth, bearer, token]`; etc. The response includes `expanded_queries` so you can see exactly what was searched.
+
+To add project-specific synonyms, create `.ctx-saver-synonyms.yaml` in your project root:
+
+```yaml
+payment_flow: [checkout, billing, invoice, transaction]
+user_model: [account, profile, member]
+```
+
+Project overrides replace (not merge) any built-in entry with the same key.
+
 ## How it works
 
 ```
@@ -202,6 +219,10 @@ summary:
   auto_index_threshold_bytes: 5120   # 5 KB
   smart_format: true                  # format-aware summariser (flutter_test | go_test | json | git_log | generic)
   enabled_formatters: []              # empty = all enabled; list names to restrict
+
+dedup:
+  enabled: true
+  window_minutes: 30   # show duplicate_hint if same command ran within this window
 
 logging:
   level: info
@@ -268,6 +289,7 @@ internal/sandbox/              execution interface (subprocess + srt stub)
 internal/store/                SQLite + FTS5 storage layer
 internal/summary/              smart summariser: format-aware (flutter_test, go_test, json, git_log) + generic fallback
   internal/summary/formats/      one file per formatter + tests
+internal/search/               synonym expansion (builtin YAML + project override)
 internal/handlers/             one file per MCP tool
 internal/hooks/                PreToolUse / PostToolUse / SessionStart hooks
 internal/server/               MCP server wiring
