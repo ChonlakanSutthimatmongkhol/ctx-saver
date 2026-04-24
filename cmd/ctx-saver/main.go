@@ -17,7 +17,7 @@
 //
 // Quick-start (works with go install — no repo clone required):
 //
-//	go install github.com/ChonlakanSutthimatmongkhol/ctx-saver@latest
+//	go install github.com/ChonlakanSutthimatmongkhol/ctx-saver/cmd/ctx-saver@latest
 //	ctx-saver init claude                     # Claude Code hooks
 //	ctx-saver init copilot                    # VS Code Copilot MCP entry
 //	ctx-saver init copilot-instructions       # Copilot Enterprise instruction rules

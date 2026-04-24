@@ -24,7 +24,7 @@ ctx-saver intercepts these, stores outputs in local SQLite with FTS5 indexing, a
 
 ```bash
 # Install pinned release
-go install github.com/ChonlakanSutthimatmongkhol/ctx-saver/cmd/ctx-saver@v0.3.0
+go install github.com/ChonlakanSutthimatmongkhol/ctx-saver/cmd/ctx-saver@latest
 ```
 
 The binary lands in `$(go env GOPATH)/bin/ctx-saver`.
@@ -257,7 +257,7 @@ If you are using GitHub Copilot in an enterprise context (e.g., at a bank or fin
 **Quick start:**
 ```bash
 # 1. Install ctx-saver binary
-go install github.com/ChonlakanSutthimatmongkhol/ctx-saver@latest
+go install github.com/ChonlakanSutthimatmongkhol/ctx-saver/cmd/ctx-saver@latest
 
 # 2. Add MCP server to VS Code (run from your project directory)
 ctx-saver init copilot

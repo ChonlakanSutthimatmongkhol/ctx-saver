@@ -23,7 +23,7 @@ This guide covers installing and verifying **ctx-saver** with GitHub Copilot Ent
 **Option A — via `go install` (recommended; no repo clone required):**
 
 ```bash
-go install github.com/ChonlakanSutthimatmongkhol/ctx-saver@latest
+go install github.com/ChonlakanSutthimatmongkhol/ctx-saver/cmd/ctx-saver@latest
 ```
 
 **Option B — build from source:**
