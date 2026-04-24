@@ -156,7 +156,7 @@ func TestCtxSearch_FindsStoredContent(t *testing.T) {
 	require.NotEmpty(t, execOut.OutputID)
 
 	// Now search for a term we know is in the log.
-	searchH := handlers.NewSearchHandler(st, proj)
+	searchH := handlers.NewSearchHandler(st, proj, nil)
 	_, searchOut, err := searchH.Handle(context.Background(), nil, handlers.SearchInput{
 		Queries:            []string{"connection pool exhausted"},
 		OutputID:           execOut.OutputID,
@@ -177,7 +177,7 @@ func TestCtxSearch_MultipleQueriesInParallel(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	searchH := handlers.NewSearchHandler(st, proj)
+	searchH := handlers.NewSearchHandler(st, proj, nil)
 	start := time.Now()
 	_, out, err := searchH.Handle(context.Background(), nil, handlers.SearchInput{
 		Queries: []string{"ERROR", "timeout", "connection"},
