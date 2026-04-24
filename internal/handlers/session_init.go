@@ -124,7 +124,7 @@ func (h *SessionInitHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest,
 			seen[key] = struct{}{}
 			out.RecentEvents = append(out.RecentEvents, RecentEventEntry{
 				AgoSeconds: int64(now.Sub(e.CreatedAt).Seconds()),
-				Summary:    fmt.Sprintf("[%s] %s", e.EventType, e.Summary),
+				Summary:    fmt.Sprintf("[%s] %s", e.ToolName, e.Summary),
 			})
 			if len(out.RecentEvents) >= 10 {
 				break

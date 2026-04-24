@@ -98,7 +98,7 @@ func TestToolDescriptions_NoRegression(t *testing.T) {
 		"ctx_outline",
 		"ctx_stats",
 		"ctx_get_section",
-		// ctx_session_init added in Task 6.3
+		"ctx_session_init",
 	}
 
 	byName := make(map[string]bool, len(tools))
