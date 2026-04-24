@@ -103,14 +103,21 @@ Full-text search (SQLite FTS5 + BM25 ranking) across all stored outputs. All que
         }
       ]
     }
-  ]
+  ],
+  "search_mode": "fts5"
 }
 ```
+
+`search_mode` values:
+- `"fts5"` — query was served by the FTS5 full-text index (default, fastest)
+- `"like_fallback"` — FTS5 failed with a syntax error; query was retried with LIKE scan
+
+**Special characters are auto-escaped** — characters such as `#`, `-`, `|`, `:`, `*`, `(`, `)` are automatically wrapped into an FTS5 phrase literal before the query is executed. You never need to escape them manually. If FTS5 still fails (e.g. extremely malformed input), the query automatically falls back to a LIKE scan and `search_mode` will be `"like_fallback"`.
 
 **Example**
 ```json
 {
-  "queries": ["FAIL", "panic", "error"],
+  "queries": ["#API-123", "payment-service", "error | warning"],
   "output_id": "out_20260422_76b3de65",
   "max_results_per_query": 5,
   "context_lines": 3
