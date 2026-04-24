@@ -517,7 +517,7 @@ func (s *SQLiteStore) GetStats(ctx context.Context, projectPath string, since ti
 // FindRecentSameCommand returns the most recent output for the same normalised
 // command within the given window. Returns nil, nil if no match is found.
 func (s *SQLiteStore) FindRecentSameCommand(ctx context.Context, projectPath, command string, within time.Duration) (*OutputMeta, error) {
-	normalized := normalizeCommand(command)
+	normalized := NormalizeCommand(command)
 	threshold := time.Now().Add(-within).Unix()
 
 	row := s.db.QueryRowContext(ctx, `
@@ -543,9 +543,9 @@ func (s *SQLiteStore) FindRecentSameCommand(ctx context.Context, projectPath, co
 	return &meta, nil
 }
 
-// normalizeCommand trims and collapses whitespace so semantically-identical
+// NormalizeCommand trims and collapses whitespace so semantically-identical
 // commands match. Does NOT lowercase (case matters for some commands).
-func normalizeCommand(cmd string) string {
+func NormalizeCommand(cmd string) string {
 	return strings.Join(strings.Fields(cmd), " ")
 }
 

@@ -27,12 +27,14 @@ type ExecuteInput struct {
 
 // ExecuteOutput is the typed output for the ctx_execute MCP tool.
 type ExecuteOutput struct {
-	OutputID     string      `json:"output_id,omitempty"     jsonschema:"ID assigned to this output (only when output was stored)"`
-	Summary      string      `json:"summary,omitempty"       jsonschema:"head+tail summary (only when output was stored)"`
-	Format       string      `json:"format,omitempty"        jsonschema:"summary format used: flutter_test | go_test | json | git_log | generic"`
-	Stats        OutputStats `json:"stats"                   jsonschema:"execution statistics"`
-	SearchHint   string      `json:"search_hint,omitempty"   jsonschema:"hint on how to search stored output"`
-	DirectOutput string      `json:"direct_output,omitempty" jsonschema:"full output (only when output is small enough to return directly)"`
+	OutputID         string      `json:"output_id,omitempty"          jsonschema:"ID assigned to this output (only when output was stored)"`
+	Summary          string      `json:"summary,omitempty"            jsonschema:"head+tail summary (only when output was stored)"`
+	Format           string      `json:"format,omitempty"             jsonschema:"summary format used: flutter_test | go_test | json | git_log | generic"`
+	Stats            OutputStats `json:"stats"                        jsonschema:"execution statistics"`
+	SearchHint       string      `json:"search_hint,omitempty"        jsonschema:"hint on how to search stored output"`
+	DirectOutput     string      `json:"direct_output,omitempty"      jsonschema:"full output (only when output is small enough to return directly)"`
+	DuplicateHint    string      `json:"duplicate_hint,omitempty"     jsonschema:"hint when the same command was recently run"`
+	PreviousOutputID string      `json:"previous_output_id,omitempty" jsonschema:"output_id of the previous identical command, if any"`
 }
 
 // OutputStats carries execution metadata.
@@ -61,6 +63,25 @@ func NewExecuteHandler(cfg *config.Config, sb sandbox.Sandbox, st store.Store, p
 func (h *ExecuteHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, input ExecuteInput) (*mcp.CallToolResult, ExecuteOutput, error) {
 	if input.Code == "" {
 		return nil, ExecuteOutput{}, fmt.Errorf("code must not be empty")
+	}
+
+	// Compute display command early so dedup check and storage use the same value.
+	displayCmd := store.NormalizeCommand(sanitiseCommand(input.Language, input.Code))
+
+	var out ExecuteOutput
+	if h.cfg.Dedup.Enabled && h.st != nil {
+		window := time.Duration(h.cfg.Dedup.WindowMinutes) * time.Minute
+		if prev, err := h.st.FindRecentSameCommand(ctx, h.projectPath, displayCmd, window); err == nil && prev != nil {
+			age := time.Since(prev.CreatedAt).Round(time.Second)
+			out.PreviousOutputID = prev.OutputID
+			out.DuplicateHint = fmt.Sprintf(
+				"Same command ran %s ago (output_id=%s). "+
+					"Consider using ctx_get_full or ctx_search on %s to reuse the cached result instead of re-executing.",
+				age, prev.OutputID, prev.OutputID,
+			)
+			slog.Info("dedup hint added", "previous_id", prev.OutputID, "age_seconds", age.Seconds())
+		}
+		// Always execute — hint is advisory only.
 	}
 
 	program, args, stdin := languageToCommand(input.Language, input.Code)
@@ -120,10 +141,8 @@ func (h *ExecuteHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, inp
 	stats.Lines = sumFmt.TotalLines
 
 	outputID := generateOutputID()
-	// Sanitise the command string before persisting (avoid logging raw secret-bearing args).
-	displayCmd := sanitiseCommand(input.Language, input.Code)
 
-	out := &store.Output{
+	storeOut := &store.Output{
 		OutputID:    outputID,
 		Command:     displayCmd,
 		Intent:      input.Intent,
@@ -135,18 +154,17 @@ func (h *ExecuteHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, inp
 		CreatedAt:   time.Now(),
 		ProjectPath: h.projectPath,
 	}
-	if err := h.st.Save(ctx, out); err != nil {
+	if err := h.st.Save(ctx, storeOut); err != nil {
 		return nil, ExecuteOutput{}, fmt.Errorf("storing output: %w", err)
 	}
 
 	statsLine := summary.FormatStats(sumFmt.TotalLines, sumFmt.TotalBytes, result.ExitCode, result.Duration.Milliseconds())
-	return nil, ExecuteOutput{
-		OutputID:   outputID,
-		Summary:    sumFmt.Text + "\n" + statsLine,
-		Format:     sumFmt.Format,
-		Stats:      stats,
-		SearchHint: fmt.Sprintf("Use ctx_search with output_id=%q to query this output", outputID),
-	}, nil
+	out.OutputID = outputID
+	out.Summary = sumFmt.Text + "\n" + statsLine
+	out.Format = sumFmt.Format
+	out.Stats = stats
+	out.SearchHint = fmt.Sprintf("Use ctx_search with output_id=%q to query this output", outputID)
+	return nil, out, nil
 }
 
 // languageToCommand maps a language name and code string to an executable + args + optional stdin.
