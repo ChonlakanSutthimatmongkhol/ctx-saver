@@ -51,6 +51,22 @@ This returns:
 
 Skipping this leads to re-running commands that already have cached results.
 
+### Rule 5: Respect cache freshness before acting on retrieved data
+
+Every retrieval response (`ctx_get_full`, `ctx_get_section`, `ctx_search`, `ctx_list_outputs`, `ctx_outline`) includes a `freshness` field with `stale_level`:
+
+| stale_level | Age | What to do |
+|---|---|---|
+| `fresh` | < 1 h | Use data as-is |
+| `aging` | 1–24 h | Use data as-is; note age if relevant |
+| `stale` | 1–7 days | Warn the user; offer to re-run via `ctx_execute` |
+| `critical` | > 7 days | **DO NOT use for decisions.** Surface `user_confirmation_required` prompt to user and wait for explicit approval before proceeding. |
+
+**Heuristic — when user asks for current state:**
+If the user's message contains "ล่าสุด", "current", "latest", "now", or equivalent intent — call `ctx_execute` to re-run the original command instead of returning stale cached data.
+
+**Auto-refresh:** outputs with `auto_refresh: true` in config are refreshed automatically on retrieval. The freshness field reflects the updated timestamp.
+
 ## Why these rules exist
 
 Sessions without these tools hit **80% context window usage within 10–15 turns** in this repo

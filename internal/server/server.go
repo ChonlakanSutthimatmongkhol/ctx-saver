@@ -120,7 +120,14 @@ Falls back to LIKE if FTS5 is unavailable; search_mode field in response indicat
 Use this when you need keyword matches across stored outputs.
 Use ctx_get_section when you already know the heading name.
 Use ctx_outline first to discover heading names before writing keyword queries.
-Use ctx_list_outputs to see all available output IDs.`,
+Use ctx_list_outputs to see all available output IDs.
+
+CACHE FRESHNESS POLICY:
+Each match includes freshness.stale_level = fresh | aging | stale | critical.
+• fresh / aging — use data as-is.
+• stale — warn the user; offer to re-run via ctx_execute.
+• critical (>7 days) — DO NOT use for decisions; surface user_confirmation_required prompt first.
+Heuristic: if the user asks for "ล่าสุด", "current", "latest", or "now" — call ctx_execute to re-run instead of returning stale cached data.`,
 	}, searchH.Handle)
 
 	listH := handlers.NewListHandler(st, projectPath)
@@ -130,7 +137,14 @@ Use ctx_list_outputs to see all available output IDs.`,
 
 Call this before running an expensive command (build, test, spec fetch) to check whether a cached result already exists.
 Each entry shows: output_id, command, size_bytes, line_count, created_at.
-Use the output_id with ctx_get_full, ctx_search, ctx_outline, or ctx_get_section to retrieve content without re-executing.`,
+Use the output_id with ctx_get_full, ctx_search, ctx_outline, or ctx_get_section to retrieve content without re-executing.
+
+CACHE FRESHNESS POLICY:
+Each entry includes freshness.stale_level = fresh | aging | stale | critical.
+• fresh / aging — cached data is current; safe to use.
+• stale — consider re-running the command before relying on this output.
+• critical (>7 days) — do not use for decisions without user confirmation.
+Heuristic: if the user asks for "ล่าสุด", "current", "latest", or "now" — call ctx_execute instead of using a cached entry.`,
 	}, listH.Handle)
 
 	getFullH := handlers.NewGetFullHandler(st, projectPath).WithFreshness(sb, cfg.Freshness)
@@ -140,7 +154,14 @@ Use the output_id with ctx_get_full, ctx_search, ctx_outline, or ctx_get_section
 
 Use this only when ctx_search and ctx_get_section are insufficient (e.g., you need raw diff output or a region without a heading).
 Prefer ctx_get_section for named sections and ctx_search for keyword retrieval — both return less context than ctx_get_full.
-Parameters: output_id (required), start_line / end_line (optional, 1-based).`,
+Parameters: output_id (required), start_line / end_line (optional, 1-based).
+
+CACHE FRESHNESS POLICY:
+Response includes freshness.stale_level = fresh | aging | stale | critical.
+• fresh / aging — use data as-is.
+• stale — warn the user and offer to refresh via ctx_execute before proceeding.
+• critical (>7 days) — DO NOT use for decisions; surface the user_confirmation_required prompt and wait for explicit approval.
+Heuristic: if the user asks for "ล่าสุด", "current", "latest", or "now" — call ctx_execute to re-run the original command instead of serving cached data.`,
 	}, getFullH.Handle)
 
 	outlineH := handlers.NewOutlineHandler(st, projectPath).WithFreshness(sb, cfg.Freshness)
@@ -152,7 +173,14 @@ Returns Markdown headings (##, ###, ####) and setext headings (=== / ---) with t
 Use this to discover section names before searching, instead of guessing keyword queries.
 Pairs with ctx_get_section: outline first → pick heading → extract section.
 
-Typical workflow: ctx_execute → ctx_outline → ctx_get_section → done (no ctx_get_full needed).`,
+Typical workflow: ctx_execute → ctx_outline → ctx_get_section → done (no ctx_get_full needed).
+
+CACHE FRESHNESS POLICY:
+Response includes freshness.stale_level = fresh | aging | stale | critical.
+• fresh / aging — structure is current; safe to use.
+• stale — headings may no longer reflect the latest file; offer to refresh via ctx_execute.
+• critical (>7 days) — DO NOT navigate this outline for decisions without user confirmation.
+Heuristic: if the user asks for "ล่าสุด", "current", "latest", or "now" — re-fetch via ctx_execute first.`,
 	}, outlineH.Handle)
 
 	sessionInitH := handlers.NewSessionInitHandler(cfg, st, projectPath, serverStart, serverVersion)
@@ -203,6 +231,13 @@ More precise than ctx_search when you know the section name; returns only the co
 Handles Markdown (## Heading, ### Heading) and setext (underline with === or ---) styles.
 
 Workflow: ctx_outline → pick heading text → ctx_get_section with that heading → done.
-Prefer this over ctx_get_full with a guessed line range when navigating long documents such as API specs or Confluence exports.`,
+Prefer this over ctx_get_full with a guessed line range when navigating long documents such as API specs or Confluence exports.
+
+CACHE FRESHNESS POLICY:
+Response includes freshness.stale_level = fresh | aging | stale | critical.
+• fresh / aging — section content is current; safe to use.
+• stale — section may have changed; warn the user and offer to re-run via ctx_execute.
+• critical (>7 days) — DO NOT use section content for decisions; surface user_confirmation_required and wait for approval.
+Heuristic: if the user asks for "ล่าสุด", "current", "latest", or "now" — call ctx_execute to refresh the source output first.`,
 	}, getSectionH.Handle)
 }

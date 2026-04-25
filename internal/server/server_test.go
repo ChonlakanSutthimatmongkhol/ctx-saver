@@ -111,3 +111,32 @@ func TestToolDescriptions_NoRegression(t *testing.T) {
 		assert.True(t, byName[name], "expected tool %q to be registered", name)
 	}
 }
+
+// ── Task 7.4: freshness vocabulary in retrieval tool descriptions ──────────
+
+func TestToolDescriptions_FreshnessVocabulary(t *testing.T) {
+	tools := listTools(t)
+	byName := make(map[string]string, len(tools))
+	for _, tool := range tools {
+		byName[tool.Name] = tool.Description
+	}
+
+	retrievalTools := []string{
+		"ctx_get_full",
+		"ctx_get_section",
+		"ctx_search",
+		"ctx_list_outputs",
+		"ctx_outline",
+	}
+
+	for _, name := range retrievalTools {
+		desc, ok := byName[name]
+		require.True(t, ok, "tool %q not registered", name)
+
+		assert.True(t, strings.Contains(desc, "freshness") || strings.Contains(desc, "stale"),
+			"tool %q description must contain 'freshness' or 'stale'", name)
+
+		assert.True(t, strings.Contains(desc, "ล่าสุด"),
+			"tool %q description must contain 'ล่าสุด' (Thai freshness heuristic keyword)", name)
+	}
+}
