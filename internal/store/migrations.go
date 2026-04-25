@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-const currentSchemaVersion = 2
+const currentSchemaVersion = 3
 
 // runMigrations applies any pending schema migrations to db.
 // It is idempotent and safe to call on every server start.
@@ -47,6 +47,10 @@ func applyMigration(db *sql.DB, version int) error {
 		if err := migration2(tx); err != nil {
 			return err
 		}
+	case 3:
+		if err := migration3(tx); err != nil {
+			return err
+		}
 	default:
 		return fmt.Errorf("unknown migration version %d", version)
 	}
@@ -86,6 +90,24 @@ func migration1(tx *sql.Tx) error {
 		`CREATE INDEX idx_outputs_project_path ON outputs(project_path)`,
 	}
 
+	for _, stmt := range stmts {
+		if _, err := tx.Exec(stmt); err != nil {
+			return fmt.Errorf("executing %q: %w", stmt[:min(40, len(stmt))], err)
+		}
+	}
+	return nil
+}
+
+// migration3 adds cache freshness metadata columns to the outputs table.
+func migration3(tx *sql.Tx) error {
+	stmts := []string{
+		`ALTER TABLE outputs ADD COLUMN source_kind TEXT NOT NULL DEFAULT 'unknown'`,
+		`ALTER TABLE outputs ADD COLUMN refreshed_at INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE outputs ADD COLUMN ttl_seconds INTEGER NOT NULL DEFAULT 0`,
+		// Backfill: treat existing rows as refreshed when they were created.
+		`UPDATE outputs SET refreshed_at = created_at WHERE refreshed_at = 0`,
+		`CREATE INDEX idx_outputs_refreshed ON outputs(project_path, refreshed_at)`,
+	}
 	for _, stmt := range stmts {
 		if _, err := tx.Exec(stmt); err != nil {
 			return fmt.Errorf("executing %q: %w", stmt[:min(40, len(stmt))], err)
