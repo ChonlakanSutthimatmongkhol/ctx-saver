@@ -67,6 +67,30 @@ func dbPath(dataDir, projectPath string) string {
 	return filepath.Join(dataDir, name)
 }
 
+// ClassifySource returns a stable source_kind string from a stored command string.
+// Commands are stored in the format "[lang] code", e.g. "[shell] acli page view 123".
+// Examples: "[shell] acli page view" → "shell:acli", "[python] import os" → "python".
+func ClassifySource(command string) string {
+	// Strip the "[lang] " prefix inserted by the execute handler.
+	lang := "shell"
+	rest := command
+	if strings.HasPrefix(command, "[") {
+		end := strings.Index(command, "]")
+		if end > 0 {
+			lang = command[1:end]
+			rest = strings.TrimSpace(command[end+1:])
+		}
+	}
+	if lang != "shell" && lang != "" {
+		return lang
+	}
+	fields := strings.Fields(rest)
+	if len(fields) == 0 {
+		return "shell:other"
+	}
+	return "shell:" + fields[0]
+}
+
 // Save stores an Output and inserts each line into the FTS index.
 func (s *SQLiteStore) Save(ctx context.Context, output *Output) error {
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -75,11 +99,21 @@ func (s *SQLiteStore) Save(ctx context.Context, output *Output) error {
 	}
 	defer tx.Rollback() //nolint:errcheck
 
+	sourceKind := output.SourceKind
+	if sourceKind == "" {
+		sourceKind = ClassifySource(output.Command)
+	}
+	refreshedAt := output.RefreshedAt
+	if refreshedAt.IsZero() {
+		refreshedAt = output.CreatedAt
+	}
+
 	_, err = tx.ExecContext(ctx, `
 		INSERT INTO outputs
 			(output_id, command, intent, full_output, size_bytes, line_count,
-			 exit_code, duration_ms, created_at, project_path)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			 exit_code, duration_ms, created_at, project_path,
+			 source_kind, refreshed_at, ttl_seconds)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		output.OutputID,
 		output.Command,
 		output.Intent,
@@ -90,6 +124,9 @@ func (s *SQLiteStore) Save(ctx context.Context, output *Output) error {
 		output.DurationMs,
 		output.CreatedAt.Unix(),
 		output.ProjectPath,
+		sourceKind,
+		refreshedAt.Unix(),
+		output.TTLSeconds,
 	)
 	if err != nil {
 		return fmt.Errorf("inserting output: %w", err)
@@ -119,15 +156,17 @@ func (s *SQLiteStore) Save(ctx context.Context, output *Output) error {
 func (s *SQLiteStore) Get(ctx context.Context, id string) (*Output, error) {
 	row := s.db.QueryRowContext(ctx, `
 		SELECT output_id, command, intent, full_output, size_bytes, line_count,
-		       exit_code, duration_ms, created_at, project_path
+		       exit_code, duration_ms, created_at, project_path,
+		       source_kind, refreshed_at, ttl_seconds
 		FROM outputs WHERE output_id = ?`, id)
 
 	var o Output
-	var createdAt int64
+	var createdAt, refreshedAt int64
 	err := row.Scan(
 		&o.OutputID, &o.Command, &o.Intent, &o.FullOutput,
 		&o.SizeBytes, &o.LineCount, &o.ExitCode, &o.DurationMs,
 		&createdAt, &o.ProjectPath,
+		&o.SourceKind, &refreshedAt, &o.TTLSeconds,
 	)
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("output %q not found", id)
@@ -136,7 +175,58 @@ func (s *SQLiteStore) Get(ctx context.Context, id string) (*Output, error) {
 		return nil, fmt.Errorf("scanning output row: %w", err)
 	}
 	o.CreatedAt = time.Unix(createdAt, 0)
+	o.RefreshedAt = time.Unix(refreshedAt, 0)
 	return &o, nil
+}
+
+// UpdateRefreshed updates an existing output's content and refreshed_at in-place,
+// preserving the original output_id. Also re-indexes FTS rows for the output.
+func (s *SQLiteStore) UpdateRefreshed(ctx context.Context, output *Output) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("beginning transaction: %w", err)
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	_, err = tx.ExecContext(ctx, `
+		UPDATE outputs
+		SET full_output = ?, size_bytes = ?, line_count = ?,
+		    refreshed_at = ?, duration_ms = ?
+		WHERE output_id = ?`,
+		output.FullOutput,
+		output.SizeBytes,
+		output.LineCount,
+		output.RefreshedAt.Unix(),
+		output.DurationMs,
+		output.OutputID,
+	)
+	if err != nil {
+		return fmt.Errorf("updating output: %w", err)
+	}
+
+	// Re-index FTS: delete old rows, insert new ones.
+	if _, err := tx.ExecContext(ctx,
+		`DELETE FROM outputs_fts WHERE output_id = ?`, output.OutputID); err != nil {
+		return fmt.Errorf("deleting stale FTS rows: %w", err)
+	}
+
+	stmt, err := tx.PrepareContext(ctx,
+		`INSERT INTO outputs_fts(output_id, line_no, content) VALUES (?, ?, ?)`)
+	if err != nil {
+		return fmt.Errorf("preparing FTS insert: %w", err)
+	}
+	defer stmt.Close()
+
+	for i, line := range strings.Split(output.FullOutput, "\n") {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		if _, err := stmt.ExecContext(ctx, output.OutputID, i+1, line); err != nil {
+			return fmt.Errorf("inserting FTS row (line %d): %w", i+1, err)
+		}
+	}
+
+	return tx.Commit()
 }
 
 // List returns lightweight metadata for outputs belonging to projectPath.

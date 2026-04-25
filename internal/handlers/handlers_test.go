@@ -101,6 +101,16 @@ func (m *mockStore) FindRecentSameCommand(_ context.Context, _, _ string, _ time
 	return m.dedupMeta, m.dedupErr
 }
 
+func (m *mockStore) UpdateRefreshed(_ context.Context, o *store.Output) error {
+	for i, saved := range m.saved {
+		if saved.OutputID == o.OutputID {
+			m.saved[i] = o
+			return nil
+		}
+	}
+	return fmt.Errorf("store: output %q not found", o.OutputID)
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────
 
 func defaultCfg() *config.Config {

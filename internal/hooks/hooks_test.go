@@ -259,6 +259,8 @@ func (m *memStore) FindRecentSameCommand(_ context.Context, _, _ string, _ time.
 	return nil, nil
 }
 
+func (m *memStore) UpdateRefreshed(_ context.Context, _ *store.Output) error { return nil }
+
 // ── Additional unit tests ──────────────────────────────────────────────────
 
 func TestExtractOutputText_ContentBlocks(t *testing.T) {
