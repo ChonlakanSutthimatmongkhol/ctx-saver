@@ -261,6 +261,21 @@ func (m *memStore) FindRecentSameCommand(_ context.Context, _, _ string, _ time.
 
 func (m *memStore) UpdateRefreshed(_ context.Context, _ *store.Output) error { return nil }
 
+func (m *memStore) SaveDecision(_ context.Context, d *store.Decision) error {
+	if d.DecisionID == "" {
+		d.DecisionID = "dec_test"
+	}
+	return nil
+}
+
+func (m *memStore) ListDecisions(_ context.Context, _ store.ListDecisionsOptions) ([]*store.Decision, error) {
+	return nil, nil
+}
+
+func (m *memStore) GetDecision(_ context.Context, _ string) (*store.Decision, error) {
+	return nil, nil
+}
+
 // ── Additional unit tests ──────────────────────────────────────────────────
 
 func TestExtractOutputText_ContentBlocks(t *testing.T) {

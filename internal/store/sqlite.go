@@ -680,6 +680,164 @@ func NormalizeCommand(cmd string) string {
 	return strings.Join(strings.Fields(cmd), " ")
 }
 
+// SaveDecision implements Store.
+func (s *SQLiteStore) SaveDecision(ctx context.Context, d *Decision) error {
+	if d.DecisionID == "" {
+		d.DecisionID = newDecisionID()
+	}
+	if d.Importance == "" {
+		d.Importance = ImportanceNormal
+	}
+	if d.CreatedAt.IsZero() {
+		d.CreatedAt = time.Now()
+	}
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO decisions
+			(decision_id, session_id, project_path, text, tags, links_to, importance, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	`,
+		d.DecisionID,
+		d.SessionID,
+		d.ProjectPath,
+		d.Text,
+		strings.Join(d.Tags, ","),
+		strings.Join(d.LinksTo, ","),
+		d.Importance,
+		d.CreatedAt.Unix(),
+	)
+	if err != nil {
+		return fmt.Errorf("inserting decision: %w", err)
+	}
+	return nil
+}
+
+// ListDecisions implements Store.
+func (s *SQLiteStore) ListDecisions(ctx context.Context, opts ListDecisionsOptions) ([]*Decision, error) {
+	if opts.Limit <= 0 {
+		opts.Limit = 50
+	}
+	if opts.Limit > 200 {
+		opts.Limit = 200
+	}
+
+	clauses := []string{"project_path = ?"}
+	args := []any{opts.ProjectPath}
+
+	switch opts.Scope {
+	case "session":
+		if opts.SessionID != "" {
+			clauses = append(clauses, "session_id = ?")
+			args = append(args, opts.SessionID)
+		}
+	case "today":
+		midnight := time.Now().Truncate(24 * time.Hour).Unix()
+		clauses = append(clauses, "created_at >= ?")
+		args = append(args, midnight)
+	case "7d":
+		weekAgo := time.Now().Add(-7 * 24 * time.Hour).Unix()
+		clauses = append(clauses, "created_at >= ?")
+		args = append(args, weekAgo)
+	case "", "all":
+		// no filter
+	default:
+		return nil, fmt.Errorf("invalid scope %q", opts.Scope)
+	}
+
+	switch opts.MinImportance {
+	case "high":
+		clauses = append(clauses, "importance = 'high'")
+	case "normal":
+		clauses = append(clauses, "importance IN ('normal', 'high')")
+	case "", "low":
+		// no filter
+	default:
+		return nil, fmt.Errorf("invalid min_importance %q", opts.MinImportance)
+	}
+
+	if len(opts.Tags) > 0 {
+		tagClauses := make([]string, 0, len(opts.Tags))
+		for _, tag := range opts.Tags {
+			tagClauses = append(tagClauses, "(',' || tags || ',') LIKE ?")
+			args = append(args, "%,"+tag+",%")
+		}
+		clauses = append(clauses, "("+strings.Join(tagClauses, " OR ")+")")
+	}
+
+	query := fmt.Sprintf(`
+		SELECT id, decision_id, session_id, project_path, text, tags, links_to, importance, created_at
+		FROM decisions
+		WHERE %s
+		ORDER BY created_at DESC
+		LIMIT ?
+	`, strings.Join(clauses, " AND "))
+	args = append(args, opts.Limit)
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("listing decisions: %w", err)
+	}
+	defer rows.Close()
+
+	var out []*Decision
+	for rows.Next() {
+		var (
+			d         Decision
+			tagsCSV   string
+			linksCSV  string
+			createdAt int64
+		)
+		if err := rows.Scan(
+			&d.ID, &d.DecisionID, &d.SessionID, &d.ProjectPath,
+			&d.Text, &tagsCSV, &linksCSV, &d.Importance, &createdAt,
+		); err != nil {
+			return nil, fmt.Errorf("scanning decision row: %w", err)
+		}
+		if tagsCSV != "" {
+			d.Tags = strings.Split(tagsCSV, ",")
+		}
+		if linksCSV != "" {
+			d.LinksTo = strings.Split(linksCSV, ",")
+		}
+		d.CreatedAt = time.Unix(createdAt, 0)
+		out = append(out, &d)
+	}
+	return out, rows.Err()
+}
+
+// GetDecision implements Store.
+func (s *SQLiteStore) GetDecision(ctx context.Context, decisionID string) (*Decision, error) {
+	row := s.db.QueryRowContext(ctx, `
+		SELECT id, decision_id, session_id, project_path, text, tags, links_to, importance, created_at
+		FROM decisions
+		WHERE decision_id = ?
+	`, decisionID)
+
+	var (
+		d         Decision
+		tagsCSV   string
+		linksCSV  string
+		createdAt int64
+	)
+	err := row.Scan(
+		&d.ID, &d.DecisionID, &d.SessionID, &d.ProjectPath,
+		&d.Text, &tagsCSV, &linksCSV, &d.Importance, &createdAt,
+	)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("getting decision: %w", err)
+	}
+	if tagsCSV != "" {
+		d.Tags = strings.Split(tagsCSV, ",")
+	}
+	if linksCSV != "" {
+		d.LinksTo = strings.Split(linksCSV, ",")
+	}
+	d.CreatedAt = time.Unix(createdAt, 0)
+	return &d, nil
+}
+
 // Close releases the database connection.
 func (s *SQLiteStore) Close() error {
 	return s.db.Close()

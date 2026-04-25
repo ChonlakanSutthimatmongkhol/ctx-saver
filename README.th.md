@@ -72,7 +72,7 @@ claude mcp add ctx-saver -- $(go env GOPATH)/bin/ctx-saver
 }
 ```
 
-ตรวจสอบ: Command Palette → **MCP: List Servers** — ควรแสดง `ctx-saver` พร้อม 8 tools
+ตรวจสอบ: Command Palette → **MCP: List Servers** — ควรแสดง `ctx-saver` พร้อม 11 tools
 
 ### ติดตั้ง hooks สำหรับ Claude และลงทะเบียน server สำหรับ Copilot
 
@@ -185,6 +185,25 @@ Project override จะแทนที่ (ไม่ merge) entry ใน built-i
 | `ctx_list_outputs` | แสดง output ทั้งหมดที่เก็บไว้ใน project พร้อม `freshness` ต่อรายการ |
 | `ctx_get_full` | ดึง output ฉบับเต็มหรือระบุช่วงบรรทัด รวม `freshness` + `user_confirmation_required`; ใช้ `accept_stale: true` เพื่อข้ามการยืนยัน |
 | `ctx_stats` | รายงานสถิติการเก็บข้อมูลและ hook activity (scope: `session\|today\|7d\|all`) |
+| `ctx_note` | บันทึก architectural decision หรือเหตุผลที่ควรรอดจาก `/compact` และ session ถัดไป |
+| `ctx_list_notes` | แสดง decision ล่าสุดที่บันทึกไว้ด้วย `ctx_note` กรองได้ด้วย scope/tag/importance |
+
+## Decision Log (v0.5.1)
+
+ใช้ `ctx_note` เพื่อบันทึก design choice ที่ไม่ชัดเจน, constraint ที่ค้นพบ, หรือ tradeoff ที่ตกลงกันไว้ เพื่อให้ session ถัดไปและหลัง `/compact` สามารถดึงเหตุผลกลับมาได้
+
+```
+ctx_note(
+  text="ใช้ WithFreshness builder pattern เพราะ positional arg จะทำให้ 15 test sites พัง",
+  tags=["arch", "phase7"],
+  importance="high"
+)
+
+ctx_list_notes(scope="session")
+ctx_list_notes(tags=["arch"], min_importance="high")
+```
+
+Decision จะถูก inject อัตโนมัติใน `ctx_session_init` (สูงสุด 10 รายการล่าสุดที่ importance normal+high จาก 7 วันที่ผ่านมา)
 
 ## วิธีการทำงาน
 

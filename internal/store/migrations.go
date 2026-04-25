@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-const currentSchemaVersion = 3
+const currentSchemaVersion = 4
 
 // runMigrations applies any pending schema migrations to db.
 // It is idempotent and safe to call on every server start.
@@ -49,6 +49,10 @@ func applyMigration(db *sql.DB, version int) error {
 		}
 	case 3:
 		if err := migration3(tx); err != nil {
+			return err
+		}
+	case 4:
+		if err := migration4(tx); err != nil {
 			return err
 		}
 	default:
@@ -121,6 +125,35 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// migration4 creates the decisions table for the ctx_note decision log feature.
+func migration4(tx *sql.Tx) error {
+	stmts := []string{
+		`CREATE TABLE decisions (
+			id           INTEGER PRIMARY KEY AUTOINCREMENT,
+			decision_id  TEXT    NOT NULL UNIQUE,
+			session_id   TEXT    NOT NULL DEFAULT '',
+			project_path TEXT    NOT NULL,
+			text         TEXT    NOT NULL,
+			tags         TEXT    NOT NULL DEFAULT '',
+			links_to     TEXT    NOT NULL DEFAULT '',
+			importance   TEXT    NOT NULL DEFAULT 'normal',
+			created_at   INTEGER NOT NULL
+		)`,
+		`CREATE INDEX idx_decisions_project_created
+			ON decisions(project_path, created_at DESC)`,
+		`CREATE INDEX idx_decisions_session
+			ON decisions(session_id, created_at DESC)`,
+		`CREATE INDEX idx_decisions_importance
+			ON decisions(project_path, importance, created_at DESC)`,
+	}
+	for _, stmt := range stmts {
+		if _, err := tx.Exec(stmt); err != nil {
+			return fmt.Errorf("executing %q: %w", stmt[:min(40, len(stmt))], err)
+		}
+	}
+	return nil
 }
 
 // migration2 creates the session_events table for hook-based session tracking.

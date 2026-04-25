@@ -16,7 +16,7 @@ import (
 
 const (
 	serverName    = "ctx-saver"
-	serverVersion = "0.5.0"
+	serverVersion = "0.5.1"
 )
 
 // New constructs a fully configured *mcp.Server with all ctx-saver tools registered.
@@ -240,4 +240,38 @@ Response includes freshness.stale_level = fresh | aging | stale | critical.
 • critical (>7 days) — DO NOT use section content for decisions; surface user_confirmation_required and wait for approval.
 Heuristic: if the user asks for "ล่าสุด", "current", "latest", or "now" — call ctx_execute to refresh the source output first.`,
 	}, getSectionH.Handle)
+
+	noteH := handlers.NewNoteHandler(st, projectPath)
+	mcp.AddTool(srv, &mcp.Tool{
+		Name: "ctx_note",
+		Description: `[DECISION LOG] Save an architectural decision, design rationale, or important reasoning that should survive /compact and future sessions.
+
+Use this when:
+- You make a non-obvious design choice ("chose X over Y because Z")
+- You discover a constraint that future-you needs to know ("can't use approach A because of dep B")
+- You make a tradeoff that's not encoded in code ("simplified for now, will revisit if N exceeds 1000")
+- User confirms an important decision ("agreed: use 7-day staleness threshold")
+
+DO NOT use for:
+- Routine progress updates ("starting task 3")
+- Tool output summaries (use ctx_execute / ctx_read_file instead)
+- Anything that's already obvious from the code
+
+Notes are scoped per-project, persist across sessions, and are surfaced in ctx_session_init.
+
+Keep notes short (1-2 sentences ideal, max 2000 chars). Tag with topics like 'arch', 'perf', 'security' for filterability. Set importance='high' only for genuinely critical decisions you'd want flagged at session start.`,
+	}, noteH.Handle)
+
+	listNotesH := handlers.NewListNotesHandler(st, projectPath)
+	mcp.AddTool(srv, &mcp.Tool{
+		Name: "ctx_list_notes",
+		Description: `[DECISION LOG] List recent decisions/notes saved via ctx_note.
+
+Use this when:
+- Resuming work after /compact and want to see what was decided
+- Investigating why a piece of code looks the way it does
+- Looking for a specific decision by tag
+
+Default scope is "7d" (last 7 days). Use "session" for current session only, "today" for today, "all" for everything.`,
+	}, listNotesH.Handle)
 }

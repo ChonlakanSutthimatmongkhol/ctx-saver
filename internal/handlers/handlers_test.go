@@ -49,6 +49,8 @@ type mockStore struct {
 	dedupMeta         *store.OutputMeta
 	dedupErr          error
 	sessionEventCount int
+	savedDecisions    int
+	decisions         []*store.Decision
 }
 
 func (m *mockStore) Save(_ context.Context, o *store.Output) error {
@@ -109,6 +111,34 @@ func (m *mockStore) UpdateRefreshed(_ context.Context, o *store.Output) error {
 		}
 	}
 	return fmt.Errorf("store: output %q not found", o.OutputID)
+}
+
+func (m *mockStore) SaveDecision(_ context.Context, d *store.Decision) error {
+	if d.DecisionID == "" {
+		d.DecisionID = fmt.Sprintf("dec_%d_test", len(m.decisions))
+	}
+	m.savedDecisions++
+	m.decisions = append(m.decisions, d)
+	return nil
+}
+
+func (m *mockStore) ListDecisions(_ context.Context, opts store.ListDecisionsOptions) ([]*store.Decision, error) {
+	var out []*store.Decision
+	for _, d := range m.decisions {
+		if d.ProjectPath == opts.ProjectPath {
+			out = append(out, d)
+		}
+	}
+	return out, nil
+}
+
+func (m *mockStore) GetDecision(_ context.Context, id string) (*store.Decision, error) {
+	for _, d := range m.decisions {
+		if d.DecisionID == id {
+			return d, nil
+		}
+	}
+	return nil, nil
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────

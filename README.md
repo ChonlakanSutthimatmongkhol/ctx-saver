@@ -73,7 +73,7 @@ Or globally in VS Code `settings.json`:
 }
 ```
 
-Verify: Command Palette → **MCP: List Servers** — should show `ctx-saver` with 8 tools.
+Verify: Command Palette → **MCP: List Servers** — should show `ctx-saver` with 11 tools.
 
 ### Install Claude hooks and Copilot server entry
 
@@ -123,6 +123,25 @@ See [Hook behaviour](#hooks) below for what each hook does.
 | `ctx_list_outputs` | List all stored outputs with per-item `freshness` field. |
 | `ctx_get_full` | Retrieve complete output or a specific line range. Includes `freshness` + `user_confirmation_required` fields. Set `accept_stale: true` to bypass confirmation gate. |
 | `ctx_stats` | Report storage, hook statistics, and adherence score (scope: `session\|today\|7d\|all`) |
+| `ctx_note` | Save an architectural decision or rationale that survives `/compact` and future sessions. |
+| `ctx_list_notes` | List recent decisions saved via `ctx_note`, filterable by scope/tag/importance. |
+
+### Decision Log (v0.5.1)
+
+Use `ctx_note` to record any non-obvious design choice, discovered constraint, or confirmed tradeoff so future sessions (and post-`/compact` context) can recover the reasoning.
+
+```
+ctx_note(
+  text="Chose WithFreshness builder pattern; positional arg would break 15 test sites",
+  tags=["arch", "phase7"],
+  importance="high"
+)
+
+ctx_list_notes(scope="session")
+ctx_list_notes(tags=["arch"], min_importance="high")
+```
+
+Decisions are scoped per-project, persist across sessions, and are automatically injected into `ctx_session_init` (up to 10 most recent normal+high importance items from the last 7 days).
 
 ### Cache Freshness Policy (v0.5.0)
 

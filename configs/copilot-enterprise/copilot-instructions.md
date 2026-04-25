@@ -67,6 +67,25 @@ If the user's message contains "ล่าสุด", "current", "latest", "now",
 
 **Auto-refresh:** outputs with `auto_refresh: true` in config are refreshed automatically on retrieval. The freshness field reflects the updated timestamp.
 
+### Rule 6: Log architectural decisions with `ctx_note`
+
+When you make a non-obvious design choice or learn a constraint that future-you needs to know:
+
+```
+ctx_note(text="...", tags=["arch", "<area>"], importance="high"|"normal")
+```
+
+Examples to log:
+- "Chose X over Y because Z" (design choices)
+- "Cannot use approach A because of constraint B" (discovered limits)
+- "User confirmed: 7-day threshold for stale cache" (decisions made together)
+
+Examples NOT to log:
+- "Starting task 3" (routine progress)
+- "Read file foo.go" (already in session_events)
+
+These notes survive `/compact` and are surfaced at next `ctx_session_init`. Use `ctx_list_notes` to review past decisions.
+
 ## Why these rules exist
 
 Sessions without these tools hit **80% context window usage within 10–15 turns** in this repo

@@ -128,6 +128,15 @@ type Store interface {
 	// timestamp in-place, preserving the original output_id.
 	UpdateRefreshed(ctx context.Context, output *Output) error
 
+	// SaveDecision stores a new decision/note. Generates decision_id if empty.
+	SaveDecision(ctx context.Context, d *Decision) error
+
+	// ListDecisions returns decisions for a project, newest first.
+	ListDecisions(ctx context.Context, opts ListDecisionsOptions) ([]*Decision, error)
+
+	// GetDecision returns one decision by ID, or nil if not found.
+	GetDecision(ctx context.Context, decisionID string) (*Decision, error)
+
 	// Close releases database resources.
 	Close() error
 }

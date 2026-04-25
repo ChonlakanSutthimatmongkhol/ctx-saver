@@ -19,11 +19,21 @@ type SessionInitOutput struct {
 	ProjectPath      string              `json:"project_path"`
 	ProjectRules     string              `json:"project_rules"`
 	RecentEvents     []RecentEventEntry  `json:"recent_events,omitempty"`
+	RecentDecisions  []DecisionDigest    `json:"recent_decisions,omitempty"`
 	CachedOutputs    CachedOutputSummary `json:"cached_outputs"`
 	ActiveConfig     ActiveConfigSummary `json:"active_config"`
 	NextActionHint   string              `json:"next_action_hint,omitempty"`
 	ServerVersion    string              `json:"server_version"`
 	SessionStartTime time.Time           `json:"session_start_time"`
+}
+
+// DecisionDigest is a compact view of one decision for session_init injection.
+type DecisionDigest struct {
+	DecisionID string   `json:"decision_id"`
+	Text       string   `json:"text"`
+	Tags       []string `json:"tags,omitempty"`
+	AgoHuman   string   `json:"ago"`
+	Importance string   `json:"importance"`
 }
 
 // RecentEventEntry describes one past tool call.
@@ -132,6 +142,26 @@ func (h *SessionInitHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest,
 		}
 	}
 
+	// Inject recent decisions (last 10, normal+high importance from past 7 days).
+	decisions, derr := h.st.ListDecisions(ctx, store.ListDecisionsOptions{
+		ProjectPath:   h.projectPath,
+		Scope:         "7d",
+		MinImportance: "normal",
+		Limit:         10,
+	})
+	if derr == nil {
+		now := time.Now()
+		for _, d := range decisions {
+			out.RecentDecisions = append(out.RecentDecisions, DecisionDigest{
+				DecisionID: d.DecisionID,
+				Text:       d.Text,
+				Tags:       d.Tags,
+				AgoHuman:   humanAgeShort(now.Sub(d.CreatedAt)),
+				Importance: d.Importance,
+			})
+		}
+	}
+
 	// Choose a next-action hint.
 	switch {
 	case len(out.RecentEvents) > 0:
@@ -140,6 +170,9 @@ func (h *SessionInitHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest,
 		out.NextActionHint = "Cached outputs exist but no recent activity. Use ctx_list_outputs to explore what is stored."
 	default:
 		out.NextActionHint = "Fresh project. Use ctx_execute for your first command to seed the cache."
+	}
+	if len(out.RecentDecisions) > 0 {
+		out.NextActionHint += fmt.Sprintf(" You have %d recent architectural decisions logged — review them to understand prior reasoning.", len(out.RecentDecisions))
 	}
 
 	recordToolCall(ctx, h.st, h.projectPath, "ctx_session_init", "", "", "session_init")
