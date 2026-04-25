@@ -18,6 +18,11 @@ type Output struct {
 	DurationMs  int64
 	CreatedAt   time.Time
 	ProjectPath string
+
+	// Phase 7: freshness metadata
+	SourceKind  string    // e.g. "shell:acli", "shell:kubectl", "python"
+	RefreshedAt time.Time // last successful execution time
+	TTLSeconds  int       // TTL snapshot at save time (0 = use default)
 }
 
 // OutputMeta is a lightweight summary used by ctx_list_outputs.
@@ -115,6 +120,10 @@ type Store interface {
 	// FindRecentSameCommand returns the most recent output for the same
 	// normalised command within the window. Returns nil, nil if not found.
 	FindRecentSameCommand(ctx context.Context, projectPath, command string, within time.Duration) (*OutputMeta, error)
+
+	// UpdateRefreshed updates an existing output's content and refreshed_at
+	// timestamp in-place, preserving the original output_id.
+	UpdateRefreshed(ctx context.Context, output *Output) error
 
 	// Close releases database resources.
 	Close() error
