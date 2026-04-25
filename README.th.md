@@ -109,6 +109,38 @@ ctx-saver init copilot
 
 ดูรายละเอียดเพิ่มเติมที่ [พฤติกรรมของ Hook](#hooks) ด้านล่าง
 
+## นโยบาย Cache Freshness (v0.5.0)
+
+ทุก response จากการดึงข้อมูลจะมี field `freshness` แนบมาด้วย:
+
+```json
+{
+  "freshness": {
+    "source_kind": "shell:kubectl",
+    "cached_at": "2026-04-26T03:00:00Z",
+    "age_seconds": 7200,
+    "age_human": "2h ago",
+    "stale_level": "aging",
+    "refresh_hint": ""
+  }
+}
+```
+
+| `stale_level` | อายุ | พฤติกรรม AI |
+|---|---|---|
+| `fresh` | < 1 ชั่วโมง | ใช้ข้อมูลได้เลย |
+| `aging` | 1–24 ชั่วโมง | ใช้ได้ แจ้งอายุถ้าเกี่ยวข้อง |
+| `stale` | 1–7 วัน | แจ้งผู้ใช้; เสนอรัน `ctx_execute` ใหม่ |
+| `critical` | > 7 วัน | **ห้ามใช้ตัดสินใจ** ระบบจะตั้ง `user_confirmation_required: true` — AI ต้องแสดง prompt ให้ผู้ใช้ยืนยันก่อนดำเนินการต่อ |
+
+**Auto-refresh**: source ที่มี `auto_refresh: true` (เช่น `shell:kubectl`, `shell:acli`) จะถูกรันใหม่อัตโนมัติเมื่อดึงข้อมูลแล้ว output เก่าเกิน TTL โดยคง `output_id` เดิมไว้
+
+**ข้ามการยืนยัน**: ส่ง `accept_stale: true` ใน input ของ tool ใดก็ได้ เพื่อข้าม confirmation gate
+
+**ปิดทั้งหมด**: ตั้งค่า `freshness.enabled: false` ใน config
+
+ดูรายละเอียดที่ [docs/migration-v0.5.md](docs/migration-v0.5.md) และตัวอย่าง config ที่ [configs/freshness-examples/](configs/freshness-examples/)
+
 ## Smart Summarizer
 
 `ctx_execute` ตรวจจับ format ของ output อัตโนมัติและสรุปผลแบบ structured:
@@ -144,13 +176,14 @@ Project override จะแทนที่ (ไม่ merge) entry ใน built-i
 
 | Tool | วัตถุประสงค์ |
 |------|-------------|
+| `ctx_session_init` ⭐ | **เรียกก่อนในทุก session ใหม่** คืน project rules, event ล่าสุด, inventory ของ output ที่เก็บไว้, และ config Copilot Enterprise ต้องเรียกเองตรงๆ; Claude Code ใช้ SessionStart hook อัตโนมัติ |
 | `ctx_execute` | รันคำสั่ง shell/python/go/node; output ขนาดใหญ่จะถูกเก็บและสรุปย่อ แสดง `duplicate_hint` ถ้ารันคำสั่งเดิมภายใน 30 นาทีที่ผ่านมา |
 | `ctx_read_file` | อ่านไฟล์ โดยเลือกส่งผ่าน processing script ได้ |
-| `ctx_outline` | ดึง headings / สารบัญจาก stored output เพื่อเลือกคำค้นหาก่อน search |
-| `ctx_get_section` | ดึง section เฉพาะด้วย heading text (ใช้หลัง `ctx_outline` สำหรับเอกสารยาว) |
-| `ctx_search` | FTS5 full-text search ในทุก output ที่เก็บไว้ (รองรับ `context_lines`). อักขระพิเศษ escape อัตโนมัติ; fallback ไป LIKE. ขยาย query ด้วย synonym อัตโนมัติ (เช่น `api_path` → endpoint, route…). กำหนด synonym ของโปรเจกต์ผ่าน `.ctx-saver-synonyms.yaml`. |
-| `ctx_list_outputs` | แสดง output ทั้งหมดที่เก็บไว้ใน project นี้ |
-| `ctx_get_full` | ดึง output ฉบับเต็มหรือระบุช่วงบรรทัด |
+| `ctx_outline` | ดึง headings / สารบัญจาก stored output รวม `freshness` field |
+| `ctx_get_section` | ดึง section เฉพาะด้วย heading text (ใช้หลัง `ctx_outline`) รวม `freshness` + `user_confirmation_required` |
+| `ctx_search` | FTS5 full-text search ในทุก output ที่เก็บไว้ รวม `freshness` ต่อผลลัพธ์ อักขระพิเศษ escape อัตโนมัติ; fallback ไป LIKE ขยาย query ด้วย synonym อัตโนมัติ |
+| `ctx_list_outputs` | แสดง output ทั้งหมดที่เก็บไว้ใน project พร้อม `freshness` ต่อรายการ |
+| `ctx_get_full` | ดึง output ฉบับเต็มหรือระบุช่วงบรรทัด รวม `freshness` + `user_confirmation_required`; ใช้ `accept_stale: true` เพื่อข้ามการยืนยัน |
 | `ctx_stats` | รายงานสถิติการเก็บข้อมูลและ hook activity (scope: `session\|today\|7d\|all`) |
 
 ## วิธีการทำงาน
@@ -221,6 +254,16 @@ deny_commands:
   - "rm -rf /"
   - "sudo *"
   - "dd if=*"
+
+freshness:
+  enabled: true
+  default_max_age_seconds: 3600           # 1 ชั่วโมง สำหรับ source ที่ไม่รู้จัก
+  user_confirm_threshold_seconds: 604800  # 7 วัน → ถาม user ก่อนใช้
+  sources:
+    shell:kubectl: { max_age_seconds: 60,  auto_refresh: true }
+    shell:acli:    { max_age_seconds: 300, auto_refresh: true }
+    shell:git:     { max_age_seconds: 120, auto_refresh: false }
+    # ดู configs/freshness-examples/ สำหรับ preset เพิ่มเติม
 ```
 
 ## Hooks
