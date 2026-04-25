@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/freshness"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/search"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/store"
 )
@@ -22,11 +24,12 @@ type SearchInput struct {
 
 // SearchMatch is a single FTS hit.
 type SearchMatch struct {
-	OutputID string   `json:"output_id"`
-	Line     int      `json:"line"`
-	Snippet  string   `json:"snippet"`
-	Score    float64  `json:"score"`
-	Context  []string `json:"context,omitempty"` // surrounding lines when context_lines > 0
+	OutputID  string                   `json:"output_id"`
+	Line      int                      `json:"line"`
+	Snippet   string                   `json:"snippet"`
+	Score     float64                  `json:"score"`
+	Context   []string                 `json:"context,omitempty"` // surrounding lines when context_lines > 0
+	Freshness *freshness.FreshnessInfo `json:"freshness,omitempty"`
 }
 
 // QueryResult groups matches for one query.
@@ -131,40 +134,49 @@ func (h *SearchHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, inpu
 		return nil, SearchOutput{}, fmt.Errorf("searching: %w", firstErr)
 	}
 
-	// Attach surrounding context lines if requested.
-	if input.ContextLines > 0 {
-		// Fetch each unique output once.
-		outputLines := make(map[string][]string)
-		for _, matches := range resultMap {
-			for _, m := range matches {
-				if _, ok := outputLines[m.OutputID]; ok {
-					continue
-				}
-				out, err := h.st.Get(ctx, m.OutputID)
-				if err != nil {
-					continue
-				}
-				outputLines[m.OutputID] = strings.Split(strings.TrimRight(out.FullOutput, "\n"), "\n")
+	// Fetch each unique output once for freshness info and optional context lines.
+	type outputData struct {
+		lines     []string
+		freshness freshness.FreshnessInfo
+	}
+	outputCache := make(map[string]outputData)
+	now := time.Now()
+	for _, matches := range resultMap {
+		for _, m := range matches {
+			if _, ok := outputCache[m.OutputID]; ok {
+				continue
+			}
+			out, err := h.st.Get(ctx, m.OutputID)
+			if err != nil {
+				continue
+			}
+			outputCache[m.OutputID] = outputData{
+				lines:     strings.Split(strings.TrimRight(out.FullOutput, "\n"), "\n"),
+				freshness: freshness.NewFreshnessInfo(out.SourceKind, out.RefreshedAt, out.TTLSeconds, now),
 			}
 		}
-		for q, matches := range resultMap {
-			for i, m := range matches {
-				lines, ok := outputLines[m.OutputID]
-				if !ok {
-					continue
-				}
+	}
+	for q, matches := range resultMap {
+		for i, m := range matches {
+			od, ok := outputCache[m.OutputID]
+			if !ok {
+				continue
+			}
+			fi := od.freshness
+			matches[i].Freshness = &fi
+			if input.ContextLines > 0 {
 				start := m.Line - 1 - input.ContextLines
 				if start < 0 {
 					start = 0
 				}
 				end := m.Line + input.ContextLines
-				if end > len(lines) {
-					end = len(lines)
+				if end > len(od.lines) {
+					end = len(od.lines)
 				}
-				matches[i].Context = lines[start:end]
+				matches[i].Context = od.lines[start:end]
 			}
-			resultMap[q] = matches
 		}
+		resultMap[q] = matches
 	}
 
 	ordered := make([]QueryResult, 0, len(expandedQueries))

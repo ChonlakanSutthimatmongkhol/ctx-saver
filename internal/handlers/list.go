@@ -7,6 +7,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/freshness"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/store"
 )
 
@@ -17,11 +18,12 @@ type ListInput struct {
 
 // OutputEntry is one row in the ctx_list_outputs response.
 type OutputEntry struct {
-	OutputID  string `json:"output_id"`
-	Command   string `json:"command"`
-	CreatedAt string `json:"created_at"`
-	SizeBytes int64  `json:"size_bytes"`
-	Lines     int    `json:"lines"`
+	OutputID  string                  `json:"output_id"`
+	Command   string                  `json:"command"`
+	CreatedAt string                  `json:"created_at"`
+	SizeBytes int64                   `json:"size_bytes"`
+	Lines     int                     `json:"lines"`
+	Freshness freshness.FreshnessInfo `json:"freshness"`
 }
 
 // ListOutput is the typed output for ctx_list_outputs.
@@ -47,6 +49,7 @@ func (h *ListHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, input 
 		return nil, ListOutput{}, fmt.Errorf("listing outputs: %w", err)
 	}
 
+	now := time.Now()
 	entries := make([]OutputEntry, 0, len(metas))
 	for _, m := range metas {
 		entries = append(entries, OutputEntry{
@@ -55,6 +58,7 @@ func (h *ListHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, input 
 			CreatedAt: m.CreatedAt.UTC().Format(time.RFC3339),
 			SizeBytes: m.SizeBytes,
 			Lines:     m.LineCount,
+			Freshness: freshness.NewFreshnessInfo(m.SourceKind, m.RefreshedAt, m.TTLSeconds, now),
 		})
 	}
 

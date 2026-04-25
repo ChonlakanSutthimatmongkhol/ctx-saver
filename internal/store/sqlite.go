@@ -235,7 +235,8 @@ func (s *SQLiteStore) List(ctx context.Context, projectPath string, limit int) (
 		limit = 50
 	}
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT output_id, command, created_at, size_bytes, line_count
+		SELECT output_id, command, created_at, size_bytes, line_count,
+		       source_kind, refreshed_at, ttl_seconds
 		FROM outputs
 		WHERE project_path = ?
 		ORDER BY created_at DESC
@@ -248,11 +249,13 @@ func (s *SQLiteStore) List(ctx context.Context, projectPath string, limit int) (
 	var metas []*OutputMeta
 	for rows.Next() {
 		var m OutputMeta
-		var createdAt int64
-		if err := rows.Scan(&m.OutputID, &m.Command, &createdAt, &m.SizeBytes, &m.LineCount); err != nil {
+		var createdAt, refreshedAt int64
+		if err := rows.Scan(&m.OutputID, &m.Command, &createdAt, &m.SizeBytes, &m.LineCount,
+			&m.SourceKind, &refreshedAt, &m.TTLSeconds); err != nil {
 			return nil, fmt.Errorf("scanning output meta: %w", err)
 		}
 		m.CreatedAt = time.Unix(createdAt, 0)
+		m.RefreshedAt = time.Unix(refreshedAt, 0)
 		metas = append(metas, &m)
 	}
 	return metas, rows.Err()

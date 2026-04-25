@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/freshness"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/store"
 )
 
@@ -18,10 +20,11 @@ type GetFullInput struct {
 
 // GetFullOutput is the typed output for ctx_get_full.
 type GetFullOutput struct {
-	OutputID   string   `json:"output_id"`
-	Lines      []string `json:"lines"`
-	TotalLines int      `json:"total_lines"`
-	Returned   int      `json:"returned"`
+	OutputID   string                `json:"output_id"`
+	Lines      []string              `json:"lines"`
+	TotalLines int                   `json:"total_lines"`
+	Returned   int                   `json:"returned"`
+	Freshness  freshness.FreshnessInfo `json:"freshness"`
 }
 
 // GetFullHandler handles the ctx_get_full MCP tool.
@@ -70,11 +73,13 @@ func (h *GetFullHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, inp
 	}
 
 	selected := allLines[start-1 : end]
+	fi := freshness.NewFreshnessInfo(out.SourceKind, out.RefreshedAt, out.TTLSeconds, time.Now())
 	recordToolCall(ctx, h.st, h.projectPath, "ctx_get_full", input.OutputID, "", "get_full: "+input.OutputID)
 	return nil, GetFullOutput{
 		OutputID:   input.OutputID,
 		Lines:      selected,
 		TotalLines: totalLines,
 		Returned:   len(selected),
+		Freshness:  fi,
 	}, nil
 }

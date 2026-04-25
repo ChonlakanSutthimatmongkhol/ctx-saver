@@ -27,11 +27,14 @@ type Output struct {
 
 // OutputMeta is a lightweight summary used by ctx_list_outputs.
 type OutputMeta struct {
-	OutputID  string
-	Command   string
-	CreatedAt time.Time
-	SizeBytes int64
-	LineCount int
+	OutputID    string
+	Command     string
+	CreatedAt   time.Time
+	SizeBytes   int64
+	LineCount   int
+	SourceKind  string
+	RefreshedAt time.Time
+	TTLSeconds  int
 }
 
 // Match is a single full-text search hit.

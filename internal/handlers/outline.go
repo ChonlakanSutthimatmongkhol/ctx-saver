@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/freshness"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/store"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/summary"
 )
@@ -25,9 +27,10 @@ type OutlineEntry struct {
 
 // OutlineOutput is the typed output for ctx_outline.
 type OutlineOutput struct {
-	OutputID   string         `json:"output_id"`
-	TotalLines int            `json:"total_lines"`
-	Entries    []OutlineEntry `json:"entries"`
+	OutputID   string                  `json:"output_id"`
+	TotalLines int                     `json:"total_lines"`
+	Entries    []OutlineEntry          `json:"entries"`
+	Freshness  freshness.FreshnessInfo `json:"freshness"`
 }
 
 // OutlineHandler handles the ctx_outline MCP tool.
@@ -68,11 +71,13 @@ func (h *OutlineHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, inp
 		}
 	}
 
+	fi := freshness.NewFreshnessInfo(out.SourceKind, out.RefreshedAt, out.TTLSeconds, time.Now())
 	recordToolCall(ctx, h.st, h.projectPath, "ctx_outline", input.OutputID, "", "outline: "+input.OutputID)
 	return nil, OutlineOutput{
 		OutputID:   input.OutputID,
 		TotalLines: totalLines,
 		Entries:    entries,
+		Freshness:  fi,
 	}, nil
 }
 
