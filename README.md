@@ -117,12 +117,44 @@ See [Hook behaviour](#hooks) below for what each hook does.
 | `ctx_session_init` ⭐ | **Call first in every new session.** Returns project rules, recent events, cached output inventory, and config. Copilot Enterprise must call this explicitly; Claude Code uses the SessionStart hook automatically. |
 | `ctx_execute` | Run shell/python/go/node; large output stored + summarised (format-aware). Shows `duplicate_hint` if the same command ran within the last 30 min. |
 | `ctx_read_file` | Read a file, optionally piped through a processing script |
-| `ctx_outline` | Extract headings / table-of-contents from a stored output |
-| `ctx_get_section` | Extract a specific section by heading text (use after `ctx_outline` to navigate long docs) |
-| `ctx_search` | FTS5 full-text search across stored outputs (supports `context_lines`). Special characters auto-escaped; LIKE fallback on parse errors. Queries auto-expanded with synonyms (e.g. `api_path` → endpoint, route…). Project synonyms via `.ctx-saver-synonyms.yaml`. |
-| `ctx_list_outputs` | List all stored outputs for this project |
-| `ctx_get_full` | Retrieve complete output or a specific line range |
+| `ctx_outline` | Extract headings / table-of-contents from a stored output. Includes `freshness` field. |
+| `ctx_get_section` | Extract a specific section by heading text (use after `ctx_outline` to navigate long docs). Includes `freshness` + `user_confirmation_required` fields. |
+| `ctx_search` | FTS5 full-text search across stored outputs (supports `context_lines`). Per-match `freshness` field. Special characters auto-escaped; LIKE fallback on parse errors. |
+| `ctx_list_outputs` | List all stored outputs with per-item `freshness` field. |
+| `ctx_get_full` | Retrieve complete output or a specific line range. Includes `freshness` + `user_confirmation_required` fields. Set `accept_stale: true` to bypass confirmation gate. |
 | `ctx_stats` | Report storage, hook statistics, and adherence score (scope: `session\|today\|7d\|all`) |
+
+### Cache Freshness Policy (v0.5.0)
+
+Every retrieval response includes a `freshness` object:
+
+```json
+{
+  "freshness": {
+    "source_kind": "shell:kubectl",
+    "cached_at": "2026-04-26T03:00:00Z",
+    "age_seconds": 7200,
+    "age_human": "2h ago",
+    "stale_level": "aging",
+    "refresh_hint": ""
+  }
+}
+```
+
+| `stale_level` | Age | AI behaviour |
+|---|---|---|
+| `fresh` | < 1 h | Use data as-is |
+| `aging` | 1–24 h | Use data as-is; note age if relevant |
+| `stale` | 1–7 days | Warn user; offer to refresh via `ctx_execute` |
+| `critical` | > 7 days | **Do not use for decisions.** `user_confirmation_required: true` is set — the AI must surface the prompt to the user and wait for approval |
+
+**Auto-refresh**: sources with `auto_refresh: true` (e.g. `shell:kubectl`, `shell:acli`) are silently re-run on retrieval when stale. The original `output_id` is preserved.
+
+**Bypass**: pass `accept_stale: true` in any retrieval input to skip the confirmation gate.
+
+**Disable entirely**: set `freshness.enabled: false` in config.
+
+See [docs/migration-v0.5.md](docs/migration-v0.5.md) for the full upgrade guide and [configs/freshness-examples/](configs/freshness-examples/) for sample configurations.
 
 ### Smart Summarizer
 
@@ -223,6 +255,16 @@ deny_commands:
   - "rm -rf /"
   - "sudo *"
   - "dd if=*"
+
+freshness:
+  enabled: true
+  default_max_age_seconds: 3600        # 1 hour for unknown sources
+  user_confirm_threshold_seconds: 604800  # 7 days → ask user before use
+  sources:
+    shell:kubectl: { max_age_seconds: 60,  auto_refresh: true }
+    shell:acli:    { max_age_seconds: 300, auto_refresh: true }
+    shell:git:     { max_age_seconds: 120, auto_refresh: false }
+    # see configs/freshness-examples/ for more presets
 ```
 
 ## Hooks
