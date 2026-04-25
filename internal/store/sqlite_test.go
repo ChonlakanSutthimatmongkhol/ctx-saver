@@ -495,3 +495,92 @@ func TestGetStats_ToolUsageCounts(t *testing.T) {
 	assert.Equal(t, 2, stats.NativeShellCount, "native shell count (runInTerminal + Bash)")
 	assert.Equal(t, 1, stats.NativeReadCount, "native read count (Read)")
 }
+
+// ── Phase 7: migration v3 + freshness metadata tests ─────────────────────
+
+func TestMigration_v3_FreshnessColumns(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+
+	out := sampleOutput("out_v3_001")
+	require.NoError(t, st.Save(ctx, out))
+
+	got, err := st.Get(ctx, "out_v3_001")
+	require.NoError(t, err)
+
+	// source_kind should be classified from "[shell] echo hello"
+	assert.Equal(t, "shell:echo", got.SourceKind)
+	// refreshed_at should be set (≈ created_at at save time)
+	assert.False(t, got.RefreshedAt.IsZero())
+	assert.WithinDuration(t, got.CreatedAt, got.RefreshedAt, time.Second)
+	// ttl_seconds default is 0
+	assert.Equal(t, 0, got.TTLSeconds)
+}
+
+func TestMigration_v3_BackfillRefreshedAt(t *testing.T) {
+	// A fresh store always applies all migrations, so refreshed_at is set from
+	// created_at for any row saved with the default (zero) RefreshedAt.
+	st := newTestStore(t)
+	ctx := context.Background()
+
+	out := sampleOutput("out_backfill_001")
+	out.CreatedAt = time.Now().Add(-24 * time.Hour)
+	// Don't set RefreshedAt — should default to CreatedAt.
+	require.NoError(t, st.Save(ctx, out))
+
+	got, err := st.Get(ctx, "out_backfill_001")
+	require.NoError(t, err)
+	assert.WithinDuration(t, out.CreatedAt, got.RefreshedAt, time.Second)
+}
+
+func TestClassifySource(t *testing.T) {
+	cases := []struct {
+		command string
+		want    string
+	}{
+		{"[shell] acli page view 123", "shell:acli"},
+		{"[shell] kubectl get pods -n prod", "shell:kubectl"},
+		{"[shell] git log --oneline", "shell:git"},
+		{"[shell] flutter test", "shell:flutter"},
+		{"[shell] go build ./...", "shell:go"},
+		{"[shell] npm run build", "shell:npm"},
+		{"[python] import os", "python"},
+		{"[go] package main", "go"},
+		{"[shell] ", "shell:other"},
+		{"no prefix command", "shell:no"},
+		{"", "shell:other"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.command, func(t *testing.T) {
+			assert.Equal(t, tc.want, store.ClassifySource(tc.command))
+		})
+	}
+}
+
+func TestUpdateRefreshed(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+
+	original := sampleOutput("out_refresh_001")
+	require.NoError(t, st.Save(ctx, original))
+
+	refreshedAt := time.Now().Add(5 * time.Minute)
+	updated := &store.Output{
+		OutputID:    "out_refresh_001",
+		FullOutput:  "new content line 1\nnew content line 2\n",
+		SizeBytes:   40,
+		LineCount:   2,
+		DurationMs:  99,
+		RefreshedAt: refreshedAt,
+	}
+	require.NoError(t, st.UpdateRefreshed(ctx, updated))
+
+	got, err := st.Get(ctx, "out_refresh_001")
+	require.NoError(t, err)
+	assert.Equal(t, "new content line 1\nnew content line 2\n", got.FullOutput)
+	assert.Equal(t, int64(40), got.SizeBytes)
+	assert.Equal(t, int64(99), got.DurationMs)
+	assert.WithinDuration(t, refreshedAt, got.RefreshedAt, time.Second)
+	// output_id preserved
+	assert.Equal(t, "out_refresh_001", got.OutputID)
+}
