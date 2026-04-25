@@ -1,0 +1,32 @@
+# Default freshness config (mirrors compiled-in defaults).
+# Copy to ~/.config/ctx-saver/config.yaml or .ctx-saver.yaml to customise.
+freshness:
+  enabled: true
+  default_max_age_seconds: 3600        # 1 hour for unknown sources
+  user_confirm_threshold_seconds: 604800  # 7 days → ask user before use
+
+  sources:
+    shell:acli:
+      max_age_seconds: 300   # 5 min
+      auto_refresh: true
+    shell:jira:
+      max_age_seconds: 300
+      auto_refresh: true
+    shell:kubectl:
+      max_age_seconds: 60    # 1 min — live cluster data
+      auto_refresh: true
+    shell:docker:
+      max_age_seconds: 60
+      auto_refresh: true
+    shell:git:
+      max_age_seconds: 120   # 2 min — may change on push
+      auto_refresh: false
+    shell:flutter:
+      max_age_seconds: 600   # 10 min — build output
+      auto_refresh: false
+    shell:go:
+      max_age_seconds: 600
+      auto_refresh: false
+    shell:npm:
+      max_age_seconds: 600
+      auto_refresh: false

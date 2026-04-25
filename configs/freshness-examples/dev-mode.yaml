@@ -1,0 +1,5 @@
+# Development / debugging mode: freshness policy disabled.
+# Use when you want to suppress all auto-refresh and confirmation gates
+# while working on ctx-saver itself.
+freshness:
+  enabled: false
