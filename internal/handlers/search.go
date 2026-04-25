@@ -20,6 +20,7 @@ type SearchInput struct {
 	OutputID           string   `json:"output_id,omitempty"             jsonschema:"optional output ID to limit search to a specific output"`
 	MaxResultsPerQuery int      `json:"max_results_per_query,omitempty" jsonschema:"maximum results per query (default: 5)"`
 	ContextLines       int      `json:"context_lines,omitempty"         jsonschema:"lines of surrounding context to include before/after each match, like grep -C (default: 0)"`
+	AcceptStale        bool     `json:"accept_stale,omitempty"          jsonschema:"set true to suppress freshness warnings in results"`
 }
 
 // SearchMatch is a single FTS hit.

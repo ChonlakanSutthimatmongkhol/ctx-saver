@@ -13,7 +13,8 @@ import (
 
 // ListInput is the typed input for ctx_list_outputs.
 type ListInput struct {
-	Limit int `json:"limit,omitempty" jsonschema:"maximum number of outputs to return (default: 50)"`
+	Limit       int  `json:"limit,omitempty"        jsonschema:"maximum number of outputs to return (default: 50)"`
+	AcceptStale bool `json:"accept_stale,omitempty" jsonschema:"set true to suppress freshness warnings in results"`
 }
 
 // OutputEntry is one row in the ctx_list_outputs response.

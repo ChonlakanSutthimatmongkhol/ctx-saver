@@ -17,7 +17,8 @@ import (
 
 // OutlineInput is the typed input for ctx_outline.
 type OutlineInput struct {
-	OutputID string `json:"output_id" jsonschema:"ID of the stored output to outline"`
+	OutputID    string `json:"output_id"              jsonschema:"ID of the stored output to outline"`
+	AcceptStale bool   `json:"accept_stale,omitempty" jsonschema:"set true to bypass freshness confirmation gate"`
 }
 
 // OutlineEntry is a single structural element found in the output.
@@ -29,10 +30,12 @@ type OutlineEntry struct {
 
 // OutlineOutput is the typed output for ctx_outline.
 type OutlineOutput struct {
-	OutputID   string                  `json:"output_id"`
-	TotalLines int                     `json:"total_lines"`
-	Entries    []OutlineEntry          `json:"entries"`
-	Freshness  freshness.FreshnessInfo `json:"freshness"`
+	OutputID                string                  `json:"output_id"`
+	TotalLines              int                     `json:"total_lines"`
+	Entries                 []OutlineEntry          `json:"entries"`
+	Freshness               freshness.FreshnessInfo `json:"freshness"`
+	UserConfirmationRequired bool                   `json:"user_confirmation_required,omitempty"`
+	UserConfirmationPrompt  string                  `json:"user_confirmation_prompt,omitempty"`
 }
 
 // OutlineHandler handles the ctx_outline MCP tool.
@@ -66,8 +69,16 @@ func (h *OutlineHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, inp
 		return nil, OutlineOutput{}, fmt.Errorf("getting output: %w", err)
 	}
 
-	if res := freshness.Resolve(out.SourceKind, out.RefreshedAt, h.fc); res.Action == "auto_refresh" {
-		out = refreshOutput(ctx, h.st, h.sb, "", out)
+	var userConfirmRequired bool
+	var userConfirmPrompt string
+	if !input.AcceptStale {
+		switch freshness.Resolve(out.SourceKind, out.RefreshedAt, h.fc).Action {
+		case "auto_refresh":
+			out = refreshOutput(ctx, h.st, h.sb, "", out)
+		case "ask_user":
+			userConfirmRequired = true
+			userConfirmPrompt = "This output is over 7 days old and may be severely outdated. Reply 'use cache' to proceed with cached data, or 'refresh' to re-run the command via ctx_execute before continuing."
+		}
 	}
 
 	lines := strings.Split(strings.TrimRight(out.FullOutput, "\n"), "\n")
@@ -89,10 +100,12 @@ func (h *OutlineHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, inp
 	fi := freshness.NewFreshnessInfo(out.SourceKind, out.RefreshedAt, out.TTLSeconds, time.Now())
 	recordToolCall(ctx, h.st, h.projectPath, "ctx_outline", input.OutputID, "", "outline: "+input.OutputID)
 	return nil, OutlineOutput{
-		OutputID:   input.OutputID,
-		TotalLines: totalLines,
-		Entries:    entries,
-		Freshness:  fi,
+		OutputID:                input.OutputID,
+		TotalLines:              totalLines,
+		Entries:                 entries,
+		Freshness:               fi,
+		UserConfirmationRequired: userConfirmRequired,
+		UserConfirmationPrompt:  userConfirmPrompt,
 	}, nil
 }
 

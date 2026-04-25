@@ -16,17 +16,20 @@ import (
 
 // GetFullInput is the typed input for ctx_get_full.
 type GetFullInput struct {
-	OutputID  string `json:"output_id"            jsonschema:"ID of the output to retrieve"`
-	LineRange []int  `json:"line_range,omitempty" jsonschema:"optional [start, end] line range (1-based, inclusive); omit to retrieve all lines"`
+	OutputID   string `json:"output_id"             jsonschema:"ID of the output to retrieve"`
+	LineRange  []int  `json:"line_range,omitempty"  jsonschema:"optional [start, end] line range (1-based, inclusive); omit to retrieve all lines"`
+	AcceptStale bool  `json:"accept_stale,omitempty" jsonschema:"set true to bypass freshness confirmation gate and use cached data regardless of age"`
 }
 
 // GetFullOutput is the typed output for ctx_get_full.
 type GetFullOutput struct {
-	OutputID   string                `json:"output_id"`
-	Lines      []string              `json:"lines"`
-	TotalLines int                   `json:"total_lines"`
-	Returned   int                   `json:"returned"`
-	Freshness  freshness.FreshnessInfo `json:"freshness"`
+	OutputID                string                  `json:"output_id"`
+	Lines                   []string                `json:"lines"`
+	TotalLines              int                     `json:"total_lines"`
+	Returned                int                     `json:"returned"`
+	Freshness               freshness.FreshnessInfo `json:"freshness"`
+	UserConfirmationRequired bool                   `json:"user_confirmation_required,omitempty"`
+	UserConfirmationPrompt  string                  `json:"user_confirmation_prompt,omitempty"`
 }
 
 // GetFullHandler handles the ctx_get_full MCP tool.
@@ -60,9 +63,17 @@ func (h *GetFullHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, inp
 		return nil, GetFullOutput{}, fmt.Errorf("retrieving output: %w", err)
 	}
 
-	// Auto-refresh before splitting so lines reflect the freshest content.
-	if res := freshness.Resolve(out.SourceKind, out.RefreshedAt, h.fc); res.Action == "auto_refresh" {
-		out = refreshOutput(ctx, h.st, h.sb, "", out)
+	// Resolve freshness and act unless the caller explicitly accepts stale data.
+	var userConfirmRequired bool
+	var userConfirmPrompt string
+	if !input.AcceptStale {
+		switch freshness.Resolve(out.SourceKind, out.RefreshedAt, h.fc).Action {
+		case "auto_refresh":
+			out = refreshOutput(ctx, h.st, h.sb, "", out)
+		case "ask_user":
+			userConfirmRequired = true
+			userConfirmPrompt = "This output is over 7 days old and may be severely outdated. Reply 'use cache' to proceed with cached data, or 'refresh' to re-run the command via ctx_execute before continuing."
+		}
 	}
 
 	// Split into lines (strip trailing newline first to avoid a ghost empty line).
@@ -92,10 +103,12 @@ func (h *GetFullHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, inp
 	fi := freshness.NewFreshnessInfo(out.SourceKind, out.RefreshedAt, out.TTLSeconds, time.Now())
 	recordToolCall(ctx, h.st, h.projectPath, "ctx_get_full", input.OutputID, "", "get_full: "+input.OutputID)
 	return nil, GetFullOutput{
-		OutputID:   input.OutputID,
-		Lines:      selected,
-		TotalLines: totalLines,
-		Returned:   len(selected),
-		Freshness:  fi,
+		OutputID:                input.OutputID,
+		Lines:                   selected,
+		TotalLines:              totalLines,
+		Returned:                len(selected),
+		Freshness:               fi,
+		UserConfirmationRequired: userConfirmRequired,
+		UserConfirmationPrompt:  userConfirmPrompt,
 	}, nil
 }
