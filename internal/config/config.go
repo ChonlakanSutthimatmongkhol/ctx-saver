@@ -22,13 +22,29 @@ func ResolveDataDir(cfg *Config, projectPath string) {
 
 // Config holds all runtime configuration for ctx-saver.
 type Config struct {
-	Sandbox      SandboxConfig `yaml:"sandbox"`
-	Storage      StorageConfig `yaml:"storage"`
-	Summary      SummaryConfig `yaml:"summary"`
-	Logging      LoggingConfig `yaml:"logging"`
-	Hooks        HooksConfig   `yaml:"hooks"`
-	Dedup        DedupConfig   `yaml:"dedup"`
-	DenyCommands []string      `yaml:"deny_commands"`
+	Sandbox      SandboxConfig   `yaml:"sandbox"`
+	Storage      StorageConfig   `yaml:"storage"`
+	Summary      SummaryConfig   `yaml:"summary"`
+	Logging      LoggingConfig   `yaml:"logging"`
+	Hooks        HooksConfig     `yaml:"hooks"`
+	Dedup        DedupConfig     `yaml:"dedup"`
+	Freshness    FreshnessConfig `yaml:"freshness"`
+	DenyCommands []string        `yaml:"deny_commands"`
+}
+
+// FreshnessConfig controls cache freshness policy (Phase 7).
+type FreshnessConfig struct {
+	Enabled                     bool                     `yaml:"enabled"`
+	DefaultMaxAgeSeconds        int                      `yaml:"default_max_age_seconds"`
+	UserConfirmThresholdSeconds int                      `yaml:"user_confirm_threshold_seconds"`
+	Sources                     map[string]FreshnessRule `yaml:"sources"`
+}
+
+// FreshnessRule defines TTL and refresh behaviour for one source kind.
+type FreshnessRule struct {
+	MaxAgeSeconds int  `yaml:"max_age_seconds"`
+	AutoRefresh   bool `yaml:"auto_refresh"`
+	NeverCache    bool `yaml:"never_cache,omitempty"`
 }
 
 // DedupConfig controls command-deduplication hints in ctx_execute responses.
@@ -106,6 +122,21 @@ func Default() *Config {
 		Dedup: DedupConfig{
 			Enabled:       true,
 			WindowMinutes: 30,
+		},
+		Freshness: FreshnessConfig{
+			Enabled:                     true,
+			DefaultMaxAgeSeconds:        3600,   // 1 hour
+			UserConfirmThresholdSeconds: 604800, // 7 days
+			Sources: map[string]FreshnessRule{
+				"shell:acli":    {MaxAgeSeconds: 300, AutoRefresh: true},
+				"shell:jira":    {MaxAgeSeconds: 300, AutoRefresh: true},
+				"shell:kubectl": {MaxAgeSeconds: 60, AutoRefresh: true},
+				"shell:docker":  {MaxAgeSeconds: 60, AutoRefresh: true},
+				"shell:git":     {MaxAgeSeconds: 120, AutoRefresh: false},
+				"shell:flutter": {MaxAgeSeconds: 600, AutoRefresh: false},
+				"shell:go":      {MaxAgeSeconds: 600, AutoRefresh: false},
+				"shell:npm":     {MaxAgeSeconds: 600, AutoRefresh: false},
+			},
 		},
 		DenyCommands: []string{
 			"rm -rf /",
