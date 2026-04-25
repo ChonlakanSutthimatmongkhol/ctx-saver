@@ -124,6 +124,7 @@ func (h *ReadFileHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, in
 			lineCount = 0
 		}
 		stats.Lines = lineCount
+		recordToolCall(ctx, h.st, h.projectPath, "ctx_read_file", input.Path, string(rawOutput), "read: "+input.Path)
 		return nil, ReadFileOutput{
 			Stats:        stats,
 			DirectOutput: string(rawOutput),
@@ -157,9 +158,11 @@ func (h *ReadFileHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, in
 	}
 
 	statsLine := summary.FormatStats(sum.TotalLines, sum.TotalBytes, exitCode, durationMs)
+	outSummary := sum.Text + "\n" + statsLine
+	recordToolCall(ctx, h.st, h.projectPath, "ctx_read_file", input.Path, outSummary, "read: "+input.Path)
 	return nil, ReadFileOutput{
 		OutputID:   outputID,
-		Summary:    sum.Text + "\n" + statsLine,
+		Summary:    outSummary,
 		Stats:      stats,
 		SearchHint: fmt.Sprintf("Use ctx_search with output_id=%q to query this output", outputID),
 		Path:       absPath,

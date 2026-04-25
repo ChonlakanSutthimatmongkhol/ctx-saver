@@ -175,5 +175,6 @@ func (h *SearchHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, inpu
 		})
 	}
 
+	recordToolCall(ctx, h.st, h.projectPath, "ctx_search", strings.Join(input.Queries, ", "), "", "search: "+strings.Join(input.Queries, ", "))
 	return nil, SearchOutput{Results: ordered, SearchMode: searchMode, ExpandedQueries: expandedQueries}, nil
 }

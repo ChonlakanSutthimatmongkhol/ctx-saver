@@ -32,12 +32,13 @@ type OutlineOutput struct {
 
 // OutlineHandler handles the ctx_outline MCP tool.
 type OutlineHandler struct {
-	st store.Store
+	st          store.Store
+	projectPath string
 }
 
 // NewOutlineHandler creates an OutlineHandler.
-func NewOutlineHandler(st store.Store) *OutlineHandler {
-	return &OutlineHandler{st: st}
+func NewOutlineHandler(st store.Store, projectPath string) *OutlineHandler {
+	return &OutlineHandler{st: st, projectPath: projectPath}
 }
 
 // Handle implements the ctx_outline tool.
@@ -67,6 +68,7 @@ func (h *OutlineHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, inp
 		}
 	}
 
+	recordToolCall(ctx, h.st, h.projectPath, "ctx_outline", input.OutputID, "", "outline: "+input.OutputID)
 	return nil, OutlineOutput{
 		OutputID:   input.OutputID,
 		TotalLines: totalLines,

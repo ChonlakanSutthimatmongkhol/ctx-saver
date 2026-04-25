@@ -120,6 +120,7 @@ func (h *ExecuteHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, inp
 		stats.Lines = len(lines)
 		out.Stats = stats
 		out.DirectOutput = string(result.Output)
+		recordToolCall(ctx, h.st, h.projectPath, "ctx_execute", input.Code, out.DirectOutput, "shell: "+input.Code)
 		return nil, out, nil
 	}
 
@@ -163,6 +164,7 @@ func (h *ExecuteHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, inp
 	out.Format = sumFmt.Format
 	out.Stats = stats
 	out.SearchHint = fmt.Sprintf("Use ctx_search with output_id=%q to query this output", outputID)
+	recordToolCall(ctx, h.st, h.projectPath, "ctx_execute", input.Code, out.Summary, "shell: "+input.Code)
 	return nil, out, nil
 }
 

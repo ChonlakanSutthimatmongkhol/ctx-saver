@@ -142,6 +142,7 @@ func (h *StatsHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, input
 			SizeBytes: o.SizeBytes, LineCount: o.LineCount,
 		})
 	}
+	recordToolCall(ctx, h.st, h.projectPath, "ctx_stats", input.Scope, "", "stats: "+input.Scope)
 	return nil, out, nil
 }
 

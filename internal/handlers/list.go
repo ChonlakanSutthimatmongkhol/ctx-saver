@@ -58,5 +58,6 @@ func (h *ListHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, input 
 		})
 	}
 
+	recordToolCall(ctx, h.st, h.projectPath, "ctx_list_outputs", "", "", "list outputs")
 	return nil, ListOutput{Outputs: entries}, nil
 }

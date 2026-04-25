@@ -222,7 +222,7 @@ func TestCtxGetFull_ReturnsAllLines(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, execOut.OutputID)
 
-	getH := handlers.NewGetFullHandler(st)
+	getH := handlers.NewGetFullHandler(st, proj)
 	_, full, err := getH.Handle(context.Background(), nil, handlers.GetFullInput{
 		OutputID: execOut.OutputID,
 	})
@@ -242,7 +242,7 @@ func TestCtxGetFull_LineRange(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, execOut.OutputID)
 
-	getH := handlers.NewGetFullHandler(st)
+	getH := handlers.NewGetFullHandler(st, proj)
 	_, full, err := getH.Handle(context.Background(), nil, handlers.GetFullInput{
 		OutputID:  execOut.OutputID,
 		LineRange: []int{10, 20},
@@ -255,7 +255,7 @@ func TestCtxGetFull_LineRange(t *testing.T) {
 
 func TestCtxGetFull_NotFound(t *testing.T) {
 	_, _, st, _ := newTestDeps(t)
-	h := handlers.NewGetFullHandler(st)
+	h := handlers.NewGetFullHandler(st, "")
 	_, _, err := h.Handle(context.Background(), nil, handlers.GetFullInput{OutputID: "out_doesnotexist"})
 	require.Error(t, err)
 }

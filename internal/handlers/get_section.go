@@ -31,12 +31,13 @@ type GetSectionOutput struct {
 
 // GetSectionHandler handles the ctx_get_section MCP tool.
 type GetSectionHandler struct {
-	st store.Store
+	st          store.Store
+	projectPath string
 }
 
 // NewGetSectionHandler creates a GetSectionHandler.
-func NewGetSectionHandler(st store.Store) *GetSectionHandler {
-	return &GetSectionHandler{st: st}
+func NewGetSectionHandler(st store.Store, projectPath string) *GetSectionHandler {
+	return &GetSectionHandler{st: st, projectPath: projectPath}
 }
 
 // Handle implements the ctx_get_section tool.
@@ -56,6 +57,7 @@ func (h *GetSectionHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, 
 	lines := strings.Split(strings.TrimRight(out.FullOutput, "\n"), "\n")
 	start, end, found := summary.FindSection(lines, input.Heading, input.Partial)
 	if !found {
+		recordToolCall(ctx, h.st, h.projectPath, "ctx_get_section", input.OutputID+"#"+input.Heading, "", "get_section: "+input.Heading)
 		return nil, GetSectionOutput{
 			OutputID: input.OutputID,
 			Heading:  input.Heading,
@@ -64,6 +66,7 @@ func (h *GetSectionHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, 
 	}
 
 	selected := lines[start-1 : end]
+	recordToolCall(ctx, h.st, h.projectPath, "ctx_get_section", input.OutputID+"#"+input.Heading, "", "get_section: "+input.Heading)
 	return nil, GetSectionOutput{
 		OutputID:  input.OutputID,
 		Heading:   input.Heading,

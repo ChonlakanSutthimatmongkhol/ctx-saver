@@ -26,12 +26,13 @@ type GetFullOutput struct {
 
 // GetFullHandler handles the ctx_get_full MCP tool.
 type GetFullHandler struct {
-	st store.Store
+	st          store.Store
+	projectPath string
 }
 
 // NewGetFullHandler creates a GetFullHandler.
-func NewGetFullHandler(st store.Store) *GetFullHandler {
-	return &GetFullHandler{st: st}
+func NewGetFullHandler(st store.Store, projectPath string) *GetFullHandler {
+	return &GetFullHandler{st: st, projectPath: projectPath}
 }
 
 // Handle implements the ctx_get_full tool.
@@ -69,6 +70,7 @@ func (h *GetFullHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, inp
 	}
 
 	selected := allLines[start-1 : end]
+	recordToolCall(ctx, h.st, h.projectPath, "ctx_get_full", input.OutputID, "", "get_full: "+input.OutputID)
 	return nil, GetFullOutput{
 		OutputID:   input.OutputID,
 		Lines:      selected,

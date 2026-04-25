@@ -39,15 +39,16 @@ func (m *mockSandbox) Execute(_ context.Context, _ sandbox.ExecuteRequest) (sand
 }
 
 type mockStore struct {
-	saved     []*store.Output
-	saveErr   error
-	getErr    error
-	listMeta  []*store.OutputMeta
-	listErr   error
-	matches   []*store.Match
-	searchErr error
-	dedupMeta *store.OutputMeta
-	dedupErr  error
+	saved             []*store.Output
+	saveErr           error
+	getErr            error
+	listMeta          []*store.OutputMeta
+	listErr           error
+	matches           []*store.Match
+	searchErr         error
+	dedupMeta         *store.OutputMeta
+	dedupErr          error
+	sessionEventCount int
 }
 
 func (m *mockStore) Save(_ context.Context, o *store.Output) error {
@@ -82,6 +83,7 @@ func (m *mockStore) Cleanup(_ context.Context, _ string, _ int) error { return n
 func (m *mockStore) Close() error                                     { return nil }
 
 func (m *mockStore) SaveSessionEvent(_ context.Context, _ *store.SessionEvent) error {
+	m.sessionEventCount++
 	return nil
 }
 func (m *mockStore) ListSessionEvents(_ context.Context, _ string, _ int) ([]*store.SessionEvent, error) {
@@ -159,6 +161,7 @@ func TestExecuteHandler_LargeOutput_StoredAndSummarised(t *testing.T) {
 	assert.Empty(t, out.DirectOutput)
 	assert.Len(t, st.saved, 1)
 	assert.Equal(t, "test large output", st.saved[0].Intent)
+	assert.Equal(t, 1, st.sessionEventCount, "expected 1 session event recorded")
 }
 
 func TestExecuteHandler_NonZeroExitCode_Succeeds(t *testing.T) {
@@ -567,7 +570,7 @@ func TestListHandler_StoreError_ReturnsError(t *testing.T) {
 // ── GetFullHandler tests ──────────────────────────────────────────────────
 
 func TestGetFullHandler_EmptyOutputID_Error(t *testing.T) {
-	h := handlers.NewGetFullHandler(&mockStore{})
+	h := handlers.NewGetFullHandler(&mockStore{}, "/proj")
 	_, _, err := h.Handle(context.Background(), nil, handlers.GetFullInput{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "output_id must not be empty")
@@ -575,7 +578,7 @@ func TestGetFullHandler_EmptyOutputID_Error(t *testing.T) {
 
 func TestGetFullHandler_NotFound_Error(t *testing.T) {
 	st := &mockStore{getErr: fmt.Errorf("store: output \"out_xyz\" not found")}
-	h := handlers.NewGetFullHandler(st)
+	h := handlers.NewGetFullHandler(st, "/proj")
 	_, _, err := h.Handle(context.Background(), nil, handlers.GetFullInput{OutputID: "out_xyz"})
 	require.Error(t, err)
 }
@@ -587,7 +590,7 @@ func TestGetFullHandler_AllLines(t *testing.T) {
 			{OutputID: "out_abc", FullOutput: content},
 		},
 	}
-	h := handlers.NewGetFullHandler(st)
+	h := handlers.NewGetFullHandler(st, "/proj")
 	_, out, err := h.Handle(context.Background(), nil, handlers.GetFullInput{OutputID: "out_abc"})
 	require.NoError(t, err)
 	assert.Equal(t, 3, out.TotalLines)
@@ -606,7 +609,7 @@ func TestGetFullHandler_LineRange(t *testing.T) {
 			{OutputID: "out_range", FullOutput: content},
 		},
 	}
-	h := handlers.NewGetFullHandler(st)
+	h := handlers.NewGetFullHandler(st, "/proj")
 	_, out, err := h.Handle(context.Background(), nil, handlers.GetFullInput{
 		OutputID:  "out_range",
 		LineRange: []int{5, 10},
@@ -623,7 +626,7 @@ func TestGetFullHandler_LineRange_StartAfterEnd_Error(t *testing.T) {
 			{OutputID: "out_bad", FullOutput: "a\nb\nc\n"},
 		},
 	}
-	h := handlers.NewGetFullHandler(st)
+	h := handlers.NewGetFullHandler(st, "/proj")
 	_, _, err := h.Handle(context.Background(), nil, handlers.GetFullInput{
 		OutputID:  "out_bad",
 		LineRange: []int{10, 5},
@@ -638,7 +641,7 @@ func TestGetFullHandler_LineRange_WrongLength_Error(t *testing.T) {
 			{OutputID: "out_bad2", FullOutput: "a\nb\n"},
 		},
 	}
-	h := handlers.NewGetFullHandler(st)
+	h := handlers.NewGetFullHandler(st, "/proj")
 	_, _, err := h.Handle(context.Background(), nil, handlers.GetFullInput{
 		OutputID:  "out_bad2",
 		LineRange: []int{1},
@@ -653,7 +656,7 @@ func TestGetFullHandler_LineRange_ClampedToTotalLines(t *testing.T) {
 			{OutputID: "out_clamp", FullOutput: "a\nb\nc\n"},
 		},
 	}
-	h := handlers.NewGetFullHandler(st)
+	h := handlers.NewGetFullHandler(st, "/proj")
 	_, out, err := h.Handle(context.Background(), nil, handlers.GetFullInput{
 		OutputID:  "out_clamp",
 		LineRange: []int{2, 999}, // end beyond total → clamped
@@ -682,7 +685,7 @@ func sectionOutput(t *testing.T, content string) *store.SQLiteStore {
 func TestGetSectionHandler_Found(t *testing.T) {
 	doc := "# Intro\nintro text\n## Sequence Diagram\ndiagram here\nmore diagram\n## Next\nafter"
 	st := sectionOutput(t, doc)
-	h := handlers.NewGetSectionHandler(st)
+	h := handlers.NewGetSectionHandler(st, "/proj")
 	_, out, err := h.Handle(context.Background(), nil, handlers.GetSectionInput{
 		OutputID: "out_sec_001",
 		Heading:  "Sequence Diagram",
@@ -697,7 +700,7 @@ func TestGetSectionHandler_Found(t *testing.T) {
 func TestGetSectionHandler_NotFound(t *testing.T) {
 	doc := "## Existing\ncontent"
 	st := sectionOutput(t, doc)
-	h := handlers.NewGetSectionHandler(st)
+	h := handlers.NewGetSectionHandler(st, "/proj")
 	_, out, err := h.Handle(context.Background(), nil, handlers.GetSectionInput{
 		OutputID: "out_sec_001",
 		Heading:  "DoesNotExist",
@@ -708,7 +711,7 @@ func TestGetSectionHandler_NotFound(t *testing.T) {
 }
 
 func TestGetSectionHandler_EmptyHeading(t *testing.T) {
-	h := handlers.NewGetSectionHandler(&mockStore{})
+	h := handlers.NewGetSectionHandler(&mockStore{}, "/proj")
 	_, _, err := h.Handle(context.Background(), nil, handlers.GetSectionInput{
 		OutputID: "out_sec_001",
 		Heading:  "   ",
@@ -718,7 +721,7 @@ func TestGetSectionHandler_EmptyHeading(t *testing.T) {
 }
 
 func TestGetSectionHandler_EmptyOutputID(t *testing.T) {
-	h := handlers.NewGetSectionHandler(&mockStore{})
+	h := handlers.NewGetSectionHandler(&mockStore{}, "/proj")
 	_, _, err := h.Handle(context.Background(), nil, handlers.GetSectionInput{
 		OutputID: "",
 		Heading:  "Some",
@@ -730,7 +733,7 @@ func TestGetSectionHandler_EmptyOutputID(t *testing.T) {
 func TestGetSectionHandler_Partial(t *testing.T) {
 	doc := "## Sequence Diagram\ndiagram content\n## Next\nafter"
 	st := sectionOutput(t, doc)
-	h := handlers.NewGetSectionHandler(st)
+	h := handlers.NewGetSectionHandler(st, "/proj")
 	_, out, err := h.Handle(context.Background(), nil, handlers.GetSectionInput{
 		OutputID: "out_sec_001",
 		Heading:  "sequence",

@@ -142,6 +142,7 @@ func (h *SessionInitHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest,
 		out.NextActionHint = "Fresh project. Use ctx_execute for your first command to seed the cache."
 	}
 
+	recordToolCall(ctx, h.st, h.projectPath, "ctx_session_init", "", "", "session_init")
 	return nil, out, nil
 }
 
