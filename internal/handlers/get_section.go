@@ -8,7 +8,9 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/config"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/freshness"
+	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/sandbox"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/store"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/summary"
 )
@@ -36,11 +38,20 @@ type GetSectionOutput struct {
 type GetSectionHandler struct {
 	st          store.Store
 	projectPath string
+	sb          sandbox.Sandbox
+	fc          config.FreshnessConfig
 }
 
 // NewGetSectionHandler creates a GetSectionHandler.
 func NewGetSectionHandler(st store.Store, projectPath string) *GetSectionHandler {
 	return &GetSectionHandler{st: st, projectPath: projectPath}
+}
+
+// WithFreshness attaches a sandbox and freshness config for auto-refresh support.
+func (h *GetSectionHandler) WithFreshness(sb sandbox.Sandbox, fc config.FreshnessConfig) *GetSectionHandler {
+	h.sb = sb
+	h.fc = fc
+	return h
 }
 
 // Handle implements the ctx_get_section tool.
@@ -57,6 +68,9 @@ func (h *GetSectionHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, 
 		return nil, GetSectionOutput{}, fmt.Errorf("getting output: %w", err)
 	}
 
+	if res := freshness.Resolve(out.SourceKind, out.RefreshedAt, h.fc); res.Action == "auto_refresh" {
+		out = refreshOutput(ctx, h.st, h.sb, "", out)
+	}
 	fi := freshness.NewFreshnessInfo(out.SourceKind, out.RefreshedAt, out.TTLSeconds, time.Now())
 	lines := strings.Split(strings.TrimRight(out.FullOutput, "\n"), "\n")
 	start, end, found := summary.FindSection(lines, input.Heading, input.Partial)

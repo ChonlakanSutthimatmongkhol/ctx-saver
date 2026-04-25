@@ -8,7 +8,9 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/config"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/freshness"
+	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/sandbox"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/store"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/summary"
 )
@@ -37,11 +39,20 @@ type OutlineOutput struct {
 type OutlineHandler struct {
 	st          store.Store
 	projectPath string
+	sb          sandbox.Sandbox
+	fc          config.FreshnessConfig
 }
 
 // NewOutlineHandler creates an OutlineHandler.
 func NewOutlineHandler(st store.Store, projectPath string) *OutlineHandler {
 	return &OutlineHandler{st: st, projectPath: projectPath}
+}
+
+// WithFreshness attaches a sandbox and freshness config for auto-refresh support.
+func (h *OutlineHandler) WithFreshness(sb sandbox.Sandbox, fc config.FreshnessConfig) *OutlineHandler {
+	h.sb = sb
+	h.fc = fc
+	return h
 }
 
 // Handle implements the ctx_outline tool.
@@ -53,6 +64,10 @@ func (h *OutlineHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, inp
 	out, err := h.st.Get(ctx, input.OutputID)
 	if err != nil {
 		return nil, OutlineOutput{}, fmt.Errorf("getting output: %w", err)
+	}
+
+	if res := freshness.Resolve(out.SourceKind, out.RefreshedAt, h.fc); res.Action == "auto_refresh" {
+		out = refreshOutput(ctx, h.st, h.sb, "", out)
 	}
 
 	lines := strings.Split(strings.TrimRight(out.FullOutput, "\n"), "\n")

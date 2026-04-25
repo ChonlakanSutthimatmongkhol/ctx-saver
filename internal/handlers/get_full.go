@@ -8,7 +8,9 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/config"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/freshness"
+	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/sandbox"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/store"
 )
 
@@ -31,11 +33,20 @@ type GetFullOutput struct {
 type GetFullHandler struct {
 	st          store.Store
 	projectPath string
+	sb          sandbox.Sandbox
+	fc          config.FreshnessConfig
 }
 
 // NewGetFullHandler creates a GetFullHandler.
 func NewGetFullHandler(st store.Store, projectPath string) *GetFullHandler {
 	return &GetFullHandler{st: st, projectPath: projectPath}
+}
+
+// WithFreshness attaches a sandbox and freshness config for auto-refresh support.
+func (h *GetFullHandler) WithFreshness(sb sandbox.Sandbox, fc config.FreshnessConfig) *GetFullHandler {
+	h.sb = sb
+	h.fc = fc
+	return h
 }
 
 // Handle implements the ctx_get_full tool.
@@ -47,6 +58,11 @@ func (h *GetFullHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, inp
 	out, err := h.st.Get(ctx, input.OutputID)
 	if err != nil {
 		return nil, GetFullOutput{}, fmt.Errorf("retrieving output: %w", err)
+	}
+
+	// Auto-refresh before splitting so lines reflect the freshest content.
+	if res := freshness.Resolve(out.SourceKind, out.RefreshedAt, h.fc); res.Action == "auto_refresh" {
+		out = refreshOutput(ctx, h.st, h.sb, "", out)
 	}
 
 	// Split into lines (strip trailing newline first to avoid a ghost empty line).

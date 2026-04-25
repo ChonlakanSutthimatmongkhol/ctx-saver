@@ -133,7 +133,7 @@ Each entry shows: output_id, command, size_bytes, line_count, created_at.
 Use the output_id with ctx_get_full, ctx_search, ctx_outline, or ctx_get_section to retrieve content without re-executing.`,
 	}, listH.Handle)
 
-	getFullH := handlers.NewGetFullHandler(st, projectPath)
+	getFullH := handlers.NewGetFullHandler(st, projectPath).WithFreshness(sb, cfg.Freshness)
 	mcp.AddTool(srv, &mcp.Tool{
 		Name: "ctx_get_full",
 		Description: `[ESCAPE HATCH] Retrieve the complete text of a stored output, optionally restricted to a line range.
@@ -143,7 +143,7 @@ Prefer ctx_get_section for named sections and ctx_search for keyword retrieval â
 Parameters: output_id (required), start_line / end_line (optional, 1-based).`,
 	}, getFullH.Handle)
 
-	outlineH := handlers.NewOutlineHandler(st, projectPath)
+	outlineH := handlers.NewOutlineHandler(st, projectPath).WithFreshness(sb, cfg.Freshness)
 	mcp.AddTool(srv, &mcp.Tool{
 		Name: "ctx_outline",
 		Description: `[USE BEFORE ctx_search on long docs] Extract a table of contents from a stored output.
@@ -194,7 +194,7 @@ Call this every ~20 turns to verify ctx-saver is being used effectively.
 If saving_percent or adherence_score is low, native tools are being over-used â€” re-read ctx_session_init rules.`,
 	}, statsH.Handle)
 
-	getSectionH := handlers.NewGetSectionHandler(st, projectPath)
+	getSectionH := handlers.NewGetSectionHandler(st, projectPath).WithFreshness(sb, cfg.Freshness)
 	mcp.AddTool(srv, &mcp.Tool{
 		Name: "ctx_get_section",
 		Description: `[STRUCTURED retrieval] Extract a named section from a stored output by heading text.
