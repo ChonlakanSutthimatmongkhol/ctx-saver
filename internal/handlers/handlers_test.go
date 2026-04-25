@@ -833,6 +833,67 @@ func TestGetFullHandler_AutoRefresh_Success(t *testing.T) {
 	assert.Equal(t, []string{"refreshed"}, out.Lines)
 }
 
+// ── Task 7.5: critical confirmation + accept_stale bypass ─────────────────
+
+func TestGetFullHandler_CriticalConfirmation(t *testing.T) {
+	st := &mockStore{}
+	now := time.Now()
+	_ = st.Save(context.Background(), &store.Output{
+		OutputID:    "critical_out_001",
+		Command:     "[shell] acli page view 99",
+		FullOutput:  "ancient data\n",
+		SizeBytes:   12,
+		LineCount:   1,
+		CreatedAt:   now.Add(-10 * 24 * time.Hour),
+		RefreshedAt: now.Add(-10 * 24 * time.Hour),
+		SourceKind:  "shell:acli",
+	})
+
+	fc := config.FreshnessConfig{
+		Enabled:                     true,
+		DefaultMaxAgeSeconds:        3600,
+		UserConfirmThresholdSeconds: 604800, // 7 days
+	}
+	h := handlers.NewGetFullHandler(st, "/proj").WithFreshness(nil, fc)
+	_, out, err := h.Handle(context.Background(), nil, handlers.GetFullInput{OutputID: "critical_out_001"})
+	require.NoError(t, err)
+
+	assert.True(t, out.UserConfirmationRequired, "10-day-old output must require user confirmation")
+	assert.NotEmpty(t, out.UserConfirmationPrompt)
+	assert.Equal(t, "critical", out.Freshness.StaleLevel)
+}
+
+func TestGetFullHandler_AcceptStale_SkipsConfirmation(t *testing.T) {
+	st := &mockStore{}
+	now := time.Now()
+	_ = st.Save(context.Background(), &store.Output{
+		OutputID:    "critical_out_002",
+		Command:     "[shell] acli page view 99",
+		FullOutput:  "ancient data\n",
+		SizeBytes:   12,
+		LineCount:   1,
+		CreatedAt:   now.Add(-10 * 24 * time.Hour),
+		RefreshedAt: now.Add(-10 * 24 * time.Hour),
+		SourceKind:  "shell:acli",
+	})
+
+	fc := config.FreshnessConfig{
+		Enabled:                     true,
+		DefaultMaxAgeSeconds:        3600,
+		UserConfirmThresholdSeconds: 604800,
+	}
+	h := handlers.NewGetFullHandler(st, "/proj").WithFreshness(nil, fc)
+	// AcceptStale=true bypasses the confirmation gate entirely.
+	_, out, err := h.Handle(context.Background(), nil, handlers.GetFullInput{
+		OutputID:    "critical_out_002",
+		AcceptStale: true,
+	})
+	require.NoError(t, err)
+
+	assert.False(t, out.UserConfirmationRequired, "accept_stale must bypass confirmation gate")
+	assert.Empty(t, out.UserConfirmationPrompt)
+}
+
 func TestGetFullHandler_AutoRefresh_SandboxError_Fallback(t *testing.T) {
 	st := &mockStore{}
 	now := time.Now()
