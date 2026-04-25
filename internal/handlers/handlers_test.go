@@ -752,3 +752,52 @@ func TestGetSectionHandler_Partial(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, out.Found)
 }
+
+// ── Freshness field tests (Task 7.2) ──────────────────────────────────────
+
+func TestGetFullHandler_FreshnessPresent(t *testing.T) {
+	st := &mockStore{}
+	now := time.Now()
+	_ = st.Save(context.Background(), &store.Output{
+		OutputID:    "fresh_out_001",
+		Command:     "[shell] echo hello",
+		FullOutput:  "hello\n",
+		SizeBytes:   6,
+		LineCount:   1,
+		CreatedAt:   now.Add(-2 * time.Hour),
+		RefreshedAt: now.Add(-2 * time.Hour),
+		SourceKind:  "shell:echo",
+	})
+
+	h := handlers.NewGetFullHandler(st, "/proj")
+	_, out, err := h.Handle(context.Background(), nil, handlers.GetFullInput{OutputID: "fresh_out_001"})
+	require.NoError(t, err)
+
+	assert.Equal(t, "shell:echo", out.Freshness.SourceKind)
+	assert.NotEmpty(t, out.Freshness.CachedAt)
+	assert.Greater(t, out.Freshness.AgeSeconds, int64(0))
+	assert.NotEmpty(t, out.Freshness.AgeHuman)
+	assert.Equal(t, "aging", out.Freshness.StaleLevel) // 2h old → aging
+}
+
+func TestGetFullHandler_FreshnessCritical(t *testing.T) {
+	st := &mockStore{}
+	now := time.Now()
+	_ = st.Save(context.Background(), &store.Output{
+		OutputID:    "stale_out_001",
+		Command:     "[shell] acli page view 123",
+		FullOutput:  "old data\n",
+		SizeBytes:   9,
+		LineCount:   1,
+		CreatedAt:   now.Add(-10 * 24 * time.Hour),
+		RefreshedAt: now.Add(-10 * 24 * time.Hour),
+		SourceKind:  "shell:acli",
+	})
+
+	h := handlers.NewGetFullHandler(st, "/proj")
+	_, out, err := h.Handle(context.Background(), nil, handlers.GetFullInput{OutputID: "stale_out_001"})
+	require.NoError(t, err)
+
+	assert.Equal(t, "critical", out.Freshness.StaleLevel)
+	assert.NotEmpty(t, out.Freshness.RefreshHint)
+}
