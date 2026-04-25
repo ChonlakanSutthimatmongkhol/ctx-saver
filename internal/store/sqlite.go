@@ -112,8 +112,8 @@ func (s *SQLiteStore) Save(ctx context.Context, output *Output) error {
 		INSERT INTO outputs
 			(output_id, command, intent, full_output, size_bytes, line_count,
 			 exit_code, duration_ms, created_at, project_path,
-			 source_kind, refreshed_at, ttl_seconds)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			 source_kind, refreshed_at, ttl_seconds, source_hash)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		output.OutputID,
 		output.Command,
 		output.Intent,
@@ -127,6 +127,7 @@ func (s *SQLiteStore) Save(ctx context.Context, output *Output) error {
 		sourceKind,
 		refreshedAt.Unix(),
 		output.TTLSeconds,
+		output.SourceHash,
 	)
 	if err != nil {
 		return fmt.Errorf("inserting output: %w", err)
@@ -157,7 +158,7 @@ func (s *SQLiteStore) Get(ctx context.Context, id string) (*Output, error) {
 	row := s.db.QueryRowContext(ctx, `
 		SELECT output_id, command, intent, full_output, size_bytes, line_count,
 		       exit_code, duration_ms, created_at, project_path,
-		       source_kind, refreshed_at, ttl_seconds
+		       source_kind, refreshed_at, ttl_seconds, source_hash
 		FROM outputs WHERE output_id = ?`, id)
 
 	var o Output
@@ -166,7 +167,7 @@ func (s *SQLiteStore) Get(ctx context.Context, id string) (*Output, error) {
 		&o.OutputID, &o.Command, &o.Intent, &o.FullOutput,
 		&o.SizeBytes, &o.LineCount, &o.ExitCode, &o.DurationMs,
 		&createdAt, &o.ProjectPath,
-		&o.SourceKind, &refreshedAt, &o.TTLSeconds,
+		&o.SourceKind, &refreshedAt, &o.TTLSeconds, &o.SourceHash,
 	)
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("output %q not found", id)
@@ -191,13 +192,14 @@ func (s *SQLiteStore) UpdateRefreshed(ctx context.Context, output *Output) error
 	_, err = tx.ExecContext(ctx, `
 		UPDATE outputs
 		SET full_output = ?, size_bytes = ?, line_count = ?,
-		    refreshed_at = ?, duration_ms = ?
+		    refreshed_at = ?, duration_ms = ?, source_hash = ?
 		WHERE output_id = ?`,
 		output.FullOutput,
 		output.SizeBytes,
 		output.LineCount,
 		output.RefreshedAt.Unix(),
 		output.DurationMs,
+		output.SourceHash,
 		output.OutputID,
 	)
 	if err != nil {

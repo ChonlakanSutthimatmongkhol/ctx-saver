@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-const currentSchemaVersion = 4
+const currentSchemaVersion = 5
 
 // runMigrations applies any pending schema migrations to db.
 // It is idempotent and safe to call on every server start.
@@ -53,6 +53,10 @@ func applyMigration(db *sql.DB, version int) error {
 		}
 	case 4:
 		if err := migration4(tx); err != nil {
+			return err
+		}
+	case 5:
+		if err := migration5(tx); err != nil {
 			return err
 		}
 	default:
@@ -147,6 +151,19 @@ func migration4(tx *sql.Tx) error {
 			ON decisions(session_id, created_at DESC)`,
 		`CREATE INDEX idx_decisions_importance
 			ON decisions(project_path, importance, created_at DESC)`,
+	}
+	for _, stmt := range stmts {
+		if _, err := tx.Exec(stmt); err != nil {
+			return fmt.Errorf("executing %q: %w", stmt[:min(40, len(stmt))], err)
+		}
+	}
+	return nil
+}
+
+// migration5 adds the source_hash column for file-backed cache invalidation (v0.5.2).
+func migration5(tx *sql.Tx) error {
+	stmts := []string{
+		`ALTER TABLE outputs ADD COLUMN source_hash TEXT NOT NULL DEFAULT ''`,
 	}
 	for _, stmt := range stmts {
 		if _, err := tx.Exec(stmt); err != nil {

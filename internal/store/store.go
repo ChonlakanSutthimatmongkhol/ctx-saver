@@ -23,6 +23,9 @@ type Output struct {
 	SourceKind  string    // e.g. "shell:acli", "shell:kubectl", "python"
 	RefreshedAt time.Time // last successful execution time
 	TTLSeconds  int       // TTL snapshot at save time (0 = use default)
+
+	// v0.5.2: content hash for file-backed cache invalidation
+	SourceHash string // SHA-256 hex; "" for non-file sources or pre-v0.5.2 rows
 }
 
 // OutputMeta is a lightweight summary used by ctx_list_outputs.
