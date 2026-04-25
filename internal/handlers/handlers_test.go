@@ -801,3 +801,63 @@ func TestGetFullHandler_FreshnessCritical(t *testing.T) {
 	assert.Equal(t, "critical", out.Freshness.StaleLevel)
 	assert.NotEmpty(t, out.Freshness.RefreshHint)
 }
+
+// ── Auto-refresh tests (Task 7.3) ─────────────────────────────────────────
+
+func TestGetFullHandler_AutoRefresh_Success(t *testing.T) {
+	st := &mockStore{}
+	now := time.Now()
+	_ = st.Save(context.Background(), &store.Output{
+		OutputID:    "refresh_out_001",
+		Command:     "[shell] echo refreshed",
+		FullOutput:  "old\n",
+		SizeBytes:   4,
+		LineCount:   1,
+		CreatedAt:   now.Add(-10 * time.Minute),
+		RefreshedAt: now.Add(-10 * time.Minute),
+		SourceKind:  "shell:echo",
+	})
+
+	sb := &mockSandbox{output: []byte("refreshed\n"), exitCode: 0}
+	fc := config.FreshnessConfig{
+		Enabled:              true,
+		DefaultMaxAgeSeconds: 60, // 1 min TTL → 10 min old triggers auto_refresh
+		Sources: map[string]config.FreshnessRule{
+			"shell:echo": {MaxAgeSeconds: 60, AutoRefresh: true},
+		},
+	}
+
+	h := handlers.NewGetFullHandler(st, "/proj").WithFreshness(sb, fc)
+	_, out, err := h.Handle(context.Background(), nil, handlers.GetFullInput{OutputID: "refresh_out_001"})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"refreshed"}, out.Lines)
+}
+
+func TestGetFullHandler_AutoRefresh_SandboxError_Fallback(t *testing.T) {
+	st := &mockStore{}
+	now := time.Now()
+	_ = st.Save(context.Background(), &store.Output{
+		OutputID:    "fallback_out_001",
+		Command:     "[shell] echo original",
+		FullOutput:  "original\n",
+		SizeBytes:   9,
+		LineCount:   1,
+		CreatedAt:   now.Add(-10 * time.Minute),
+		RefreshedAt: now.Add(-10 * time.Minute),
+		SourceKind:  "shell:echo",
+	})
+
+	sb := &mockSandbox{err: fmt.Errorf("sandbox unavailable")}
+	fc := config.FreshnessConfig{
+		Enabled:              true,
+		DefaultMaxAgeSeconds: 60,
+		Sources: map[string]config.FreshnessRule{
+			"shell:echo": {MaxAgeSeconds: 60, AutoRefresh: true},
+		},
+	}
+
+	h := handlers.NewGetFullHandler(st, "/proj").WithFreshness(sb, fc)
+	_, out, err := h.Handle(context.Background(), nil, handlers.GetFullInput{OutputID: "fallback_out_001"})
+	require.NoError(t, err) // fallback: no error, returns original
+	assert.Equal(t, []string{"original"}, out.Lines)
+}

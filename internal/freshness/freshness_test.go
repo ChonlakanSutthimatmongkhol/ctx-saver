@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/config"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/freshness"
 )
 
@@ -105,6 +106,81 @@ func TestNewFreshnessInfo(t *testing.T) {
 	}
 	if fi.RefreshHint != "" {
 		t.Errorf("RefreshHint should be empty for aging, got %q", fi.RefreshHint)
+	}
+}
+
+// ── Resolver tests (Task 7.3) ─────────────────────────────────────────────
+
+func TestResolve_Disabled(t *testing.T) {
+	cfg := config.FreshnessConfig{Enabled: false}
+	res := freshness.Resolve("shell:acli", time.Now().Add(-10*24*time.Hour), cfg)
+	if res.Action != "use_cache" {
+		t.Errorf("disabled: Action = %q, want use_cache", res.Action)
+	}
+}
+
+func TestResolve_Fresh(t *testing.T) {
+	cfg := config.FreshnessConfig{
+		Enabled:              true,
+		DefaultMaxAgeSeconds: 3600,
+	}
+	res := freshness.Resolve("shell:echo", time.Now().Add(-30*time.Minute), cfg)
+	if res.Action != "use_cache" {
+		t.Errorf("fresh: Action = %q, want use_cache", res.Action)
+	}
+}
+
+func TestResolve_AutoRefresh(t *testing.T) {
+	cfg := config.FreshnessConfig{
+		Enabled:              true,
+		DefaultMaxAgeSeconds: 3600,
+		Sources: map[string]config.FreshnessRule{
+			"shell:kubectl": {MaxAgeSeconds: 60, AutoRefresh: true},
+		},
+	}
+	res := freshness.Resolve("shell:kubectl", time.Now().Add(-5*time.Minute), cfg)
+	if res.Action != "auto_refresh" {
+		t.Errorf("auto_refresh: Action = %q, want auto_refresh", res.Action)
+	}
+}
+
+func TestResolve_StaleNoRefresh(t *testing.T) {
+	cfg := config.FreshnessConfig{
+		Enabled:              true,
+		DefaultMaxAgeSeconds: 3600,
+		Sources: map[string]config.FreshnessRule{
+			"shell:git": {MaxAgeSeconds: 120, AutoRefresh: false},
+		},
+	}
+	res := freshness.Resolve("shell:git", time.Now().Add(-10*time.Minute), cfg)
+	if res.Action != "use_cache" {
+		t.Errorf("stale no refresh: Action = %q, want use_cache", res.Action)
+	}
+}
+
+func TestResolve_NeverCache(t *testing.T) {
+	cfg := config.FreshnessConfig{
+		Enabled:              true,
+		DefaultMaxAgeSeconds: 3600,
+		Sources: map[string]config.FreshnessRule{
+			"shell:live": {MaxAgeSeconds: 3600, AutoRefresh: false, NeverCache: true},
+		},
+	}
+	res := freshness.Resolve("shell:live", time.Now().Add(-1*time.Second), cfg)
+	if res.Action != "auto_refresh" {
+		t.Errorf("never_cache: Action = %q, want auto_refresh", res.Action)
+	}
+}
+
+func TestResolve_Critical_AskUser(t *testing.T) {
+	cfg := config.FreshnessConfig{
+		Enabled:                     true,
+		DefaultMaxAgeSeconds:        3600,
+		UserConfirmThresholdSeconds: 604800, // 7 days
+	}
+	res := freshness.Resolve("shell:acli", time.Now().Add(-8*24*time.Hour), cfg)
+	if res.Action != "ask_user" {
+		t.Errorf("critical: Action = %q, want ask_user", res.Action)
 	}
 }
 
