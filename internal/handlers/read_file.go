@@ -13,6 +13,7 @@ import (
 
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/config"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/freshness"
+	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/handlers/signatures"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/sandbox"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/store"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/summary"
@@ -23,6 +24,7 @@ type ReadFileInput struct {
 	Path          string `json:"path"                      jsonschema:"path to the file to read (relative paths resolved from server working directory)"`
 	ProcessScript string `json:"process_script,omitempty"  jsonschema:"optional shell or python script that receives the file content via stdin (e.g. 'jq .endpoints')"`
 	Language      string `json:"language,omitempty"        jsonschema:"language for process_script: shell or python (default: shell)"`
+	Fields        string `json:"fields,omitempty"          jsonschema:"optional view filter: 'signatures' returns only function/type/const declarations with original line numbers. Omit for full content. Supported: go, python, dart (basic regex; complex generics, operator overloads, and multi-line signatures may be missed for dart — use process_script 'grep -nE ...' for complex Dart files)."`
 }
 
 // ReadFileOutput is the typed output for ctx_read_file.
@@ -176,9 +178,17 @@ func (h *ReadFileHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, in
 		}
 		stats.Lines = lineCount
 		recordToolCall(ctx, h.st, h.projectPath, "ctx_read_file", input.Path, string(rawOutput), "read: "+input.Path)
+		directContent := string(rawOutput)
+		if input.Fields == "signatures" {
+			filtered, ferr := applySignaturesFilter(rawOutput, absPath)
+			if ferr != nil {
+				return nil, ReadFileOutput{}, ferr
+			}
+			directContent = filtered
+		}
 		return nil, ReadFileOutput{
 			Stats:        stats,
-			DirectOutput: string(rawOutput),
+			DirectOutput: directContent,
 			Path:         absPath,
 		}, nil
 	}
@@ -221,6 +231,22 @@ func (h *ReadFileHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, in
 	statsLine := summary.FormatStats(sum.TotalLines, sum.TotalBytes, exitCode, durationMs)
 	outSummary := sum.Text + "\n" + statsLine
 	recordToolCall(ctx, h.st, h.projectPath, "ctx_read_file", input.Path, outSummary, "read: "+input.Path)
+
+	// Apply signatures filter AFTER saving full content to DB (view-only).
+	if input.Fields == "signatures" {
+		filtered, ferr := applySignaturesFilter(rawOutput, absPath)
+		if ferr != nil {
+			return nil, ReadFileOutput{}, ferr
+		}
+		return nil, ReadFileOutput{
+			OutputID:   outputID,
+			Summary:    filtered,
+			Stats:      stats,
+			SearchHint: fmt.Sprintf("Signatures view. Use ctx_get_full %q for full file content.", outputID),
+			Path:       absPath,
+		}, nil
+	}
+
 	return nil, ReadFileOutput{
 		OutputID:   outputID,
 		Summary:    outSummary,
@@ -228,4 +254,23 @@ func (h *ReadFileHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, in
 		SearchHint: fmt.Sprintf("Use ctx_search with output_id=%q to query this output", outputID),
 		Path:       absPath,
 	}, nil
+}
+
+// applySignaturesFilter extracts function/type/const signatures from rawOutput
+// using the language detected from absPath.
+// Returns an error if the file type is unsupported for fields=signatures.
+func applySignaturesFilter(rawOutput []byte, absPath string) (string, error) {
+	lang := signatures.DetectLanguage(absPath)
+	if lang == signatures.LangNone {
+		ext := filepath.Ext(absPath)
+		if ext == "" {
+			ext = "(no extension)"
+		}
+		return "", fmt.Errorf("fields=signatures unsupported for file type %s; omit --fields or use process_script", ext)
+	}
+	filtered, err := signatures.Extract(rawOutput, lang)
+	if err != nil {
+		return "", fmt.Errorf("fields=signatures: extracting from %s: %w", absPath, err)
+	}
+	return filtered, nil
 }

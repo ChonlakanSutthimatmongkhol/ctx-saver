@@ -166,3 +166,51 @@ func TestReadFile_FileDeletedBetweenReads_NoStaleReturn(t *testing.T) {
 	_, _, err = h.Handle(ctx, nil, handlers.ReadFileInput{Path: file})
 	require.Error(t, err, "deleted file must return an error, not cached content")
 }
+
+// ── T4.8: fields=signatures shares the same cache key as full read ───────────────
+
+func TestReadFile_FieldsSignatures_SharesCacheKey(t *testing.T) {
+	tmp := t.TempDir()
+	// Write a file large enough to exceed threshold (stored via output_id path).
+	code := "package foo\n\nfunc Bar() {}\nfunc Baz() {}\n"
+	file := filepath.Join(tmp, "foo.go")
+	require.NoError(t, os.WriteFile(file, []byte(code), 0644))
+
+	ms := &readFileMock{}
+	h := handlers.NewReadFileHandler(largeCfg(), &mockSandbox{}, ms, "/proj", tmp)
+	ctx := context.Background()
+
+	// First call with fields=signatures — stores full content in DB.
+	_, out1, err := h.Handle(ctx, nil, handlers.ReadFileInput{Path: file, Fields: "signatures"})
+	require.NoError(t, err)
+	require.NotEmpty(t, out1.OutputID, "fields=signatures must still produce output_id")
+
+	// The stored output must contain the full file, not just signatures.
+	require.Len(t, ms.saved, 1)
+	require.Contains(t, ms.saved[0].FullOutput, "func Bar()",
+		"DB must store full file content, not filtered signatures")
+
+	// Second call without fields=signatures — must return from cache (same key).
+	_, out2, err := h.Handle(ctx, nil, handlers.ReadFileInput{Path: file})
+	require.NoError(t, err)
+	require.Equal(t, out1.OutputID, out2.OutputID,
+		"full read after signatures read must hit same cache entry")
+	require.Len(t, ms.saved, 1, "only one DB entry should exist (shared cache key)")
+}
+
+// ── T4.9: unsupported file type returns clear error ──────────────────────────
+
+func TestReadFile_FieldsSignatures_UnsupportedType_ReturnsError(t *testing.T) {
+	tmp := t.TempDir()
+	file := filepath.Join(tmp, "data.txt")
+	require.NoError(t, os.WriteFile(file, []byte("hello world\n"), 0644))
+
+	ms := &readFileMock{}
+	h := handlers.NewReadFileHandler(defaultCfg(), &mockSandbox{}, ms, "/proj", tmp)
+	ctx := context.Background()
+
+	_, _, err := h.Handle(ctx, nil, handlers.ReadFileInput{Path: file, Fields: "signatures"})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), ".txt",
+		"error must mention the file extension")
+}

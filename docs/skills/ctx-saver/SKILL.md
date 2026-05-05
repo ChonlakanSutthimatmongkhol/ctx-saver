@@ -19,17 +19,19 @@ ctx-saver is an MCP server that stores large command outputs in SQLite and retur
 |-----------|------|
 | Run shell/python/go/node command | `ctx_execute` |
 | Read a large file (spec, log, SQL) | `ctx_read_file` |
+| Read only function/type signatures of a source file | `ctx_read_file` with `fields="signatures"` |
 | See document structure before searching | `ctx_outline` |
 | Extract a specific section by heading name | `ctx_get_section` |
 | Search in a previously stored output | `ctx_search` |
 | List all stored outputs for this project | `ctx_list_outputs` |
 | Get full output or specific line range | `ctx_get_full` |
 | Verify ctx-saver is saving context / check hook activity | `ctx_stats` |
+| Clear stale cache before switching context | `ctx_purge` |
 
 ## Core Decision Rule
 
-- Output **≤5KB** → returned directly, no storage
-- Output **>5KB** → stored in `.ctx-saver/outputs.db`, AI receives summary only
+- Output **≤32KB** → returned directly, no storage (v0.6.0+ default)
+- Output **>32KB** → stored in `.ctx-saver/outputs.db`, AI receives summary only
 
 ---
 

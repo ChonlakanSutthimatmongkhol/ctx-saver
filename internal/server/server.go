@@ -97,6 +97,13 @@ Optional processing:
   Example: process_script="jq '.endpoints | length'"
 • language: "shell" (default) or "python" for the process_script
 
+Optional view filter:
+• fields="signatures" — returns only function/type/const declarations with original
+  line numbers instead of full content. Reduces output 80–90% for code-heavy files.
+  Supported languages: go (full), python (~95%), dart (basic regex).
+  Dart limits: complex generics, operator overloads, and multi-line signatures may
+  be missed. Use process_script 'grep -nE ...' for complex Dart files.
+
 After calling:
 • Same retrieval tools work: ctx_search, ctx_get_full, ctx_get_section, ctx_outline`,
 	}, readFileH.Handle)

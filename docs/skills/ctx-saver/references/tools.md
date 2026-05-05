@@ -99,6 +99,7 @@ Read a file through the sandbox, storing the full content and returning a compac
 | `path` | string | Y | File path (absolute or relative to server working directory) |
 | `process_script` | string | N | Shell or Python script that receives file content via stdin |
 | `language` | string | N | Language for `process_script`: `shell` or `python` (default: `shell`) |
+| `fields` | string | N | View filter: `"signatures"` returns only function/type/const declarations with original line numbers. Supported: `go` (full), `python` (~95%), `dart` (basic regex). Omit for full content. |
 
 **Output** — same fields as `ctx_execute` plus:
 | Field | Description |
