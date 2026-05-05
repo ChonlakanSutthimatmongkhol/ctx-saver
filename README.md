@@ -245,17 +245,24 @@ Claude Code / VS Code Copilot
 
 Measured from real commands executed through `ctx_execute` in this repository.
 
-Benchmark snapshot (`2026-04-23`): `go test -race -v ./internal/summary/...` and `cat README.md`.
+Benchmark snapshot (`2026-05-06`). Assumption for token estimate: `1 token ≈ 4 bytes`.
 
-Assumption for token estimate: `1 token ≈ 4 bytes`.
+| Command | Format | Raw (bytes) | Summary (bytes) | Saving | Tokens saved |
+|---------|--------|-------------|-----------------|--------|--------------|
+| `go test -race -v ./...` (790 lines) | `go_test` ✦ | 39,313 | 115 | **99.7%** | ~9,800 |
+| `git log --oneline -500` | `git_log` ✦ | 8,701 | 155 | **98.2%** | ~2,135 |
+| jira 200 issues (JSON) | `json` ✦ | 87,938 | 320 | **99.6%** | ~21,905 |
+| `kubectl get pods` (100 pods) | `generic` | 6,153 | 1,850 | **69.9%** | ~1,076 |
+| `app.log` (2,000 lines) | `generic` | 176,998 | 1,500 | **99.2%** | ~43,875 |
+| `git diff HEAD~5` (398 lines) | `generic` | 21,795 | 750 | **96.6%** | ~5,261 |
+| `grep -rn 'func' ./...` (500 matches) | `generic` | 50,344 | 1,450 | **97.1%** | ~12,224 |
+| **Total** | | **391,242** | **6,140** | **98.4%** | **~96,276** |
 
-| Command | Raw output (bytes) | Returned summary (bytes) | Bytes saved | Estimated tokens saved |
-|---------|---------------------|--------------------------|-------------|------------------------|
-| `go test -race -v ./internal/summary/...` | 5,640 | 110 | 5,530 | ~1,383 |
-| `cat README.md` | 10,135 | 173 | 9,962 | ~2,490 |
-| **Total** | **15,775** | **283** | **15,492** | **~3,873** |
+✦ Smart-format summariser: extracts structured metadata instead of head/tail truncation.
 
-Overall reduction in this run: **98.21%** (from 15,775 bytes to 283 bytes).
+Overall reduction in this run: **98.4%** (from 391,242 bytes to 6,140 bytes).
+
+For a dry-run comparison (head-20 + tail-5 simulation), run `scripts/benchmark.sh`.
 
 ## Configuration
 
