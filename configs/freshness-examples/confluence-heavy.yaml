@@ -1,6 +1,17 @@
 # For repos where Confluence / spec fetches dominate the session.
 # Long TTLs because specs change infrequently; no auto-refresh to avoid
 # hammering the Confluence API on every retrieval.
+summary:
+  # Files/outputs smaller than this are returned inline (direct_output).
+  # Larger ones are stored with an output_id and summarized.
+  #
+  # Tuning guideline:
+  # - 32768 (default) — fits typical Go/Python files (300-500 lines)
+  # - 65536 (aggressive) — keeps medium build outputs inline; uses more
+  #   per-turn tokens but eliminates ctx_get_full round-trips
+  # - 5120 (legacy v0.5.x) — minimal inline; forces output_id flow early
+  auto_index_threshold_bytes: 32768
+
 freshness:
   enabled: true
   default_max_age_seconds: 86400       # 24 hours for general commands

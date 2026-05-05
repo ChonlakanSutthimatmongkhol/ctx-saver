@@ -254,7 +254,7 @@ storage:
 summary:
   head_lines: 20
   tail_lines: 5
-  auto_index_threshold_bytes: 5120   # 5 KB
+  auto_index_threshold_bytes: 32768  # 32 KB (v0.6.0+)
   smart_format: true                  # format-aware summariser (flutter_test | go_test | json | git_log | generic)
   enabled_formatters: []              # ว่าง = เปิดทั้งหมด; ระบุชื่อเพื่อจำกัด
 
@@ -283,6 +283,24 @@ freshness:
     shell:acli:    { max_age_seconds: 300, auto_refresh: true }
     shell:git:     { max_age_seconds: 120, auto_refresh: false }
     # ดู configs/freshness-examples/ สำหรับ preset เพิ่มเติม
+```
+
+## การปรับแต่งประสิทธิภาพ Token (Token efficiency tuning)
+
+`auto_index_threshold_bytes` กำหนดว่า output ขนาดเท่าไหร่ถึงจะ return inline (ตรงๆ)
+แทนที่จะเก็บด้วย `output_id`:
+
+| ค่า | ผล |
+|-----|-----|
+| `32768` (ค่าเริ่มต้น) | ไฟล์ Go/Python ทั่วไป (300–500 บรรทัด) return inline ไม่ต้องรอ round-trip |
+| `65536` | เก็บ build output ขนาดกลาง inline ได้; ใช้ token ต่อ turn มากขึ้น แต่เรียก tool น้อยลง |
+| `5120` | พฤติกรรมแบบ v0.5.x — บังคับใช้ `output_id` กับไฟล์ส่วนใหญ่ |
+
+ตั้งค่าใน `~/.config/ctx-saver/config.yaml`:
+
+```yaml
+summary:
+  auto_index_threshold_bytes: 32768  # ปรับตามต้องการ
 ```
 
 ## Hooks

@@ -108,7 +108,7 @@ func Default() *Config {
 		Summary: SummaryConfig{
 			HeadLines:               20,
 			TailLines:               5,
-			AutoIndexThresholdBytes: 5120,
+			AutoIndexThresholdBytes: 32768,
 			SmartFormat:             true,
 			EnabledFormatters:       nil, // nil = all enabled
 		},

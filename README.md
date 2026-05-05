@@ -255,7 +255,7 @@ storage:
 summary:
   head_lines: 20
   tail_lines: 5
-  auto_index_threshold_bytes: 5120   # 5 KB
+  auto_index_threshold_bytes: 32768  # 32 KB (v0.6.0+)
   smart_format: true                  # format-aware summariser (flutter_test | go_test | json | git_log | generic)
   enabled_formatters: []              # empty = all enabled; list names to restrict
 
@@ -284,6 +284,24 @@ freshness:
     shell:acli:    { max_age_seconds: 300, auto_refresh: true }
     shell:git:     { max_age_seconds: 120, auto_refresh: false }
     # see configs/freshness-examples/ for more presets
+```
+
+## Token efficiency tuning
+
+The `auto_index_threshold_bytes` setting controls when outputs are returned inline
+vs stored with an `output_id`:
+
+| Value  | Effect |
+|--------|--------|
+| `32768` (default) | Typical Go/Python source files (300–500 lines) return inline — no round-trip needed |
+| `65536` | Keeps medium build outputs inline; uses more per-turn tokens but fewer tool calls |
+| `5120` | Legacy v0.5.x behavior — forces `output_id` flow for most files |
+
+Configure in `~/.config/ctx-saver/config.yaml`:
+
+```yaml
+summary:
+  auto_index_threshold_bytes: 32768  # adjust to taste
 ```
 
 ## Hooks

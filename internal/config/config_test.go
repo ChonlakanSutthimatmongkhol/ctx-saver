@@ -19,7 +19,7 @@ func TestDefault_HasSaneValues(t *testing.T) {
 	assert.Equal(t, 50, cfg.Storage.MaxOutputSizeMB)
 	assert.Equal(t, 20, cfg.Summary.HeadLines)
 	assert.Equal(t, 5, cfg.Summary.TailLines)
-	assert.Equal(t, 5120, cfg.Summary.AutoIndexThresholdBytes)
+	assert.Equal(t, 32768, cfg.Summary.AutoIndexThresholdBytes)
 	assert.NotEmpty(t, cfg.DenyCommands)
 }
 

@@ -1,5 +1,16 @@
 # Development / debugging mode: freshness policy disabled.
 # Use when you want to suppress all auto-refresh and confirmation gates
 # while working on ctx-saver itself.
+summary:
+  # Files/outputs smaller than this are returned inline (direct_output).
+  # Larger ones are stored with an output_id and summarized.
+  #
+  # Tuning guideline:
+  # - 32768 (default) — fits typical Go/Python files (300-500 lines)
+  # - 65536 (aggressive) — keeps medium build outputs inline; uses more
+  #   per-turn tokens but eliminates ctx_get_full round-trips
+  # - 5120 (legacy v0.5.x) — minimal inline; forces output_id flow early
+  auto_index_threshold_bytes: 32768
+
 freshness:
   enabled: false
