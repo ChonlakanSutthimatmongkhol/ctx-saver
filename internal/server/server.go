@@ -16,7 +16,7 @@ import (
 
 const (
 	serverName    = "ctx-saver"
-	serverVersion = "0.6.0"
+	serverVersion = "0.6.1"
 )
 
 // New constructs a fully configured *mcp.Server with all ctx-saver tools registered.
@@ -38,15 +38,8 @@ func registerTools(srv *mcp.Server, cfg *config.Config, sb sandbox.Sandbox, st s
 		Name: "ctx_execute",
 		Description: `[PREFERRED for command execution] Run shell, python, go, or node code in a sandboxed subprocess.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 CRITICAL: Use this instead of runInTerminal / Shell / Bash / execute_in_terminal for ALL commands.
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Why this matters:
-• Native terminal tools inject FULL output (10–50 KB typical) directly into the context window.
-• After 3–5 such calls the context window fills up and the agent starts forgetting earlier turns.
-• Symptoms: forgotten requirements, half-implemented features, contradictory answers, re-asking the user.
-• ctx_execute sandboxes execution and returns a ~1–2 KB summary while preserving the full output for later retrieval.
+Why: native tools inject 10–50 KB output into context per call; ctx_execute stores it and returns ~2 KB summary — prevents context overflow and forgotten requirements.
 
 When to use (default choice):
 • Build / test / lint: flutter build, flutter test, go test, go build, npm run, cargo test
@@ -77,9 +70,7 @@ If unsure whether to use this — USE IT. Over-using ctx_execute is harmless; un
 		Name: "ctx_read_file",
 		Description: `[PREFERRED for reading files] Read a file through the sandbox, storing full content and returning a compact summary.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Use this INSTEAD of readFile / read_file when the file is likely large or structured.
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 When to use:
 • Files > 50 lines
@@ -175,7 +166,6 @@ Returns freshness.stale_level field — see ctx_session_init for usage policy.`,
 		Name: "ctx_session_init",
 		Description: `[CALL THIS FIRST in every new session] Initialize ctx-saver context and receive project rules.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Returns:
 • Project rules (how to use ctx-saver tools correctly)
 • Recent session activity (what was done before)

@@ -2,6 +2,16 @@
 
 All notable changes to ctx-saver will be documented in this file.
 
+## v0.6.1 — Tool description compression
+
+### Changed
+- Removed decorative banner separators (━━━) from `ctx_execute`, `ctx_read_file`,
+  and `ctx_session_init` descriptions (~120 tokens/turn saved).
+- Compressed `ctx_execute` "Why this matters" 4-bullet block to 1 line while
+  preserving behavioral reasoning (~55 tokens/turn saved).
+
+Total fixed overhead reduction: ~175 tokens/turn.
+
 ## v0.6.0 — Token reduction release
 
 ### Added
