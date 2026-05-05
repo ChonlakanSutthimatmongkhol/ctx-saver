@@ -504,7 +504,7 @@ func TestSearchHandler_SearchMode_MultiQuery_FallbackWins(t *testing.T) {
 	out := &store.Output{
 		OutputID: "out_mm_001", Command: "test", Intent: "",
 		FullOutput: "payment-service found\nother line",
-		SizeBytes: 30, LineCount: 2, CreatedAt: time.Now(), ProjectPath: "/proj",
+		SizeBytes:  30, LineCount: 2, CreatedAt: time.Now(), ProjectPath: "/proj",
 	}
 	require.NoError(t, realStore.Save(context.Background(), out))
 

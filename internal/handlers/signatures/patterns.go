@@ -21,8 +21,8 @@ var patternsByLang = map[Language][]*regexp.Regexp{
 var goPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`^package\s+\w+`),
 	regexp.MustCompile(`^import\s*\(`),
-	regexp.MustCompile(`^func\s+`),       // covers methods: func (r *X) Foo
-	regexp.MustCompile(`^type\s+\w+`),   // type declarations (struct, interface, alias, generics)
+	regexp.MustCompile(`^func\s+`),    // covers methods: func (r *X) Foo
+	regexp.MustCompile(`^type\s+\w+`), // type declarations (struct, interface, alias, generics)
 	regexp.MustCompile(`^var\s+`),
 	regexp.MustCompile(`^const\s+`),
 }

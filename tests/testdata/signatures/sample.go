@@ -1,3 +1,4 @@
+package server
 // Package server implements the MCP server for ctx-saver.
 // This is a sample fixture for signatures extraction tests.
 package server

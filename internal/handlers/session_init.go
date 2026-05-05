@@ -16,16 +16,16 @@ type SessionInitInput struct{}
 
 // SessionInitOutput is the typed output for ctx_session_init.
 type SessionInitOutput struct {
-	ProjectPath      string              `json:"project_path"`
-	ProjectRules     string              `json:"project_rules"`
-	RecentEvents     []RecentEventEntry  `json:"recent_events,omitempty"`
-	RecentDecisions  []DecisionDigest    `json:"recent_decisions,omitempty"`
-	CachedOutputs    CachedOutputSummary `json:"cached_outputs"`
-	ActiveConfig     ActiveConfigSummary `json:"active_config"`
+	ProjectPath      string                 `json:"project_path"`
+	ProjectRules     string                 `json:"project_rules"`
+	RecentEvents     []RecentEventEntry     `json:"recent_events,omitempty"`
+	RecentDecisions  []DecisionDigest       `json:"recent_decisions,omitempty"`
+	CachedOutputs    CachedOutputSummary    `json:"cached_outputs"`
+	ActiveConfig     ActiveConfigSummary    `json:"active_config"`
 	FreshnessPolicy  FreshnessPolicySummary `json:"freshness_policy"`
-	NextActionHint   string              `json:"next_action_hint,omitempty"`
-	ServerVersion    string              `json:"server_version"`
-	SessionStartTime time.Time           `json:"session_start_time"`
+	NextActionHint   string                 `json:"next_action_hint,omitempty"`
+	ServerVersion    string                 `json:"server_version"`
+	SessionStartTime time.Time              `json:"session_start_time"`
 }
 
 // FreshnessPolicySummary describes how to interpret stale_level values returned
@@ -33,10 +33,10 @@ type SessionInitOutput struct {
 // ctx_get_section). Full policy lives here; each tool description references this
 // field instead of repeating it.
 type FreshnessPolicySummary struct {
-	StaleLevels        []string          `json:"stale_levels"`
-	Actions            map[string]string `json:"actions"`
-	RefreshKeywordsTH  []string          `json:"refresh_keywords_th"`
-	RefreshKeywordsEN  []string          `json:"refresh_keywords_en"`
+	StaleLevels       []string          `json:"stale_levels"`
+	Actions           map[string]string `json:"actions"`
+	RefreshKeywordsTH []string          `json:"refresh_keywords_th"`
+	RefreshKeywordsEN []string          `json:"refresh_keywords_en"`
 }
 
 // DecisionDigest is a compact view of one decision for session_init injection.

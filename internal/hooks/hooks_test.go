@@ -308,8 +308,8 @@ func TestTruncate_UTF8(t *testing.T) {
 
 func TestIsNativeShellTool(t *testing.T) {
 	cases := []struct {
-		name    string
-		want    bool
+		name string
+		want bool
 	}{
 		{"runInTerminal", true},
 		{"Shell", true},

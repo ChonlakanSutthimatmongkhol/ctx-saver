@@ -1,6 +1,7 @@
+package signatures
+
 // Package signatures provides language detection and signature extraction
 // for source code files. It supports Go, Python, and Dart (basic regex).
-package signatures
 
 import (
 	"path/filepath"
