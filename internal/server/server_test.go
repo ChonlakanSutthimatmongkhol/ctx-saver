@@ -112,7 +112,7 @@ func TestToolDescriptions_NoRegression(t *testing.T) {
 	}
 }
 
-// ── Task 7.4: freshness vocabulary in retrieval tool descriptions ──────────
+// ── Task 7.4 / F1: freshness reference in retrieval tool descriptions ──────
 
 func TestToolDescriptions_FreshnessVocabulary(t *testing.T) {
 	tools := listTools(t)
@@ -133,10 +133,7 @@ func TestToolDescriptions_FreshnessVocabulary(t *testing.T) {
 		desc, ok := byName[name]
 		require.True(t, ok, "tool %q not registered", name)
 
-		assert.True(t, strings.Contains(desc, "freshness") || strings.Contains(desc, "stale"),
-			"tool %q description must contain 'freshness' or 'stale'", name)
-
-		assert.True(t, strings.Contains(desc, "ล่าสุด"),
-			"tool %q description must contain 'ล่าสุด' (Thai freshness heuristic keyword)", name)
+		assert.True(t, strings.Contains(desc, "ctx_session_init"),
+			"tool %q description must reference ctx_session_init for freshness policy", name)
 	}
 }

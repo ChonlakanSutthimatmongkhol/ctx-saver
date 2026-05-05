@@ -22,9 +22,21 @@ type SessionInitOutput struct {
 	RecentDecisions  []DecisionDigest    `json:"recent_decisions,omitempty"`
 	CachedOutputs    CachedOutputSummary `json:"cached_outputs"`
 	ActiveConfig     ActiveConfigSummary `json:"active_config"`
+	FreshnessPolicy  FreshnessPolicySummary `json:"freshness_policy"`
 	NextActionHint   string              `json:"next_action_hint,omitempty"`
 	ServerVersion    string              `json:"server_version"`
 	SessionStartTime time.Time           `json:"session_start_time"`
+}
+
+// FreshnessPolicySummary describes how to interpret stale_level values returned
+// by retrieval tools (ctx_search, ctx_list_outputs, ctx_get_full, ctx_outline,
+// ctx_get_section). Full policy lives here; each tool description references this
+// field instead of repeating it.
+type FreshnessPolicySummary struct {
+	StaleLevels        []string          `json:"stale_levels"`
+	Actions            map[string]string `json:"actions"`
+	RefreshKeywordsTH  []string          `json:"refresh_keywords_th"`
+	RefreshKeywordsEN  []string          `json:"refresh_keywords_en"`
 }
 
 // DecisionDigest is a compact view of one decision for session_init injection.
@@ -96,6 +108,17 @@ func (h *SessionInitHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest,
 			DedupEnabled:       h.cfg.Dedup.Enabled,
 			DedupWindowMinutes: h.cfg.Dedup.WindowMinutes,
 			SmartFormatEnabled: h.cfg.Summary.SmartFormat,
+		},
+		FreshnessPolicy: FreshnessPolicySummary{
+			StaleLevels: []string{"fresh", "aging", "stale", "critical"},
+			Actions: map[string]string{
+				"fresh":    "use as-is",
+				"aging":    "use as-is",
+				"stale":    "warn user; offer ctx_execute refresh",
+				"critical": "DO NOT use; require user_confirmation_required prompt",
+			},
+			RefreshKeywordsTH: []string{"ล่าสุด", "ปัจจุบัน"},
+			RefreshKeywordsEN: []string{"current", "latest", "now"},
 		},
 	}
 
