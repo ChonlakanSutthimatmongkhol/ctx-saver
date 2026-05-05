@@ -249,4 +249,23 @@ Use this when:
 
 Default scope is "7d" (last 7 days). Use "session" for current session only, "today" for today, "all" for everything.`,
 	}, listNotesH.Handle)
+
+	purgeH := handlers.NewPurgeHandler(st, projectPath)
+	mcp.AddTool(srv, &mcp.Tool{
+		Name: "ctx_purge",
+		Description: `[DESTRUCTIVE] Delete cached outputs and session events for this project.
+
+Use when:
+- Switching to a new feature/context that won't reuse current cache
+- Cache became stale or noisy (irrelevant entries hurting search relevance)
+- Pre-demo / pre-handover cleanup
+
+Default behavior: deletes cached outputs + session events. Decision notes
+(ctx_note entries) are PRESERVED.
+
+Set all=true to also delete decision notes (irreversible — notes contain
+long-term decisions worth keeping).
+
+REQUIRES confirm="yes" to execute (safety check).`,
+	}, purgeH.Handle)
 }

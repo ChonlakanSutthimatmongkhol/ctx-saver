@@ -141,6 +141,25 @@ func (m *mockStore) GetDecision(_ context.Context, id string) (*store.Decision, 
 	return nil, nil
 }
 
+func (m *mockStore) PurgeOutputs(_ context.Context, _ string) (int, error) {
+	n := len(m.saved)
+	m.saved = nil
+	return n, nil
+}
+
+func (m *mockStore) PurgeEvents(_ context.Context, _ string) (int, error) {
+	n := m.sessionEventCount
+	m.sessionEventCount = 0
+	return n, nil
+}
+
+func (m *mockStore) PurgeNotes(_ context.Context, _ string) (int, error) {
+	n := len(m.decisions)
+	m.decisions = nil
+	m.savedDecisions = 0
+	return n, nil
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────
 
 func defaultCfg() *config.Config {

@@ -99,6 +99,7 @@ func TestToolDescriptions_NoRegression(t *testing.T) {
 		"ctx_stats",
 		"ctx_get_section",
 		"ctx_session_init",
+		"ctx_purge",
 	}
 
 	byName := make(map[string]bool, len(tools))

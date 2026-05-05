@@ -140,6 +140,18 @@ type Store interface {
 	// GetDecision returns one decision by ID, or nil if not found.
 	GetDecision(ctx context.Context, decisionID string) (*Decision, error)
 
+	// PurgeOutputs deletes all cached outputs for projectPath.
+	// Returns the number of rows deleted.
+	PurgeOutputs(ctx context.Context, projectPath string) (int, error)
+
+	// PurgeEvents deletes all session events for projectPath.
+	// Returns the number of rows deleted.
+	PurgeEvents(ctx context.Context, projectPath string) (int, error)
+
+	// PurgeNotes deletes all decision notes for projectPath.
+	// Returns the number of rows deleted.
+	PurgeNotes(ctx context.Context, projectPath string) (int, error)
+
 	// Close releases database resources.
 	Close() error
 }

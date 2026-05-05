@@ -840,6 +840,78 @@ func (s *SQLiteStore) GetDecision(ctx context.Context, decisionID string) (*Deci
 	return &d, nil
 }
 
+// PurgeOutputs deletes all cached outputs (and their FTS index rows) for
+// projectPath. Returns the number of rows deleted from the outputs table.
+func (s *SQLiteStore) PurgeOutputs(ctx context.Context, projectPath string) (int, error) {
+	// Collect IDs first so we can remove FTS rows individually.
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT output_id FROM outputs WHERE project_path = ?`, projectPath)
+	if err != nil {
+		return 0, fmt.Errorf("purge outputs: listing ids for %s: %w", projectPath, err)
+	}
+	var ids []string
+	for rows.Next() {
+		var id string
+		if scanErr := rows.Scan(&id); scanErr != nil {
+			rows.Close()
+			return 0, fmt.Errorf("purge outputs: scanning id: %w", scanErr)
+		}
+		ids = append(ids, id)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, fmt.Errorf("purge outputs: iterating ids: %w", err)
+	}
+
+	// Delete FTS rows then main rows in a transaction.
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, fmt.Errorf("purge outputs: begin transaction: %w", err)
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	for _, id := range ids {
+		if _, err := tx.ExecContext(ctx,
+			`DELETE FROM outputs_fts WHERE output_id = ?`, id); err != nil {
+			return 0, fmt.Errorf("purge outputs: removing fts rows for %s: %w", id, err)
+		}
+	}
+	res, err := tx.ExecContext(ctx,
+		`DELETE FROM outputs WHERE project_path = ?`, projectPath)
+	if err != nil {
+		return 0, fmt.Errorf("purge outputs: deleting outputs for %s: %w", projectPath, err)
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("purge outputs: commit: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	return int(n), nil
+}
+
+// PurgeEvents deletes all session events for projectPath.
+// Returns the number of rows deleted.
+func (s *SQLiteStore) PurgeEvents(ctx context.Context, projectPath string) (int, error) {
+	res, err := s.db.ExecContext(ctx,
+		`DELETE FROM session_events WHERE project_path = ?`, projectPath)
+	if err != nil {
+		return 0, fmt.Errorf("purge events: deleting events for %s: %w", projectPath, err)
+	}
+	n, _ := res.RowsAffected()
+	return int(n), nil
+}
+
+// PurgeNotes deletes all decision notes for projectPath.
+// Returns the number of rows deleted.
+func (s *SQLiteStore) PurgeNotes(ctx context.Context, projectPath string) (int, error) {
+	res, err := s.db.ExecContext(ctx,
+		`DELETE FROM decisions WHERE project_path = ?`, projectPath)
+	if err != nil {
+		return 0, fmt.Errorf("purge notes: deleting notes for %s: %w", projectPath, err)
+	}
+	n, _ := res.RowsAffected()
+	return int(n), nil
+}
+
 // Close releases the database connection.
 func (s *SQLiteStore) Close() error {
 	return s.db.Close()

@@ -276,7 +276,9 @@ func (m *memStore) GetDecision(_ context.Context, _ string) (*store.Decision, er
 	return nil, nil
 }
 
-// ── Additional unit tests ──────────────────────────────────────────────────
+func (m *memStore) PurgeOutputs(_ context.Context, _ string) (int, error) { return 0, nil }
+func (m *memStore) PurgeEvents(_ context.Context, _ string) (int, error)  { return 0, nil }
+func (m *memStore) PurgeNotes(_ context.Context, _ string) (int, error)   { return 0, nil }
 
 func TestExtractOutputText_ContentBlocks(t *testing.T) {
 	input := []any{
