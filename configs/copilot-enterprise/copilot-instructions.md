@@ -86,6 +86,11 @@ Examples NOT to log:
 
 These notes survive `/compact` and are surfaced at next `ctx_session_init`. Use `ctx_list_notes` to review past decisions.
 
+### Rule 7: Additional tools (v0.6.0+)
+
+- **`ctx_purge`** — use to clear stale/noisy cache when switching feature context or before a demo handover. Always requires `confirm="yes"`. Decision notes are preserved by default; pass `all=true` to delete them too. **Irreversible — confirm with user first.**
+- **`ctx_read_file` with `fields="signatures"`** — use to get only function/type/const declarations (with original line numbers) without reading the full file. Supported: Go (full), Python (~95%), Dart (basic regex). Omit for full content.
+
 ## Why these rules exist
 
 Sessions without these tools hit **80% context window usage within 10–15 turns** in this repo
