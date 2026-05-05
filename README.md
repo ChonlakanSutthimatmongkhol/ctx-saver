@@ -116,7 +116,7 @@ See [Hook behaviour](#hooks) below for what each hook does.
 |------|---------|
 | `ctx_session_init` ⭐ | **Call first in every new session.** Returns project rules, recent events, cached output inventory, and config. Copilot Enterprise must call this explicitly; Claude Code uses the SessionStart hook automatically. |
 | `ctx_execute` | Run shell/python/go/node; large output stored + summarised (format-aware). Shows `duplicate_hint` if the same command ran within the last 30 min. |
-| `ctx_read_file` | Read a file, optionally piped through a processing script |
+| `ctx_read_file` | Read a file, optionally piped through a processing script. Use `fields="signatures"` to return only function/type/const declarations with original line numbers (Go, Python, Dart). |
 | `ctx_outline` | Extract headings / table-of-contents from a stored output. Includes `freshness` field. |
 | `ctx_get_section` | Extract a specific section by heading text (use after `ctx_outline` to navigate long docs). Includes `freshness` + `user_confirmation_required` fields. |
 | `ctx_search` | FTS5 full-text search across stored outputs (supports `context_lines`). Per-match `freshness` field. Special characters auto-escaped; LIKE fallback on parse errors. |
@@ -125,6 +125,24 @@ See [Hook behaviour](#hooks) below for what each hook does.
 | `ctx_stats` | Report storage, hook statistics, and adherence score (scope: `session\|today\|7d\|all`) |
 | `ctx_note` | Save an architectural decision or rationale that survives `/compact` and future sessions. |
 | `ctx_list_notes` | List recent decisions saved via `ctx_note`, filterable by scope/tag/importance. |
+| `ctx_purge` | **[DESTRUCTIVE]** Delete all cached outputs and session events for this project. Requires `confirm="yes"`. Decision notes are preserved by default; pass `all=true` to delete them too. |
+
+### Cache Purge (v0.6.0)
+
+Use `ctx_purge` to clear cached data when switching feature context, the cache is noisy/stale, or before a demo handover.
+
+```
+ctx_purge(confirm="yes")          # deletes outputs + events; keeps notes
+ctx_purge(confirm="yes", all=true) # also deletes ctx_note entries
+```
+
+| Target | Default | `all=true` |
+|--------|---------|------------|
+| Cached outputs | ✅ deleted | ✅ deleted |
+| Session events | ✅ deleted | ✅ deleted |
+| Decision notes | ❌ kept | ✅ deleted |
+
+> ⚠️ Irreversible. Deleted outputs cannot be recovered.
 
 ### Decision Log (v0.5.1)
 

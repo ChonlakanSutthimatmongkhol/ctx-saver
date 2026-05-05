@@ -178,7 +178,7 @@ Project override จะแทนที่ (ไม่ merge) entry ใน built-i
 |------|-------------|
 | `ctx_session_init` ⭐ | **เรียกก่อนในทุก session ใหม่** คืน project rules, event ล่าสุด, inventory ของ output ที่เก็บไว้, และ config Copilot Enterprise ต้องเรียกเองตรงๆ; Claude Code ใช้ SessionStart hook อัตโนมัติ |
 | `ctx_execute` | รันคำสั่ง shell/python/go/node; output ขนาดใหญ่จะถูกเก็บและสรุปย่อ แสดง `duplicate_hint` ถ้ารันคำสั่งเดิมภายใน 30 นาทีที่ผ่านมา |
-| `ctx_read_file` | อ่านไฟล์ โดยเลือกส่งผ่าน processing script ได้ |
+| `ctx_read_file` | อ่านไฟล์ โดยเลือกส่งผ่าน processing script ได้ ใช้ `fields="signatures"` เพื่อดึงเฉพาะ function/type/const declaration พร้อมหมายเลขบรรทัดต้นฉบับ (รองรับ Go, Python, Dart) |
 | `ctx_outline` | ดึง headings / สารบัญจาก stored output รวม `freshness` field |
 | `ctx_get_section` | ดึง section เฉพาะด้วย heading text (ใช้หลัง `ctx_outline`) รวม `freshness` + `user_confirmation_required` |
 | `ctx_search` | FTS5 full-text search ในทุก output ที่เก็บไว้ รวม `freshness` ต่อผลลัพธ์ อักขระพิเศษ escape อัตโนมัติ; fallback ไป LIKE ขยาย query ด้วย synonym อัตโนมัติ |
@@ -187,6 +187,24 @@ Project override จะแทนที่ (ไม่ merge) entry ใน built-i
 | `ctx_stats` | รายงานสถิติการเก็บข้อมูลและ hook activity (scope: `session\|today\|7d\|all`) |
 | `ctx_note` | บันทึก architectural decision หรือเหตุผลที่ควรรอดจาก `/compact` และ session ถัดไป |
 | `ctx_list_notes` | แสดง decision ล่าสุดที่บันทึกไว้ด้วย `ctx_note` กรองได้ด้วย scope/tag/importance |
+| `ctx_purge` | **[DESTRUCTIVE]** ลบ cached output และ session event ทั้งหมดของ project ต้องส่ง `confirm="yes"` Decision notes จะถูกเก็บไว้ตามค่าเริ่มต้น ส่ง `all=true` เพื่อลบด้วย |
+
+## Cache Purge (v0.6.0)
+
+ใช้ `ctx_purge` เพื่อล้าง cache เมื่อสลับ feature context, cache เก่าหรือรกรุงรัง, หรือก่อนส่งมอบงาน demo
+
+```
+ctx_purge(confirm="yes")           # ลบ output + event; เก็บ notes ไว้
+ctx_purge(confirm="yes", all=true)  # ลบ ctx_note entries ด้วย
+```
+
+| เป้าหมาย | ค่าเริ่มต้น | `all=true` |
+|----------|------------|------------|
+| Cached outputs | ✅ ลบ | ✅ ลบ |
+| Session events | ✅ ลบ | ✅ ลบ |
+| Decision notes | ❌ เก็บไว้ | ✅ ลบ |
+
+> ⚠️ ย้อนกลับไม่ได้ output ที่ลบแล้วกู้คืนไม่ได้
 
 ## Decision Log (v0.5.1)
 
