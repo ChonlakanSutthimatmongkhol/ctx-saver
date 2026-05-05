@@ -4,8 +4,9 @@ description: >
   Workflow for running commands and reading files through ctx-saver MCP tools to reduce context window usage.
   Use when: running tests, builds, or any command with large output; reading large files (OpenAPI spec, logs, SQL migrations);
   fetching Confluence/Jira pages; searching previously stored outputs; retrieving full output by ID or line range;
-  extracting a specific section from a long document by heading name.
-  Tools: ctx_execute, ctx_read_file, ctx_search, ctx_list_outputs, ctx_get_full, ctx_outline, ctx_get_section, ctx_stats.
+  extracting a specific section from a long document by heading name; viewing only function/type signatures of a source file;
+  purging stale cache before switching context; saving or querying architectural decision notes.
+  Tools: ctx_execute, ctx_read_file, ctx_search, ctx_list_outputs, ctx_get_full, ctx_outline, ctx_get_section, ctx_stats, ctx_purge, ctx_note, ctx_list_notes.
 argument-hint: 'Describe the command or file you want to run/read'
 ---
 

@@ -1,7 +1,7 @@
 # ctx-saver MCP Tools Reference
 
 ctx-saver is an MCP server that reduces AI context window usage.
-When a command output exceeds **5KB**, it is stored in SQLite and only a summary is returned.
+When a command output exceeds **32KB** (v0.6.0+ default), it is stored in SQLite and only a summary is returned.
 Full content is always retrievable on demand.
 
 ---
@@ -28,6 +28,10 @@ Full content is always retrievable on demand.
 | `active_config.dedup_enabled` | Whether dedup is active |
 | `active_config.dedup_window_minutes` | Dedup window |
 | `active_config.smart_format_enabled` | Whether format-aware summarizer is on |
+| `freshness_policy.stale_levels` | Ordered list: `fresh`, `aging`, `stale`, `critical` |
+| `freshness_policy.actions` | Action per stale_level (use-as-is / warn / require confirmation) |
+| `freshness_policy.refresh_keywords_th` | Thai words that signal user wants fresh data (`ล่าสุด`, `ปัจจุบัน`) |
+| `freshness_policy.refresh_keywords_en` | English words: `current`, `latest`, `now` |
 | `next_action_hint` | Recommended next step |
 | `server_version` | ctx-saver binary version |
 | `session_start_time` | Server start time (UTC) |
@@ -388,6 +392,86 @@ Key metrics:
 ## Output ID Format
 
 `out_YYYYMMDD_<8hex>` — e.g. `out_20260422_76b3de65`
+
+---
+
+## ctx_purge
+
+**[DESTRUCTIVE]** Delete cached outputs and session events for this project.
+
+Use when switching feature context, cache is noisy/stale, or before a demo handover.
+
+**REQUIRES `confirm="yes"`** — safety check against accidental invocation.
+
+**Input**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `confirm` | string | **Y** | Must be `"yes"` to execute |
+| `all` | bool | N | If `true`, also deletes decision notes (`ctx_note` entries). Default `false` — notes are preserved. |
+
+**Output**
+| Field | Description |
+|-------|-------------|
+| `outputs_deleted` | Number of cached outputs deleted |
+| `events_deleted` | Number of session events deleted |
+| `notes_deleted` | Number of decision notes deleted (0 unless `all=true`) |
+| `notes_kept` | Number of notes preserved (when `all=false`) |
+| `message` | Human-readable summary |
+
+**Default vs `all=true`**
+
+| Target | Default | `all=true` |
+|--------|---------|------------|
+| Cached outputs | ✅ deleted | ✅ deleted |
+| Session events | ✅ deleted | ✅ deleted |
+| Decision notes | ❌ kept | ✅ deleted |
+
+**Example**
+```json
+{ "confirm": "yes" }
+```
+
+---
+
+## ctx_note
+
+**[DECISION LOG]** Save an architectural decision or constraint that should survive `/compact` and future sessions.
+
+Use for: non-obvious design choices, discovered constraints, confirmed tradeoffs.
+Do NOT use for: routine progress, tool output summaries, obvious code facts.
+
+Notes are scoped per-project, persist across sessions, and are surfaced in `ctx_session_init`.
+
+**Input**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `text` | string | **Y** | Note content (1–2 sentences ideal, max 2000 chars) |
+| `tags` | string[] | N | Topic tags e.g. `["arch", "perf", "security"]` |
+| `importance` | string | N | `"normal"` (default) or `"high"` |
+| `links_to` | string[] | N | Output IDs this decision relates to |
+
+**Output**
+| Field | Description |
+|-------|-------------|
+| `decision_id` | Unique ID for this note |
+| `message` | Confirmation message |
+
+---
+
+## ctx_list_notes
+
+**[DECISION LOG]** List saved decisions/notes for this project.
+
+**Input**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `scope` | string | N | `session`, `today`, `7d` (default), or `all` |
+| `tags` | string[] | N | Filter by tags (OR match) |
+| `min_importance` | string | N | `"normal"` (default) or `"high"` |
+
+**Output:** list of decision entries, each with `decision_id`, `text`, `tags`, `importance`, `ago`.
+
+---
 
 ## Storage Location
 
