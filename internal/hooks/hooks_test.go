@@ -280,6 +280,19 @@ func (m *memStore) PurgeOutputs(_ context.Context, _ string) (int, error) { retu
 func (m *memStore) PurgeEvents(_ context.Context, _ string) (int, error)  { return 0, nil }
 func (m *memStore) PurgeNotes(_ context.Context, _ string) (int, error)   { return 0, nil }
 
+func (m *memStore) LastEventTime(_ context.Context, _ string) (time.Time, error) {
+	return time.Time{}, nil
+}
+func (m *memStore) LastKnowledgeRefresh(_ context.Context, _ string) (time.Time, error) {
+	return time.Time{}, nil
+}
+func (m *memStore) SessionCountSince(_ context.Context, _ string, _ time.Time) (int, error) {
+	return 0, nil
+}
+func (m *memStore) KnowledgeStats(_ context.Context, _ string) (*store.KnowledgeData, error) {
+	return &store.KnowledgeData{}, nil
+}
+
 func TestExtractOutputText_ContentBlocks(t *testing.T) {
 	input := []any{
 		map[string]any{"text": "hello"},

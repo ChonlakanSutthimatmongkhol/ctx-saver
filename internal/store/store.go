@@ -154,4 +154,18 @@ type Store interface {
 
 	// Close releases database resources.
 	Close() error
+
+	// LastEventTime returns the most recent session_event timestamp for the project.
+	// Returns zero time if no events exist.
+	LastEventTime(ctx context.Context, projectPath string) (time.Time, error)
+
+	// LastKnowledgeRefresh returns the mtime of .ctx-saver/project-knowledge.md.
+	// Returns zero time if the file does not exist (never refreshed).
+	LastKnowledgeRefresh(ctx context.Context, projectPath string) (time.Time, error)
+
+	// SessionCountSince returns the number of distinct sessions recorded after since.
+	SessionCountSince(ctx context.Context, projectPath string, since time.Time) (int, error)
+
+	// KnowledgeStats returns aggregated data for knowledge generation.
+	KnowledgeStats(ctx context.Context, projectPath string) (*KnowledgeData, error)
 }

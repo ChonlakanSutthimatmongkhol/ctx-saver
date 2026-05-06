@@ -912,6 +912,211 @@ func (s *SQLiteStore) PurgeNotes(ctx context.Context, projectPath string) (int, 
 	return int(n), nil
 }
 
+// LastEventTime implements Store.
+func (s *SQLiteStore) LastEventTime(ctx context.Context, projectPath string) (time.Time, error) {
+	var ts sql.NullInt64
+	err := s.db.QueryRowContext(ctx,
+		`SELECT MAX(created_at) FROM session_events WHERE project_path = ?`,
+		projectPath,
+	).Scan(&ts)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("last event time: %w", err)
+	}
+	if !ts.Valid {
+		return time.Time{}, nil
+	}
+	return time.Unix(ts.Int64, 0), nil
+}
+
+// LastKnowledgeRefresh implements Store by stat-ing project-knowledge.md.
+// No database query — avoids any schema change.
+func (s *SQLiteStore) LastKnowledgeRefresh(_ context.Context, projectPath string) (time.Time, error) {
+	knowledgePath := filepath.Join(projectPath, ".ctx-saver", "project-knowledge.md")
+	info, err := os.Stat(knowledgePath)
+	if os.IsNotExist(err) {
+		return time.Time{}, nil
+	}
+	if err != nil {
+		return time.Time{}, fmt.Errorf("stat project-knowledge.md: %w", err)
+	}
+	return info.ModTime(), nil
+}
+
+// SessionCountSince implements Store.
+func (s *SQLiteStore) SessionCountSince(ctx context.Context, projectPath string, since time.Time) (int, error) {
+	var count int
+	err := s.db.QueryRowContext(ctx,
+		`SELECT COUNT(DISTINCT session_id) FROM session_events
+		 WHERE project_path = ? AND created_at > ?`,
+		projectPath,
+		since.Unix(),
+	).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("session count since: %w", err)
+	}
+	return count, nil
+}
+
+// KnowledgeStats implements Store.
+func (s *SQLiteStore) KnowledgeStats(ctx context.Context, projectPath string) (*KnowledgeData, error) {
+	data := &KnowledgeData{}
+
+	// Aggregate counts.
+	if err := s.db.QueryRowContext(ctx,
+		`SELECT COUNT(DISTINCT session_id) FROM session_events WHERE project_path = ?`,
+		projectPath,
+	).Scan(&data.SessionCount); err != nil {
+		return nil, fmt.Errorf("knowledge stats: session count: %w", err)
+	}
+	if err := s.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM outputs WHERE project_path = ?`,
+		projectPath,
+	).Scan(&data.OutputCount); err != nil {
+		return nil, fmt.Errorf("knowledge stats: output count: %w", err)
+	}
+	if err := s.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM decisions WHERE project_path = ?`,
+		projectPath,
+	).Scan(&data.DecisionCount); err != nil {
+		return nil, fmt.Errorf("knowledge stats: decision count: %w", err)
+	}
+
+	// Top files — read operations with a non-empty source_hash.
+	fileRows, err := s.db.QueryContext(ctx, `
+		SELECT command, COUNT(*) as reads, MAX(source_hash) as last_hash, MAX(refreshed_at) as last_refreshed
+		FROM outputs
+		WHERE project_path = ?
+		  AND command LIKE '%read%'
+		  AND source_hash != ''
+		GROUP BY command
+		ORDER BY reads DESC
+		LIMIT 10`,
+		projectPath,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("knowledge stats: top files: %w", err)
+	}
+	defer fileRows.Close()
+	for fileRows.Next() {
+		var (
+			f            FileFreq
+			lastHash     string
+			lastRefreshed int64
+		)
+		if err := fileRows.Scan(&f.Path, &f.ReadCount, &lastHash, &lastRefreshed); err != nil {
+			return nil, fmt.Errorf("knowledge stats: scanning file row: %w", err)
+		}
+		f.LastChanged = time.Unix(lastRefreshed, 0)
+		f.HashStable = time.Since(f.LastChanged) > 3*24*time.Hour
+		data.TopFiles = append(data.TopFiles, f)
+	}
+	if err := fileRows.Err(); err != nil {
+		return nil, fmt.Errorf("knowledge stats: iterating file rows: %w", err)
+	}
+
+	// Top commands — non-read operations.
+	cmdRows, err := s.db.QueryContext(ctx, `
+		SELECT command, COUNT(*) as runs, AVG(size_bytes) as avg_bytes
+		FROM outputs
+		WHERE project_path = ?
+		  AND command NOT LIKE '%read%'
+		GROUP BY command
+		ORDER BY runs DESC
+		LIMIT 10`,
+		projectPath,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("knowledge stats: top commands: %w", err)
+	}
+	defer cmdRows.Close()
+	for cmdRows.Next() {
+		var c CommandFreq
+		if err := cmdRows.Scan(&c.Command, &c.RunCount, &c.AvgBytes); err != nil {
+			return nil, fmt.Errorf("knowledge stats: scanning command row: %w", err)
+		}
+		data.TopCommands = append(data.TopCommands, c)
+	}
+	if err := cmdRows.Err(); err != nil {
+		return nil, fmt.Errorf("knowledge stats: iterating command rows: %w", err)
+	}
+
+	// Command sequences — co-occurrence within 5-minute window.
+	seqRows, err := s.db.QueryContext(ctx, `
+		WITH pairs AS (
+			SELECT a.command AS first_cmd, b.command AS second_cmd, COUNT(*) AS co_count
+			FROM outputs a
+			JOIN outputs b ON a.project_path = b.project_path
+			               AND b.created_at > a.created_at
+			               AND b.created_at < a.created_at + 300
+			WHERE a.project_path = ?
+			GROUP BY first_cmd, second_cmd
+			HAVING co_count >= 3
+		),
+		totals AS (
+			SELECT command, COUNT(*) AS total
+			FROM outputs
+			WHERE project_path = ?
+			GROUP BY command
+		)
+		SELECT p.first_cmd, p.second_cmd,
+		       CAST(p.co_count * 100.0 / t.total AS REAL) AS pct
+		FROM pairs p
+		JOIN totals t ON t.command = p.first_cmd
+		ORDER BY p.co_count DESC
+		LIMIT 5`,
+		projectPath, projectPath,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("knowledge stats: sequences: %w", err)
+	}
+	defer seqRows.Close()
+	for seqRows.Next() {
+		var seq CmdSequence
+		if err := seqRows.Scan(&seq.First, &seq.Second, &seq.Percent); err != nil {
+			return nil, fmt.Errorf("knowledge stats: scanning sequence row: %w", err)
+		}
+		data.Sequences = append(data.Sequences, seq)
+	}
+	if err := seqRows.Err(); err != nil {
+		return nil, fmt.Errorf("knowledge stats: iterating sequence rows: %w", err)
+	}
+
+	// High-importance decisions.
+	decRows, err := s.db.QueryContext(ctx, `
+		SELECT text, tags, created_at
+		FROM decisions
+		WHERE project_path = ?
+		  AND importance = 'high'
+		ORDER BY created_at DESC
+		LIMIT 10`,
+		projectPath,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("knowledge stats: decisions: %w", err)
+	}
+	defer decRows.Close()
+	for decRows.Next() {
+		var (
+			d         DecisionOut
+			tagsCSV   string
+			createdAt int64
+		)
+		if err := decRows.Scan(&d.Text, &tagsCSV, &createdAt); err != nil {
+			return nil, fmt.Errorf("knowledge stats: scanning decision row: %w", err)
+		}
+		if tagsCSV != "" {
+			d.Tags = strings.Split(tagsCSV, ",")
+		}
+		d.CreatedAt = time.Unix(createdAt, 0)
+		data.KeyDecisions = append(data.KeyDecisions, d)
+	}
+	if err := decRows.Err(); err != nil {
+		return nil, fmt.Errorf("knowledge stats: iterating decision rows: %w", err)
+	}
+
+	return data, nil
+}
+
 // Close releases the database connection.
 func (s *SQLiteStore) Close() error {
 	return s.db.Close()
