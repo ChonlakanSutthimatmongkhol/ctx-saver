@@ -2,4 +2,4 @@
 // All components (MCP server, knowledge renderer, CLI) must import from here.
 package version
 
-const Version = "0.7.5"
+const Version = "0.7.6"
