@@ -10,5 +10,10 @@ coverage.out
 # macOS
 .DS_Store
 
-# Planning docs
+# Planning docs (all spec/plan/hotfix files at repo root)
 PHASE*.md
+*_PLAN.md
+*_SPEC*.md
+TEST_PLAN.md
+HOTFIX_SPEC*.md
+FIX_SPEC*.md
