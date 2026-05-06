@@ -3,6 +3,8 @@ package handlers
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -24,6 +26,7 @@ type SessionInitOutput struct {
 	ActiveConfig     ActiveConfigSummary    `json:"active_config"`
 	FreshnessPolicy  FreshnessPolicySummary `json:"freshness_policy"`
 	NextActionHint   string                 `json:"next_action_hint,omitempty"`
+	ProjectKnowledge string                 `json:"project_knowledge,omitempty"`
 	ServerVersion    string                 `json:"server_version"`
 	SessionStartTime time.Time              `json:"session_start_time"`
 }
@@ -196,6 +199,16 @@ func (h *SessionInitHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest,
 	}
 	if len(out.RecentDecisions) > 0 {
 		out.NextActionHint += fmt.Sprintf(" You have %d recent architectural decisions logged — review them to understand prior reasoning.", len(out.RecentDecisions))
+	}
+
+	// Inject project-knowledge.md if present (capped at 8 KB to keep response lean).
+	knowledgePath := filepath.Join(h.projectPath, ".ctx-saver", "project-knowledge.md")
+	if raw, rerr := os.ReadFile(knowledgePath); rerr == nil {
+		const maxKnowledgeBytes = 8 * 1024
+		if len(raw) > maxKnowledgeBytes {
+			raw = append(raw[:maxKnowledgeBytes], []byte("\n…(truncated)")...)
+		}
+		out.ProjectKnowledge = string(raw)
 	}
 
 	recordToolCall(ctx, h.st, h.projectPath, "ctx_session_init", "", "", "session_init")
