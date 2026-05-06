@@ -32,10 +32,11 @@ func NewReadOnlySQLiteStore(dataDir, projectPath string) (*SQLiteStore, error) {
 		return nil, fmt.Errorf("database not found at %s (run ctx-saver server first): %w", dbFile, err)
 	}
 
-	// file: URI with mode=ro — opens read-only, no PRAGMAs that require writing.
-	// WAL and foreign_keys are already set by the MCP server; we don't need to
-	// re-set them on a read-only connection (and doing so would require write access).
-	dsn := "file://" + dbFile + "?mode=ro"
+	// file: URI with mode=ro + immutable=1 — opens read-only without acquiring
+	// any OS-level file lock (no fcntl/flock). SQLite assumes the file won't
+	// change while open. This prevents the process from entering kernel
+	// uninterruptible sleep (UE state) when another process holds the write lock.
+	dsn := "file://" + dbFile + "?mode=ro&immutable=1"
 	roDB, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("opening read-only database %s: %w", dbFile, err)

@@ -56,6 +56,13 @@ func main() {
 func run() error {
 	args := os.Args[1:]
 
+	// ── Version flag: ctx-saver --version / -v ────────────────────────────────
+	// Must be handled before any DB access to avoid flock UE state.
+	if len(args) >= 1 && (args[0] == "--version" || args[0] == "-v" || args[0] == "version") {
+		fmt.Println("ctx-saver 0.7.4")
+		return nil
+	}
+
 	// ── Hook subcommand: ctx-saver hook <event> ────────────────────────────────
 	// Hooks are lightweight — they open the store, run, and exit.
 	// They do NOT start the full MCP server.
