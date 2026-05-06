@@ -21,7 +21,32 @@ type SQLiteStore struct {
 	roDB *sql.DB // read-only connection — for analytics/background queries
 }
 
-// NewSQLiteStore opens (or creates) the SQLite database for the given project path
+// NewReadOnlySQLiteStore opens an existing database in read-only mode.
+// It skips migrations (DB must already exist at the correct schema version).
+// This is safe to call while another process holds a write connection because
+// SQLite WAL read-only connections never block on writers.
+// Returns an error if the database file does not exist.
+func NewReadOnlySQLiteStore(dataDir, projectPath string) (*SQLiteStore, error) {
+	dbFile := dbPath(dataDir, projectPath)
+	if _, err := os.Stat(dbFile); err != nil {
+		return nil, fmt.Errorf("database not found at %s (run ctx-saver server first): %w", dbFile, err)
+	}
+
+	// file: URI with mode=ro — opens read-only, no PRAGMAs that require writing.
+	// WAL and foreign_keys are already set by the MCP server; we don't need to
+	// re-set them on a read-only connection (and doing so would require write access).
+	dsn := "file://" + dbFile + "?mode=ro"
+	roDB, err := sql.Open("sqlite", dsn)
+	if err != nil {
+		return nil, fmt.Errorf("opening read-only database %s: %w", dbFile, err)
+	}
+	roDB.SetMaxOpenConns(4)
+	roDB.SetMaxIdleConns(2)
+
+	// Return a store with db == roDB so all paths work; callers must not write.
+	return &SQLiteStore{db: roDB, roDB: roDB}, nil
+}
+
 // inside dataDir, runs pending migrations, and cleans up old outputs.
 func NewSQLiteStore(dataDir, projectPath string) (*SQLiteStore, error) {
 	if err := os.MkdirAll(dataDir, 0700); err != nil {
@@ -31,7 +56,9 @@ func NewSQLiteStore(dataDir, projectPath string) (*SQLiteStore, error) {
 	dbFile := dbPath(dataDir, projectPath)
 
 	// Open with WAL mode for better concurrent read performance.
-	db, err := sql.Open("sqlite", dbFile+"?_journal_mode=WAL&_foreign_keys=on&_busy_timeout=5000")
+	// Note: modernc.org/sqlite ignores _busy_timeout in the DSN.
+	// We set it via PRAGMA after the first connection is established.
+	db, err := sql.Open("sqlite", dbFile+"?_journal_mode=WAL&_foreign_keys=on")
 	if err != nil {
 		return nil, fmt.Errorf("opening database %s: %w", dbFile, err)
 	}
@@ -39,17 +66,25 @@ func NewSQLiteStore(dataDir, projectPath string) (*SQLiteStore, error) {
 	// Single writer to avoid SQLITE_BUSY on concurrent MCP calls.
 	db.SetMaxOpenConns(1)
 
+	// Set busy_timeout via PRAGMA so modernc.org/sqlite actually honours it.
+	if _, err := db.Exec(`PRAGMA busy_timeout = 5000`); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("setting busy_timeout: %w", err)
+	}
+
 	// Read-only connection for background analytics queries (KnowledgeStats).
-	// WAL mode allows multiple concurrent readers without blocking writers.
-	// Note: mode=ro requires file: URI prefix in modernc.org/sqlite — omit it
-	// here and rely on not calling any writes on this pool by convention.
-	roDB, err := sql.Open("sqlite", dbFile+"?_journal_mode=WAL&_foreign_keys=on&_busy_timeout=5000")
+	roDB, err := sql.Open("sqlite", dbFile+"?_journal_mode=WAL&_foreign_keys=on")
 	if err != nil {
 		db.Close()
 		return nil, fmt.Errorf("opening read-only database %s: %w", dbFile, err)
 	}
-	roDB.SetMaxOpenConns(4) // multiple concurrent readers safe in WAL
+	roDB.SetMaxOpenConns(4)
 	roDB.SetMaxIdleConns(2)
+	if _, err := roDB.Exec(`PRAGMA busy_timeout = 5000`); err != nil {
+		roDB.Close()
+		db.Close()
+		return nil, fmt.Errorf("setting roDB busy_timeout: %w", err)
+	}
 
 	if err := runMigrations(db); err != nil {
 		db.Close()
@@ -1063,24 +1098,28 @@ func (s *SQLiteStore) KnowledgeStats(ctx context.Context, projectPath string) (*
 	}
 
 	// Command sequences — co-occurrence within 5-minute window.
-	// Restricted to the last 30 days to keep the self-join fast on large tables.
+	// Use a pre-filtered CTE (recent, max 200 rows) so the self-join is at most
+	// 200×200 = 40 000 comparisons regardless of total table size.
 	seqRows, err := s.roDB.QueryContext(ctx, `
-		WITH pairs AS (
+		WITH recent AS (
+			SELECT command, created_at
+			FROM outputs
+			WHERE project_path = ?
+			  AND created_at > strftime('%s', 'now') - 7*24*3600
+			ORDER BY created_at DESC
+			LIMIT 200
+		),
+		pairs AS (
 			SELECT a.command AS first_cmd, b.command AS second_cmd, COUNT(*) AS co_count
-			FROM outputs a
-			JOIN outputs b ON a.project_path = b.project_path
-			               AND b.created_at > a.created_at
-			               AND b.created_at < a.created_at + 300
-			WHERE a.project_path = ?
-			  AND a.created_at > strftime('%s', 'now') - 30*24*3600
+			FROM recent a
+			JOIN recent b ON b.created_at > a.created_at
+			             AND b.created_at < a.created_at + 300
 			GROUP BY first_cmd, second_cmd
-			HAVING co_count >= 3
+			HAVING co_count >= 2
 		),
 		totals AS (
 			SELECT command, COUNT(*) AS total
-			FROM outputs
-			WHERE project_path = ?
-			  AND created_at > strftime('%s', 'now') - 30*24*3600
+			FROM recent
 			GROUP BY command
 		)
 		SELECT p.first_cmd, p.second_cmd,
@@ -1089,7 +1128,7 @@ func (s *SQLiteStore) KnowledgeStats(ctx context.Context, projectPath string) (*
 		JOIN totals t ON t.command = p.first_cmd
 		ORDER BY p.co_count DESC
 		LIMIT 5`,
-		projectPath, projectPath,
+		projectPath,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("knowledge stats: sequences: %w", err)

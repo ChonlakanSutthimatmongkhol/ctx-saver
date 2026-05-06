@@ -51,14 +51,27 @@ func runKnowledge(args []string) error {
 		cfg.Knowledge.MinSessions = *minSessions
 	}
 
-	st, err := store.NewSQLiteStore(cfg.Storage.DataDir, projectPath)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Hard exit timer: if the DB is locked by stuck processes (e.g. UE-state
+	// zombie procs holding kernel flock), NewReadOnlySQLiteStore can block in
+	// uninterruptible kernel sleep. time.AfterFunc runs on a separate goroutine
+	// so it fires even when the main goroutine is stuck in a kernel syscall.
+	exitTimer := time.AfterFunc(10*time.Second, func() {
+		os.Stderr.WriteString("ctx-saver knowledge: timed out (DB locked by another process)\n")
+		os.Exit(2)
+	})
+	defer exitTimer.Stop()
+
+	// Open a read-only connection — skips migrations and never blocks on
+	// write locks held by a running MCP server process.
+	st, err := store.NewReadOnlySQLiteStore(cfg.Storage.DataDir, projectPath)
 	if err != nil {
 		return fmt.Errorf("knowledge: opening store: %w", err)
 	}
 	defer st.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
+	exitTimer.Stop() // DB opened — cancel the hard exit timer
 
 	switch action {
 	case "refresh":
