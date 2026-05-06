@@ -2,6 +2,7 @@
 package server
 
 import (
+	"context"
 	"log/slog"
 	"time"
 
@@ -9,6 +10,7 @@ import (
 
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/config"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/handlers"
+	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/knowledge"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/sandbox"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/search"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/store"
@@ -29,6 +31,55 @@ func New(cfg *config.Config, sb sandbox.Sandbox, st store.Store, projectPath, wo
 
 	registerTools(srv, cfg, sb, st, projectPath, workdir, serverStart)
 	return srv
+}
+
+// idleCheckInterval is the polling frequency for RunIdleKnowledgeRefresh.
+// Overridden in tests to speed up the tick.
+var idleCheckInterval = 5 * time.Minute
+
+// RunIdleKnowledgeRefresh polls every 5 minutes and auto-refreshes
+// project-knowledge.md when the project has been idle for cfg.Knowledge.IdleMinutes
+// AND at least cfg.Knowledge.MinSessions new sessions have been recorded since
+// the last refresh. Runs until ctx is cancelled.
+//
+// Works on both Claude Code and Copilot because it reads from session_events
+// in the database rather than from Claude Code hooks.
+func RunIdleKnowledgeRefresh(ctx context.Context, st store.Store, projectPath string, cfg *config.Config) {
+	ticker := time.NewTicker(idleCheckInterval)
+	defer ticker.Stop()
+
+	idleThreshold := time.Duration(cfg.Knowledge.IdleMinutes) * time.Minute
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			lastEvent, err := st.LastEventTime(ctx, projectPath)
+			if err != nil || lastEvent.IsZero() {
+				continue
+			}
+
+			idle := time.Since(lastEvent)
+			if idle < idleThreshold {
+				continue
+			}
+
+			lastRefresh, _ := st.LastKnowledgeRefresh(ctx, projectPath)
+			newSessions, _ := st.SessionCountSince(ctx, projectPath, lastRefresh)
+			if newSessions < cfg.Knowledge.MinSessions {
+				continue
+			}
+
+			if err := knowledge.Refresh(ctx, st, projectPath, cfg); err != nil {
+				slog.Warn("idle knowledge refresh failed", "error", err)
+			} else {
+				slog.Info("idle knowledge refresh completed",
+					"idle_minutes", int(idle.Minutes()),
+					"new_sessions", newSessions)
+			}
+		}
+	}
 }
 
 // registerTools binds all MCP tool handlers to the server.

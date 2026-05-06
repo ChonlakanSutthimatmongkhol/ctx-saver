@@ -173,6 +173,11 @@ func runServer() error {
 	// ── Auto-cleanup background goroutine ──────────────────────────────────────
 	go runPeriodicCleanup(ctx, st, projectPath, cfg.Storage.RetentionDays)
 
+	// ── Idle knowledge refresh goroutine (disabled when idle_minutes = 0) ─────
+	if cfg.Knowledge.IdleMinutes > 0 {
+		go server.RunIdleKnowledgeRefresh(ctx, st, projectPath, cfg)
+	}
+
 	// ── Sandbox ────────────────────────────────────────────────────────────────
 	sb := sandbox.NewSubprocess(cfg.DenyCommands)
 
