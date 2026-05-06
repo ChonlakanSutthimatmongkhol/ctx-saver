@@ -372,6 +372,57 @@ ctx-saver init copilot
 ctx-saver init copilot-instructions
 ```
 
+## Project Knowledge
+
+The longer you use ctx-saver with a project, the more it learns about it.
+After 3+ sessions, ctx-saver can generate a `.ctx-saver/project-knowledge.md`
+file containing:
+
+- **Most-read files** — with cache stability (hash unchanged or frequently changing)
+- **Most-run commands** — with average output size
+- **Common sequences** — command pairs that tend to run together
+- **High-importance decisions** — notes tagged with `importance=high`
+- **Session patterns** — session and output counts
+
+This file is referenced from `CLAUDE.md` / `copilot-instructions.md` so every
+AI session starts with project context at zero extra token cost per turn.
+
+### Generating knowledge
+
+```bash
+ctx-saver knowledge refresh          # generate/update project-knowledge.md
+ctx-saver knowledge show             # print to stdout (no file write)
+ctx-saver knowledge reset            # delete project-knowledge.md
+ctx-saver knowledge refresh --quiet  # suppress output (for cron)
+```
+
+### Cron setup (recommended)
+
+```bash
+# macOS/Linux — refresh every weeknight at 23:00
+crontab -e
+# Add:
+0 23 * * 1-5 cd /path/to/project && ctx-saver knowledge refresh --quiet
+
+# View server log
+tail -f ~/.local/share/ctx-saver/server.log
+```
+
+**Idle detection** runs automatically while the MCP server is active: after
+`knowledge.idle_minutes` (default 30) of inactivity, knowledge is refreshed
+in the background — no cron needed during active sessions.
+
+### Configuration
+
+```yaml
+knowledge:
+  min_sessions: 3        # sessions required before first generation
+  idle_minutes: 30       # 0 = disable idle detection
+  top_files_limit: 10
+  top_commands_limit: 10
+  decisions_limit: 10
+```
+
 ## Build
 
 ```bash

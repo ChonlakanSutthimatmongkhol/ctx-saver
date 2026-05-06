@@ -2,6 +2,25 @@
 
 All notable changes to ctx-saver will be documented in this file.
 
+## v0.7.0 — Materialized Project Knowledge
+
+### Added
+- `ctx-saver knowledge refresh/show/reset` CLI subcommand
+- `.ctx-saver/project-knowledge.md` — auto-generated project context file
+  containing most-read files, most-run commands, command sequences, and
+  high-importance decisions
+- Idle detection: MCP server auto-refreshes knowledge after 30 min of
+  inactivity (configurable via `knowledge.idle_minutes`; set to `0` to disable)
+- `ctx-saver init` now auto-injects a knowledge reference line into
+  `CLAUDE.md` and `copilot-instructions.md` (idempotent)
+- `knowledge` config section in `.ctx-saver.yaml` with `min_sessions`,
+  `idle_minutes`, `top_files_limit`, `top_commands_limit`, `decisions_limit`
+
+### Result
+AI sessions start with learned project context — no extra tokens per turn,
+no manual maintenance. Works on both Claude Code and Copilot Enterprise
+because idle detection reads from `session_events` DB, not Claude Code hooks.
+
 ## v0.6.2 — Tool consolidation for Copilot Enterprise compatibility
 
 ### Why

@@ -18,7 +18,7 @@ import (
 
 const (
 	serverName    = "ctx-saver"
-	serverVersion = "0.6.2"
+	serverVersion = "0.7.0"
 )
 
 // New constructs a fully configured *mcp.Server with all ctx-saver tools registered.

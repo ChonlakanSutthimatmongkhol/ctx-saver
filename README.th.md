@@ -366,6 +366,52 @@ ctx-saver init copilot                # ลง MCP server ใน .vscode/mcp.jso
 ctx-saver init copilot-instructions   # ลง Copilot rules ใน .github/
 ```
 
+## Project Knowledge (ความรู้เกี่ยวกับ Project)
+
+ยิ่งใช้ ctx-saver กับ project นานขึ้น → AI รู้จัก project ดีขึ้น
+หลังจาก 3+ sessions, ctx-saver สร้างไฟล์ `.ctx-saver/project-knowledge.md` ที่มี:
+
+- **ไฟล์ที่อ่านบ่อย** — พร้อม cache stability (hash เปลี่ยนบ่อยหรือไม่)
+- **คำสั่งที่รันบ่อย** — พร้อม average output size
+- **ลำดับคำสั่งที่พบบ่อย** — คู่คำสั่งที่มักรันต่อกัน
+- **การตัดสินใจสำคัญ** — notes ที่ tag `importance=high`
+- **รูปแบบการทำงาน** — session และ output counts
+
+ไฟล์นี้ถูก reference จาก `CLAUDE.md` / `copilot-instructions.md` ทำให้ทุก session
+ได้ context โดยไม่เพิ่ม token cost
+
+### การสร้าง knowledge
+
+```bash
+ctx-saver knowledge refresh          # สร้าง/อัปเดต project-knowledge.md
+ctx-saver knowledge show             # แสดงผลที่ stdout (ไม่เขียนไฟล์)
+ctx-saver knowledge reset            # ลบ project-knowledge.md
+ctx-saver knowledge refresh --quiet  # ไม่แสดง output (สำหรับ cron)
+```
+
+### ตั้ง Cron (แนะนำ)
+
+```bash
+# macOS/Linux — refresh ทุกคืนวันทำงาน 23:00
+crontab -e
+# เพิ่ม:
+0 23 * * 1-5 cd /path/to/project && ctx-saver knowledge refresh --quiet
+```
+
+**Idle detection** ทำงานอัตโนมัติขณะ MCP server เปิดอยู่: หลังจาก idle
+`knowledge.idle_minutes` (default 30 นาที) จะ refresh ใน background โดยอัตโนมัติ
+
+### การตั้งค่า
+
+```yaml
+knowledge:
+  min_sessions: 3        # จำนวน sessions ขั้นต่ำก่อนสร้างไฟล์
+  idle_minutes: 30       # 0 = ปิด idle detection
+  top_files_limit: 10
+  top_commands_limit: 10
+  decisions_limit: 10
+```
+
 ## Build
 
 ```bash
