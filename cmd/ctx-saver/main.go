@@ -10,6 +10,9 @@
 //	ctx-saver init claude                     — install hooks into ~/.claude/settings.json
 //	ctx-saver init copilot                    — install MCP server into .vscode/mcp.json
 //	ctx-saver init copilot-instructions       — install .github/copilot-instructions.md
+//	ctx-saver knowledge refresh               — generate/update project-knowledge.md
+//	ctx-saver knowledge show                  — print current knowledge to stdout
+//	ctx-saver knowledge reset                 — delete project-knowledge.md
 //
 // The server communicates over stdin/stdout using the MCP protocol (stdio transport).
 // All log output goes to the configured log file (default: ~/.local/share/ctx-saver/server.log)
@@ -67,6 +70,11 @@ func run() error {
 	// One-shot setup that writes config files; does NOT start the MCP server.
 	if len(args) >= 1 && args[0] == "init" {
 		return runInit(args[1:])
+	}
+
+	// ── Knowledge subcommand: ctx-saver knowledge <action> ────────────────────
+	if len(args) >= 1 && args[0] == "knowledge" {
+		return runKnowledge(args[1:])
 	}
 
 	// ── MCP server mode ────────────────────────────────────────────────────────
