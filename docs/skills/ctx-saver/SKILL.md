@@ -6,7 +6,7 @@ description: >
   fetching Confluence/Jira pages; searching previously stored outputs; retrieving full output by ID or line range;
   extracting a specific section from a long document by heading name; viewing only function/type signatures of a source file;
   purging stale cache before switching context; saving or querying architectural decision notes.
-  Tools: ctx_execute, ctx_read_file, ctx_search, ctx_list_outputs, ctx_get_full, ctx_outline, ctx_get_section, ctx_stats, ctx_purge, ctx_note, ctx_list_notes.
+  Tools: ctx_execute, ctx_read_file, ctx_search, ctx_get_full, ctx_outline, ctx_get_section, ctx_stats, ctx_purge, ctx_note.
 argument-hint: 'Describe the command or file you want to run/read'
 ---
 
@@ -24,7 +24,7 @@ ctx-saver is an MCP server that stores large command outputs in SQLite and retur
 | See document structure before searching | `ctx_outline` |
 | Extract a specific section by heading name | `ctx_get_section` |
 | Search in a previously stored output | `ctx_search` |
-| List all stored outputs for this project | `ctx_list_outputs` |
+| List all stored outputs for this project | `ctx_stats` with `view="outputs"` |
 | Get full output or specific line range | `ctx_get_full` |
 | Verify ctx-saver is saving context / check hook activity | `ctx_stats` |
 | Clear stale cache before switching context | `ctx_purge` |

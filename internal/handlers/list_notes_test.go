@@ -18,8 +18,8 @@ func TestListNotesHandler_DefaultScope(t *testing.T) {
 			{DecisionID: "dec_1", ProjectPath: "/proj", Text: "first", Importance: "normal", CreatedAt: time.Now()},
 		},
 	}
-	h := handlers.NewListNotesHandler(st, "/proj")
-	_, out, err := h.Handle(context.Background(), nil, handlers.ListNotesInput{})
+	h := handlers.NewNoteHandler(st, "/proj")
+	_, out, err := h.Handle(context.Background(), nil, handlers.NoteInput{Action: "list"})
 	require.NoError(t, err)
 	assert.Equal(t, "7d", out.Scope)
 	assert.Equal(t, 1, out.Count)
@@ -28,9 +28,9 @@ func TestListNotesHandler_DefaultScope(t *testing.T) {
 
 func TestListNotesHandler_LimitClamping(t *testing.T) {
 	st := &mockStore{}
-	h := handlers.NewListNotesHandler(st, "/proj")
+	h := handlers.NewNoteHandler(st, "/proj")
 	// limit > 100 should be clamped — no error, just returns empty
-	_, out, err := h.Handle(context.Background(), nil, handlers.ListNotesInput{Limit: 999})
+	_, out, err := h.Handle(context.Background(), nil, handlers.NoteInput{Action: "list", Limit: 999})
 	require.NoError(t, err)
 	assert.Equal(t, 0, out.Count)
 }
@@ -47,8 +47,8 @@ func TestListNotesHandler_AgoHuman(t *testing.T) {
 			},
 		},
 	}
-	h := handlers.NewListNotesHandler(st, "/proj")
-	_, out, err := h.Handle(context.Background(), nil, handlers.ListNotesInput{})
+	h := handlers.NewNoteHandler(st, "/proj")
+	_, out, err := h.Handle(context.Background(), nil, handlers.NoteInput{Action: "list"})
 	require.NoError(t, err)
 	require.Len(t, out.Decisions, 1)
 	assert.Equal(t, "5m", out.Decisions[0].AgoHuman)
@@ -57,8 +57,8 @@ func TestListNotesHandler_AgoHuman(t *testing.T) {
 
 func TestListNotesHandler_RecordsSessionEvent(t *testing.T) {
 	st := &mockStore{}
-	h := handlers.NewListNotesHandler(st, "/proj")
-	_, _, err := h.Handle(context.Background(), nil, handlers.ListNotesInput{})
+	h := handlers.NewNoteHandler(st, "/proj")
+	_, _, err := h.Handle(context.Background(), nil, handlers.NoteInput{Action: "list"})
 	require.NoError(t, err)
 	assert.Equal(t, 1, st.sessionEventCount)
 }

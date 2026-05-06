@@ -592,11 +592,11 @@ func loadTestSynonyms(t *testing.T, yamlContent string) (*search.SynonymTable, e
 	return search.Load(dir)
 }
 
-// ── ListHandler tests ─────────────────────────────────────────────────────
+// ── ctx_stats view="outputs" tests (formerly ListHandler) ────────────────
 
 func TestListHandler_EmptyStore_ReturnsEmptyList(t *testing.T) {
-	h := handlers.NewListHandler(&mockStore{}, "/proj")
-	_, out, err := h.Handle(context.Background(), nil, handlers.ListInput{})
+	h := handlers.NewStatsHandler(statsCfg(), &mockStore{}, "/proj", time.Now())
+	_, out, err := h.Handle(context.Background(), nil, handlers.StatsInput{View: "outputs"})
 	require.NoError(t, err)
 	assert.Empty(t, out.Outputs)
 }
@@ -609,8 +609,8 @@ func TestListHandler_ReturnsEntries(t *testing.T) {
 			{OutputID: "out_2", Command: "make build", CreatedAt: now, SizeBytes: 512, LineCount: 10},
 		},
 	}
-	h := handlers.NewListHandler(st, "/proj")
-	_, out, err := h.Handle(context.Background(), nil, handlers.ListInput{Limit: 10})
+	h := handlers.NewStatsHandler(statsCfg(), st, "/proj", time.Now())
+	_, out, err := h.Handle(context.Background(), nil, handlers.StatsInput{View: "outputs", Limit: 10})
 	require.NoError(t, err)
 	require.Len(t, out.Outputs, 2)
 	assert.Equal(t, "out_1", out.Outputs[0].OutputID)
@@ -620,8 +620,8 @@ func TestListHandler_ReturnsEntries(t *testing.T) {
 
 func TestListHandler_StoreError_ReturnsError(t *testing.T) {
 	st := &mockStore{listErr: fmt.Errorf("db locked")}
-	h := handlers.NewListHandler(st, "/proj")
-	_, _, err := h.Handle(context.Background(), nil, handlers.ListInput{})
+	h := handlers.NewStatsHandler(statsCfg(), st, "/proj", time.Now())
+	_, _, err := h.Handle(context.Background(), nil, handlers.StatsInput{View: "outputs"})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "db locked")
 }

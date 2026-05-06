@@ -35,7 +35,7 @@ ctx-saver is available as an MCP tool — you must use it instead of native tool
 ### Rule 3: Use cached outputs before re-running
 
 Before running an expensive command (build / test / spec fetch), check the cache:
-1. `ctx_list_outputs` — see what is already stored for this project
+1. `ctx_stats(view="outputs")` — see what is already stored for this project
 2. `ctx_search` — keyword search across stored outputs
 3. `ctx_get_section` — extract a named section (use `ctx_outline` first to discover heading names)
 4. `ctx_get_full` — retrieve a line range as a last resort
@@ -53,7 +53,7 @@ Skipping this leads to re-running commands that already have cached results.
 
 ### Rule 5: Respect cache freshness before acting on retrieved data
 
-Every retrieval response (`ctx_get_full`, `ctx_get_section`, `ctx_search`, `ctx_list_outputs`, `ctx_outline`) includes a `freshness` field with `stale_level`:
+Every retrieval response (`ctx_get_full`, `ctx_get_section`, `ctx_search`, `ctx_stats(view=outputs)`, `ctx_outline`) includes a `freshness` field with `stale_level`:
 
 | stale_level | Age | What to do |
 |---|---|---|
@@ -84,7 +84,7 @@ Examples NOT to log:
 - "Starting task 3" (routine progress)
 - "Read file foo.go" (already in session_events)
 
-These notes survive `/compact` and are surfaced at next `ctx_session_init`. Use `ctx_list_notes` to review past decisions.
+These notes survive `/compact` and are surfaced at next `ctx_session_init`. Use `ctx_note(action="list")` to review past decisions.
 
 ### Rule 7: Additional tools (v0.6.0+)
 

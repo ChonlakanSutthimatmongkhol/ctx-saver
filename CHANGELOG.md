@@ -2,6 +2,28 @@
 
 All notable changes to ctx-saver will be documented in this file.
 
+## v0.6.2 — Tool consolidation for Copilot Enterprise compatibility
+
+### Why
+Copilot Enterprise enforces a 10-tool cap per MCP server. ctx-saver v0.6.1 had
+12 tools; the last two registered (`ctx_list_notes`, `ctx_purge`) were silently
+deferred and unreachable from Copilot sessions.
+
+### Changed
+- `ctx_note` now handles both save and list operations via `action` parameter
+  (`action="save"` default when `text` is provided; `action="list"` default when `text` is empty).
+  Default behavior preserved for existing callers.
+- `ctx_stats` now handles both stats summary and outputs listing via `view` parameter
+  (`view="stats"` default; `view="outputs"` lists cached outputs).
+  Default behavior preserved for existing callers.
+
+### Removed (breaking)
+- `ctx_list_notes` — use `ctx_note` with `action="list"` instead
+- `ctx_list_outputs` — use `ctx_stats` with `view="outputs"` instead
+
+### Result
+Tool count: 12 → 10. All features now callable on Copilot Enterprise.
+
 ## v0.6.1 — Tool description compression
 
 ### Changed

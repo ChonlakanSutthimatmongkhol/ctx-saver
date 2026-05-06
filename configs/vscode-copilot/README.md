@@ -44,5 +44,5 @@ You should see `ctx-saver` with status `running` and 5 tools listed.
 | `ctx_execute` | Run shell/python/go/node code; large output is stored + summarised |
 | `ctx_read_file` | Read a file (optionally through a processing script) |
 | `ctx_search` | Full-text search across stored outputs |
-| `ctx_list_outputs` | List all stored outputs for this project |
+| `ctx_stats` (view="outputs") | List all stored outputs for this project |
 | `ctx_get_full` | Retrieve complete output or a line range |

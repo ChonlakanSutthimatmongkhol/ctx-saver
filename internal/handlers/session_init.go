@@ -29,7 +29,7 @@ type SessionInitOutput struct {
 }
 
 // FreshnessPolicySummary describes how to interpret stale_level values returned
-// by retrieval tools (ctx_search, ctx_list_outputs, ctx_get_full, ctx_outline,
+// by retrieval tools (ctx_search, ctx_stats view=outputs, ctx_get_full, ctx_outline,
 // ctx_get_section). Full policy lives here; each tool description references this
 // field instead of repeating it.
 type FreshnessPolicySummary struct {
@@ -188,9 +188,9 @@ func (h *SessionInitHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest,
 	// Choose a next-action hint.
 	switch {
 	case len(out.RecentEvents) > 0:
-		out.NextActionHint = "Recent session activity found. Check ctx_list_outputs to reuse cached results, or ctx_stats to verify adherence_score."
+		out.NextActionHint = "Recent session activity found. Check ctx_stats(view=outputs) to reuse cached results, or ctx_stats to verify adherence_score."
 	case out.CachedOutputs.TotalOutputs > 0:
-		out.NextActionHint = "Cached outputs exist but no recent activity. Use ctx_list_outputs to explore what is stored."
+		out.NextActionHint = "Cached outputs exist but no recent activity. Use ctx_stats(view=outputs) to explore what is stored."
 	default:
 		out.NextActionHint = "Fresh project. Use ctx_execute for your first command to seed the cache."
 	}
@@ -219,7 +219,7 @@ func truncateStr(s string, max int) string {
 const sessionRulesText = `━━━ ctx-saver SESSION RULES ━━━
 1. Commands (build/test/git/kubectl/curl/etc.) → ctx_execute, NOT runInTerminal/Shell/Bash
 2. Files > 50 lines → ctx_read_file, NOT readFile
-3. Before re-running: check ctx_list_outputs / ctx_search / ctx_get_section for cached results
+3. Before re-running: check ctx_stats(view=outputs) / ctx_search / ctx_get_section for cached results
 4. Verify every ~20 turns: ctx_stats → saving_percent and adherence_score should be > 80%
 5. Dangerous commands (rm -rf, curl|bash, eval) are blocked by PreToolUse hook
 Exception: pwd / whoami / echo / date may use native terminal.

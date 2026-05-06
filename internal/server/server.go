@@ -16,7 +16,7 @@ import (
 
 const (
 	serverName    = "ctx-saver"
-	serverVersion = "0.6.1"
+	serverVersion = "0.6.2"
 )
 
 // New constructs a fully configured *mcp.Server with all ctx-saver tools registered.
@@ -55,7 +55,7 @@ When native terminal is acceptable:
 After calling this tool:
 • A summary is returned plus an output_id.
 • To see more detail: ctx_search (keyword) or ctx_get_full (line range) or ctx_get_section (heading).
-• To see what is already cached: ctx_list_outputs.
+• To see what is already cached: ctx_stats(view="outputs").
 
 Configuration:
 • language: "shell" (default), "python", "go", "node"
@@ -118,22 +118,10 @@ Falls back to LIKE if FTS5 is unavailable; search_mode field in response indicat
 Use this when you need keyword matches across stored outputs.
 Use ctx_get_section when you already know the heading name.
 Use ctx_outline first to discover heading names before writing keyword queries.
-Use ctx_list_outputs to see all available output IDs.
+Use ctx_stats(view="outputs") to see all available output IDs.
 
 Returns freshness.stale_level field — see ctx_session_init for usage policy.`,
 	}, searchH.Handle)
-
-	listH := handlers.NewListHandler(st, projectPath)
-	mcp.AddTool(srv, &mcp.Tool{
-		Name: "ctx_list_outputs",
-		Description: `[CHECK BEFORE RE-RUNNING COMMANDS] List all outputs stored for this project, newest first.
-
-Call this before running an expensive command (build, test, spec fetch) to check whether a cached result already exists.
-Each entry shows: output_id, command, size_bytes, line_count, created_at.
-Use the output_id with ctx_get_full, ctx_search, ctx_outline, or ctx_get_section to retrieve content without re-executing.
-
-Returns freshness.stale_level field — see ctx_session_init for usage policy.`,
-	}, listH.Handle)
 
 	getFullH := handlers.NewGetFullHandler(st, projectPath).WithFreshness(sb, cfg.Freshness)
 	mcp.AddTool(srv, &mcp.Tool{
@@ -184,19 +172,22 @@ No arguments required.`,
 	statsH := handlers.NewStatsHandler(cfg, st, projectPath, serverStart)
 	mcp.AddTool(srv, &mcp.Tool{
 		Name: "ctx_stats",
-		Description: `[VERIFICATION tool] Report ctx-saver statistics: outputs stored, bytes saved, top commands, hook activity, and adherence score.
+		Description: `[VERIFICATION + INVENTORY tool] Report ctx-saver state for this project.
 
-Scope parameter: session (default) | today | 7d | all
+View 'stats' (default):
+- Adherence score (how consistently ctx-saver tools are being used vs native)
+- Outputs stored, bytes saved, top commands, hook activity
+- Useful for verifying ctx-saver is working and quantifying savings
+- Scope: session | today | 7d | all (default: session)
+- Call every ~20 turns; if adherence_score < 80, re-read ctx_session_init rules
 
-Key fields to watch:
-• saving_percent — percentage of raw bytes NOT injected into context. Should be > 80% in healthy sessions.
-• adherence_score — 0–100 score based on ctx-saver vs native tool usage ratio. Aim for > 80%.
-• adherence_note — plain-English assessment of current adherence level.
-• hook_stats.dangerous_blocked — commands blocked by PreToolUse safety rules.
-• hook_stats.redirected_to_mcp — soft denies recommending ctx_execute instead of native shell.
+View 'outputs':
+- Full list of cached outputs newest-first (with output_id, command, size, freshness)
+- Use BEFORE re-running commands to check if a recent run is already cached
+- Use to find an output_id for ctx_get_full / ctx_search / ctx_outline
+- Limit defaults to 50
 
-Call this every ~20 turns to verify ctx-saver is being used effectively.
-If saving_percent or adherence_score is low, native tools are being over-used — re-read ctx_session_init rules.`,
+freshness.stale_level on each entry — see ctx_session_init for usage policy.`,
 	}, statsH.Handle)
 
 	getSectionH := handlers.NewGetSectionHandler(st, projectPath).WithFreshness(sb, cfg.Freshness)
@@ -216,36 +207,21 @@ Returns freshness.stale_level field — see ctx_session_init for usage policy.`,
 	noteH := handlers.NewNoteHandler(st, projectPath)
 	mcp.AddTool(srv, &mcp.Tool{
 		Name: "ctx_note",
-		Description: `[DECISION LOG] Save an architectural decision, design rationale, or important reasoning that should survive /compact and future sessions.
+		Description: `[DECISION LOG] Save or list architectural decisions, design rationale, and important reasoning that should survive /compact and future sessions.
 
-Use this when:
-- You make a non-obvious design choice ("chose X over Y because Z")
-- You discover a constraint that future-you needs to know ("can't use approach A because of dep B")
-- You make a tradeoff that's not encoded in code ("simplified for now, will revisit if N exceeds 1000")
-- User confirms an important decision ("agreed: use 7-day staleness threshold")
+Action 'save' (default if ` + "`text`" + ` is provided):
+- Use when you make a non-obvious design choice, discover a constraint, or finalize a tradeoff
+- Keep notes short (1-2 sentences ideal, max 2000 chars)
+- Tag with topics like 'arch', 'perf', 'security' for filterability
+- Set importance='high' only for genuinely critical decisions you'd want flagged at session start
+- DO NOT use for routine progress updates or tool output summaries
 
-DO NOT use for:
-- Routine progress updates ("starting task 3")
-- Tool output summaries (use ctx_execute / ctx_read_file instead)
-- Anything that's already obvious from the code
+Action 'list' (default if ` + "`text`" + ` is empty):
+- Use when resuming work after /compact, investigating prior decisions, or filtering by tag/importance
+- Default scope is "7d" (last 7 days). Use "session", "today", or "all" to widen.
 
-Notes are scoped per-project, persist across sessions, and are surfaced in ctx_session_init.
-
-Keep notes short (1-2 sentences ideal, max 2000 chars). Tag with topics like 'arch', 'perf', 'security' for filterability. Set importance='high' only for genuinely critical decisions you'd want flagged at session start.`,
+Notes are scoped per-project, persist across sessions, and are surfaced in ctx_session_init.`,
 	}, noteH.Handle)
-
-	listNotesH := handlers.NewListNotesHandler(st, projectPath)
-	mcp.AddTool(srv, &mcp.Tool{
-		Name: "ctx_list_notes",
-		Description: `[DECISION LOG] List recent decisions/notes saved via ctx_note.
-
-Use this when:
-- Resuming work after /compact and want to see what was decided
-- Investigating why a piece of code looks the way it does
-- Looking for a specific decision by tag
-
-Default scope is "7d" (last 7 days). Use "session" for current session only, "today" for today, "all" for everything.`,
-	}, listNotesH.Handle)
 
 	purgeH := handlers.NewPurgeHandler(st, projectPath)
 	mcp.AddTool(srv, &mcp.Tool{

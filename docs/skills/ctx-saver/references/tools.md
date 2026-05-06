@@ -185,18 +185,20 @@ Project overrides replace (not merge) any builtin entry with the same key.
 
 ---
 
-## ctx_list_outputs
+## ctx_stats (view="outputs")
 
 **Check before re-running commands.** List all outputs stored for the current project, newest first. Call this before running an expensive command (build, test, spec fetch) to verify whether a cached result already exists. Use the `output_id` with `ctx_search`, `ctx_get_full`, `ctx_outline`, or `ctx_get_section` to retrieve content without re-executing.
 
 **Input**
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| `view` | string | Y | Must be `"outputs"` to list cached outputs |
 | `limit` | int | N | Max number of outputs to return (default: 50) |
 
 **Output**
 ```json
 {
+  "view": "outputs",
   "outputs": [
     {
       "output_id": "out_20260422_76b3de65",
@@ -458,13 +460,14 @@ Notes are scoped per-project, persist across sessions, and are surfaced in `ctx_
 
 ---
 
-## ctx_list_notes
+## ctx_note (action="list")
 
 **[DECISION LOG]** List saved decisions/notes for this project.
 
 **Input**
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| `action` | string | Y | Must be `"list"` to query saved notes |
 | `scope` | string | N | `session`, `today`, `7d` (default), or `all` |
 | `tags` | string[] | N | Filter by tags (OR match) |
 | `min_importance` | string | N | `"normal"` (default) or `"high"` |

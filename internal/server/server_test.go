@@ -93,12 +93,12 @@ func TestToolDescriptions_NoRegression(t *testing.T) {
 		"ctx_execute",
 		"ctx_read_file",
 		"ctx_search",
-		"ctx_list_outputs",
 		"ctx_get_full",
 		"ctx_outline",
 		"ctx_stats",
 		"ctx_get_section",
 		"ctx_session_init",
+		"ctx_note",
 		"ctx_purge",
 	}
 
@@ -126,8 +126,8 @@ func TestToolDescriptions_FreshnessVocabulary(t *testing.T) {
 		"ctx_get_full",
 		"ctx_get_section",
 		"ctx_search",
-		"ctx_list_outputs",
 		"ctx_outline",
+		"ctx_stats",
 	}
 
 	for _, name := range retrievalTools {

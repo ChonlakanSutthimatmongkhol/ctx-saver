@@ -8,33 +8,58 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/config"
+	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/freshness"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/store"
 )
 
 // StatsInput is the input for the ctx_stats MCP tool.
 type StatsInput struct {
+	// Discriminator: "stats" (default) returns adherence + summary metrics; "outputs" returns full list of stored outputs.
+	View string `json:"view,omitempty"`
+
+	// Stats fields (used when view="stats" or omitted).
 	Scope string `json:"scope,omitempty" jsonschema:"session | today | 7d | all (default: session)"`
+
+	// Outputs list fields (used when view="outputs").
+	Limit       int  `json:"limit,omitempty"        jsonschema:"maximum number of outputs to return (default: 50)"`
+	AcceptStale bool `json:"accept_stale,omitempty" jsonschema:"set true to suppress freshness warnings in results"`
 }
 
-// StatsOutput is the response from ctx_stats.
+// StatsOutput is the response from ctx_stats (discriminated by View field).
 type StatsOutput struct {
-	Scope                 string           `json:"scope"`
-	OutputsStored         int              `json:"outputs_stored"`
-	RawBytes              int64            `json:"raw_bytes"`
-	EstimatedSummaryBytes int64            `json:"estimated_summary_bytes"`
-	SavingPercent         float64          `json:"saving_percent"`
-	AvgDurationMs         int64            `json:"avg_duration_ms"`
+	View string `json:"view"`
+
+	// Stats view fields (when View == "stats").
+	Scope                 string           `json:"scope,omitempty"`
+	OutputsStored         int              `json:"outputs_stored,omitempty"`
+	RawBytes              int64            `json:"raw_bytes,omitempty"`
+	EstimatedSummaryBytes int64            `json:"estimated_summary_bytes,omitempty"`
+	SavingPercent         float64          `json:"saving_percent,omitempty"`
+	AvgDurationMs         int64            `json:"avg_duration_ms,omitempty"`
 	TopCommands           []CommandStatOut `json:"top_commands,omitempty"`
 	LargestOutputs        []OutputMetaOut  `json:"largest_outputs,omitempty"`
-	HookStats             HookStatsOut     `json:"hook_stats"`
+	HookStats             HookStatsOut     `json:"hook_stats,omitempty"`
 
 	// Adherence fields — how consistently ctx-saver tools are being used.
-	AdherenceScore   float64 `json:"adherence_score,omitempty"`   // 0–100
-	NativeShellCount int     `json:"native_shell_count,omitempty"` // runInTerminal/Shell/Bash calls
-	NativeReadCount  int     `json:"native_read_count,omitempty"`  // readFile/read_file/Read calls
+	AdherenceScore   float64 `json:"adherence_score,omitempty"`
+	NativeShellCount int     `json:"native_shell_count,omitempty"`
+	NativeReadCount  int     `json:"native_read_count,omitempty"`
 	CtxExecuteCount  int     `json:"ctx_execute_count,omitempty"`
 	CtxReadFileCount int     `json:"ctx_read_file_count,omitempty"`
 	AdherenceNote    string  `json:"adherence_note,omitempty"`
+
+	// Outputs view field (when View == "outputs").
+	Outputs []OutputEntry `json:"outputs,omitempty"`
+}
+
+// OutputEntry is one row in the outputs list (view="outputs").
+type OutputEntry struct {
+	OutputID  string                  `json:"output_id"`
+	Command   string                  `json:"command"`
+	CreatedAt string                  `json:"created_at"`
+	SizeBytes int64                   `json:"size_bytes"`
+	Lines     int                     `json:"lines"`
+	Freshness freshness.FreshnessInfo `json:"freshness"`
 }
 
 // CommandStatOut is the per-command aggregate in StatsOutput.
@@ -72,8 +97,25 @@ func NewStatsHandler(cfg *config.Config, st store.Store, projectPath string, ser
 	return &StatsHandler{cfg: cfg, st: st, projectPath: projectPath, serverStart: serverStart}
 }
 
-// Handle processes a ctx_stats request.
+// Handle dispatches to handleStats or handleListOutputs based on the view field.
+// Backward compat: omitted view defaults to "stats".
 func (h *StatsHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, input StatsInput) (*mcp.CallToolResult, StatsOutput, error) {
+	view := input.View
+	if view == "" {
+		view = "stats"
+	}
+
+	switch view {
+	case "stats":
+		return h.handleStats(ctx, input)
+	case "outputs":
+		return h.handleListOutputs(ctx, input)
+	default:
+		return nil, StatsOutput{}, fmt.Errorf("unknown view %q (expected 'stats' or 'outputs')", view)
+	}
+}
+
+func (h *StatsHandler) handleStats(ctx context.Context, input StatsInput) (*mcp.CallToolResult, StatsOutput, error) {
 	scope := input.Scope
 	if scope == "" {
 		scope = "session"
@@ -113,6 +155,7 @@ func (h *StatsHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, input
 	adherenceNote := adherenceNote(adherenceScore, total)
 
 	out := StatsOutput{
+		View:                  "stats",
 		Scope:                 scope,
 		OutputsStored:         stats.OutputsStored,
 		RawBytes:              stats.RawBytes,
@@ -144,6 +187,29 @@ func (h *StatsHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, input
 	}
 	recordToolCall(ctx, h.st, h.projectPath, "ctx_stats", input.Scope, "", "stats: "+input.Scope)
 	return nil, out, nil
+}
+
+func (h *StatsHandler) handleListOutputs(ctx context.Context, input StatsInput) (*mcp.CallToolResult, StatsOutput, error) {
+	metas, err := h.st.List(ctx, h.projectPath, input.Limit)
+	if err != nil {
+		return nil, StatsOutput{}, fmt.Errorf("listing outputs: %w", err)
+	}
+
+	now := time.Now()
+	entries := make([]OutputEntry, 0, len(metas))
+	for _, m := range metas {
+		entries = append(entries, OutputEntry{
+			OutputID:  m.OutputID,
+			Command:   m.Command,
+			CreatedAt: m.CreatedAt.UTC().Format(time.RFC3339),
+			SizeBytes: m.SizeBytes,
+			Lines:     m.LineCount,
+			Freshness: freshness.NewFreshnessInfo(m.SourceKind, m.RefreshedAt, m.TTLSeconds, now),
+		})
+	}
+
+	recordToolCall(ctx, h.st, h.projectPath, "ctx_stats", "", "", "stats outputs")
+	return nil, StatsOutput{View: "outputs", Outputs: entries}, nil
 }
 
 // adherenceNote returns a plain-English assessment of the current adherence score.

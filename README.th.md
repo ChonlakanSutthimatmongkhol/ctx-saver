@@ -182,11 +182,9 @@ Project override จะแทนที่ (ไม่ merge) entry ใน built-i
 | `ctx_outline` | ดึง headings / สารบัญจาก stored output รวม `freshness` field |
 | `ctx_get_section` | ดึง section เฉพาะด้วย heading text (ใช้หลัง `ctx_outline`) รวม `freshness` + `user_confirmation_required` |
 | `ctx_search` | FTS5 full-text search ในทุก output ที่เก็บไว้ รวม `freshness` ต่อผลลัพธ์ อักขระพิเศษ escape อัตโนมัติ; fallback ไป LIKE ขยาย query ด้วย synonym อัตโนมัติ |
-| `ctx_list_outputs` | แสดง output ทั้งหมดที่เก็บไว้ใน project พร้อม `freshness` ต่อรายการ |
 | `ctx_get_full` | ดึง output ฉบับเต็มหรือระบุช่วงบรรทัด รวม `freshness` + `user_confirmation_required`; ใช้ `accept_stale: true` เพื่อข้ามการยืนยัน |
-| `ctx_stats` | รายงานสถิติการเก็บข้อมูลและ hook activity (scope: `session\|today\|7d\|all`) |
-| `ctx_note` | บันทึก architectural decision หรือเหตุผลที่ควรรอดจาก `/compact` และ session ถัดไป |
-| `ctx_list_notes` | แสดง decision ล่าสุดที่บันทึกไว้ด้วย `ctx_note` กรองได้ด้วย scope/tag/importance |
+| `ctx_stats` | รายงานสถิติการเก็บข้อมูลและ hook activity (scope: `session\|today\|7d\|all`); ใช้ `view="outputs"` เพื่อแสดง output ทั้งหมด (แทน `ctx_list_outputs`) |
+| `ctx_note` | บันทึกหรือแสดง architectural decision ที่รอดจาก `/compact`; ใช้ `action="list"` เพื่อดู decision ที่บันทึกไว้ (แทน `ctx_list_notes`) |
 | `ctx_purge` | **[DESTRUCTIVE]** ลบ cached output และ session event ทั้งหมดของ project ต้องส่ง `confirm="yes"` Decision notes จะถูกเก็บไว้ตามค่าเริ่มต้น ส่ง `all=true` เพื่อลบด้วย |
 
 ## Cache Purge (v0.6.0)
@@ -217,8 +215,8 @@ ctx_note(
   importance="high"
 )
 
-ctx_list_notes(scope="session")
-ctx_list_notes(tags=["arch"], min_importance="high")
+ctx_note(action="list", scope="session")
+ctx_note(action="list", tags=["arch"], min_importance="high")
 ```
 
 Decision จะถูก inject อัตโนมัติใน `ctx_session_init` (สูงสุด 10 รายการล่าสุดที่ importance normal+high จาก 7 วันที่ผ่านมา)

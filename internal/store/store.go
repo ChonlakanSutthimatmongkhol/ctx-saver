@@ -28,7 +28,7 @@ type Output struct {
 	SourceHash string // SHA-256 hex; "" for non-file sources or pre-v0.5.2 rows
 }
 
-// OutputMeta is a lightweight summary used by ctx_list_outputs.
+// OutputMeta is a lightweight summary used by ctx_stats (view="outputs").
 type OutputMeta struct {
 	OutputID    string
 	Command     string

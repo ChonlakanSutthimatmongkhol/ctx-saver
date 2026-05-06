@@ -154,3 +154,54 @@ func TestStatsHandler_ScopePassthrough(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, st.capturedSince.IsZero())
 }
+
+// M2 dispatch tests
+
+func TestStatsHandler_ViewOmitted_Stats(t *testing.T) {
+	st := &statsStore{stats: &store.Stats{}}
+	h := handlers.NewStatsHandler(statsCfg(), st, "/proj", time.Now())
+	_, out, err := h.Handle(context.Background(), nil, handlers.StatsInput{})
+	require.NoError(t, err)
+	assert.Equal(t, "stats", out.View)
+}
+
+func TestStatsHandler_ViewStats_Stats(t *testing.T) {
+	st := &statsStore{stats: &store.Stats{}}
+	h := handlers.NewStatsHandler(statsCfg(), st, "/proj", time.Now())
+	_, out, err := h.Handle(context.Background(), nil, handlers.StatsInput{View: "stats"})
+	require.NoError(t, err)
+	assert.Equal(t, "stats", out.View)
+}
+
+func TestStatsHandler_ViewOutputs_ListsOutputs(t *testing.T) {
+	now := time.Now().UTC()
+	st := &mockStore{
+		listMeta: []*store.OutputMeta{
+			{OutputID: "out_x", Command: "go build", CreatedAt: now, SizeBytes: 2048, LineCount: 50},
+		},
+	}
+	h := handlers.NewStatsHandler(statsCfg(), st, "/proj", time.Now())
+	_, out, err := h.Handle(context.Background(), nil, handlers.StatsInput{View: "outputs"})
+	require.NoError(t, err)
+	assert.Equal(t, "outputs", out.View)
+	require.Len(t, out.Outputs, 1)
+	assert.Equal(t, "out_x", out.Outputs[0].OutputID)
+}
+
+func TestStatsHandler_ViewOutputs_RespectsLimit(t *testing.T) {
+	st := &mockStore{}
+	h := handlers.NewStatsHandler(statsCfg(), st, "/proj", time.Now())
+	_, out, err := h.Handle(context.Background(), nil, handlers.StatsInput{View: "outputs", Limit: 5})
+	require.NoError(t, err)
+	assert.Equal(t, "outputs", out.View)
+	assert.Empty(t, out.Outputs)
+}
+
+func TestStatsHandler_ViewBogus_Error(t *testing.T) {
+	st := &statsStore{stats: &store.Stats{}}
+	h := handlers.NewStatsHandler(statsCfg(), st, "/proj", time.Now())
+	_, _, err := h.Handle(context.Background(), nil, handlers.StatsInput{View: "bogus"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unknown view")
+	assert.Contains(t, err.Error(), "bogus")
+}

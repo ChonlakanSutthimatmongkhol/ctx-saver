@@ -120,11 +120,9 @@ See [Hook behaviour](#hooks) below for what each hook does.
 | `ctx_outline` | Extract headings / table-of-contents from a stored output. Includes `freshness` field. |
 | `ctx_get_section` | Extract a specific section by heading text (use after `ctx_outline` to navigate long docs). Includes `freshness` + `user_confirmation_required` fields. |
 | `ctx_search` | FTS5 full-text search across stored outputs (supports `context_lines`). Per-match `freshness` field. Special characters auto-escaped; LIKE fallback on parse errors. |
-| `ctx_list_outputs` | List all stored outputs with per-item `freshness` field. |
 | `ctx_get_full` | Retrieve complete output or a specific line range. Includes `freshness` + `user_confirmation_required` fields. Set `accept_stale: true` to bypass confirmation gate. |
-| `ctx_stats` | Report storage, hook statistics, and adherence score (scope: `session\|today\|7d\|all`) |
-| `ctx_note` | Save an architectural decision or rationale that survives `/compact` and future sessions. |
-| `ctx_list_notes` | List recent decisions saved via `ctx_note`, filterable by scope/tag/importance. |
+| `ctx_stats` | Report storage, hook statistics, and adherence score (scope: `session\|today\|7d\|all`). Use `view="outputs"` to list all cached outputs (replaces `ctx_list_outputs`). |
+| `ctx_note` | Save or list architectural decisions that survive `/compact`. Use `action="list"` to query saved notes (replaces `ctx_list_notes`). |
 | `ctx_purge` | **[DESTRUCTIVE]** Delete all cached outputs and session events for this project. Requires `confirm="yes"`. Decision notes are preserved by default; pass `all=true` to delete them too. |
 
 ### Cache Purge (v0.6.0)
@@ -155,8 +153,8 @@ ctx_note(
   importance="high"
 )
 
-ctx_list_notes(scope="session")
-ctx_list_notes(tags=["arch"], min_importance="high")
+ctx_note(action="list", scope="session")
+ctx_note(action="list", tags=["arch"], min_importance="high")
 ```
 
 Decisions are scoped per-project, persist across sessions, and are automatically injected into `ctx_session_init` (up to 10 most recent normal+high importance items from the last 7 days).

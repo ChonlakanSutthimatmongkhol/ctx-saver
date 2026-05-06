@@ -12,7 +12,7 @@ claude mcp add ctx-saver -- /usr/local/bin/ctx-saver
 ```bash
 claude mcp list
 # Should show ctx-saver with 5 tools:
-#   ctx_execute, ctx_read_file, ctx_search, ctx_list_outputs, ctx_get_full
+#   ctx_execute, ctx_read_file, ctx_search, ctx_get_full, ctx_stats, ctx_note ...
 ```
 
 ## Usage examples inside Claude Code

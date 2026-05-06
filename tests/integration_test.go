@@ -188,7 +188,7 @@ func TestCtxSearch_MultipleQueriesInParallel(t *testing.T) {
 	_ = elapsed // parallel queries should be fast; not strictly asserting timing
 }
 
-// ── ctx_list_outputs tests ─────────────────────────────────────────────────
+// ── ctx_stats view="outputs" tests ────────────────────────────────────────
 
 func TestCtxListOutputs_ReturnsStoredOutputs(t *testing.T) {
 	cfg, sb, st, proj := newTestDeps(t)
@@ -203,8 +203,8 @@ func TestCtxListOutputs_ReturnsStoredOutputs(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	listH := handlers.NewListHandler(st, proj)
-	_, out, err := listH.Handle(context.Background(), nil, handlers.ListInput{})
+	statsH := handlers.NewStatsHandler(cfg, st, proj, time.Now())
+	_, out, err := statsH.Handle(context.Background(), nil, handlers.StatsInput{View: "outputs"})
 	require.NoError(t, err)
 	assert.Len(t, out.Outputs, 3)
 }
