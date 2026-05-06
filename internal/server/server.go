@@ -9,12 +9,12 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/config"
-	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/version"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/handlers"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/knowledge"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/sandbox"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/search"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/store"
+	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/version"
 )
 
 const serverName = "ctx-saver"
