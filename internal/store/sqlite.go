@@ -17,7 +17,8 @@ import (
 
 // SQLiteStore implements Store using a per-project SQLite database.
 type SQLiteStore struct {
-	db *sql.DB
+	db   *sql.DB // write connection — single writer
+	roDB *sql.DB // read-only connection — for analytics/background queries
 }
 
 // NewSQLiteStore opens (or creates) the SQLite database for the given project path
@@ -38,6 +39,16 @@ func NewSQLiteStore(dataDir, projectPath string) (*SQLiteStore, error) {
 	// Single writer to avoid SQLITE_BUSY on concurrent MCP calls.
 	db.SetMaxOpenConns(1)
 
+	// Read-only connection for background analytics queries (KnowledgeStats).
+	// WAL mode allows multiple concurrent readers without blocking writers.
+	roDB, err := sql.Open("sqlite", dbFile+"?_journal_mode=WAL&_foreign_keys=on&mode=ro")
+	if err != nil {
+		db.Close()
+		return nil, fmt.Errorf("opening read-only database %s: %w", dbFile, err)
+	}
+	roDB.SetMaxOpenConns(4) // multiple concurrent readers safe in WAL
+	roDB.SetMaxIdleConns(2)
+
 	if err := runMigrations(db); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("running migrations: %w", err)
@@ -45,11 +56,12 @@ func NewSQLiteStore(dataDir, projectPath string) (*SQLiteStore, error) {
 
 	// Restrict permissions to owner only after migrations have created the file.
 	if err := os.Chmod(dbFile, 0600); err != nil {
+		roDB.Close()
 		db.Close()
 		return nil, fmt.Errorf("setting database file permissions: %w", err)
 	}
 
-	return &SQLiteStore{db: db}, nil
+	return &SQLiteStore{db: db, roDB: roDB}, nil
 }
 
 // dbPath returns the SQLite file path.
@@ -962,19 +974,19 @@ func (s *SQLiteStore) KnowledgeStats(ctx context.Context, projectPath string) (*
 	data := &KnowledgeData{}
 
 	// Aggregate counts.
-	if err := s.db.QueryRowContext(ctx,
+	if err := s.roDB.QueryRowContext(ctx,
 		`SELECT COUNT(DISTINCT session_id) FROM session_events WHERE project_path = ?`,
 		projectPath,
 	).Scan(&data.SessionCount); err != nil {
 		return nil, fmt.Errorf("knowledge stats: session count: %w", err)
 	}
-	if err := s.db.QueryRowContext(ctx,
+	if err := s.roDB.QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM outputs WHERE project_path = ?`,
 		projectPath,
 	).Scan(&data.OutputCount); err != nil {
 		return nil, fmt.Errorf("knowledge stats: output count: %w", err)
 	}
-	if err := s.db.QueryRowContext(ctx,
+	if err := s.roDB.QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM decisions WHERE project_path = ?`,
 		projectPath,
 	).Scan(&data.DecisionCount); err != nil {
@@ -982,7 +994,7 @@ func (s *SQLiteStore) KnowledgeStats(ctx context.Context, projectPath string) (*
 	}
 
 	// Top files — read operations with a non-empty source_hash.
-	fileRows, err := s.db.QueryContext(ctx, `
+	fileRows, err := s.roDB.QueryContext(ctx, `
 		SELECT command, COUNT(*) as reads, MAX(source_hash) as last_hash, MAX(refreshed_at) as last_refreshed
 		FROM outputs
 		WHERE project_path = ?
@@ -1017,7 +1029,7 @@ func (s *SQLiteStore) KnowledgeStats(ctx context.Context, projectPath string) (*
 	}
 
 	// Top commands — non-read operations.
-	cmdRows, err := s.db.QueryContext(ctx, `
+	cmdRows, err := s.roDB.QueryContext(ctx, `
 		SELECT command, COUNT(*) as runs, AVG(size_bytes) as avg_bytes
 		FROM outputs
 		WHERE project_path = ?
@@ -1049,7 +1061,7 @@ func (s *SQLiteStore) KnowledgeStats(ctx context.Context, projectPath string) (*
 	}
 
 	// Command sequences — co-occurrence within 5-minute window.
-	seqRows, err := s.db.QueryContext(ctx, `
+	seqRows, err := s.roDB.QueryContext(ctx, `
 		WITH pairs AS (
 			SELECT a.command AS first_cmd, b.command AS second_cmd, COUNT(*) AS co_count
 			FROM outputs a
@@ -1090,7 +1102,7 @@ func (s *SQLiteStore) KnowledgeStats(ctx context.Context, projectPath string) (*
 	}
 
 	// High-importance decisions.
-	decRows, err := s.db.QueryContext(ctx, `
+	decRows, err := s.roDB.QueryContext(ctx, `
 		SELECT text, tags, created_at
 		FROM decisions
 		WHERE project_path = ?
@@ -1125,7 +1137,10 @@ func (s *SQLiteStore) KnowledgeStats(ctx context.Context, projectPath string) (*
 	return data, nil
 }
 
-// Close releases the database connection.
+// Close releases both database connections.
 func (s *SQLiteStore) Close() error {
+	if err := s.roDB.Close(); err != nil {
+		slog.Warn("closing read-only database connection", "error", err)
+	}
 	return s.db.Close()
 }

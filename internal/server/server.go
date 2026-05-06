@@ -18,7 +18,7 @@ import (
 
 const (
 	serverName    = "ctx-saver"
-	serverVersion = "0.7.0"
+	serverVersion = "0.7.2"
 )
 
 // New constructs a fully configured *mcp.Server with all ctx-saver tools registered.
@@ -71,8 +71,11 @@ func RunIdleKnowledgeRefresh(ctx context.Context, st store.Store, projectPath st
 				continue
 			}
 
-			if err := knowledge.Refresh(ctx, st, projectPath, cfg); err != nil {
-				slog.Warn("idle knowledge refresh failed", "error", err)
+			refreshCtx, refreshCancel := context.WithTimeout(ctx, 30*time.Second)
+			refreshErr := knowledge.Refresh(refreshCtx, st, projectPath, cfg)
+			refreshCancel()
+			if refreshErr != nil {
+				slog.Warn("idle knowledge refresh failed", "error", refreshErr)
 			} else {
 				slog.Info("idle knowledge refresh completed",
 					"idle_minutes", int(idle.Minutes()),

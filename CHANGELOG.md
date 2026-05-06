@@ -2,6 +2,17 @@
 
 All notable changes to ctx-saver will be documented in this file.
 
+## v0.7.2 — Fix: read-only connection for KnowledgeStats
+
+### Fixed
+- `ctx_execute` (and other MCP tools) hanging while idle knowledge refresh was running — `KnowledgeStats` now uses a dedicated read-only connection (`roDB`) instead of the shared write connection, eliminating DB contention entirely
+- Idle knowledge refresh goroutine now runs with a 30s context deadline, preventing indefinite blocking of MCP tool calls in worst-case scenarios
+
+### Changed
+- `SQLiteStore` now maintains two connections: `db` (writer, `MaxOpenConns=1`) and `roDB` (reader, `MaxOpenConns=4`)
+- `Close()` closes both connections
+- Migration 6: composite index `idx_outputs_project_created ON outputs(project_path, created_at)` for faster self-join in command-sequence aggregation
+
 ## v0.7.1 — Bug Fix
 
 ### Fixed

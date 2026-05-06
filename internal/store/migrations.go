@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-const currentSchemaVersion = 5
+const currentSchemaVersion = 6
 
 // runMigrations applies any pending schema migrations to db.
 // It is idempotent and safe to call on every server start.
@@ -57,6 +57,10 @@ func applyMigration(db *sql.DB, version int) error {
 		}
 	case 5:
 		if err := migration5(tx); err != nil {
+			return err
+		}
+	case 6:
+		if err := migration6(tx); err != nil {
 			return err
 		}
 	default:
@@ -169,6 +173,17 @@ func migration5(tx *sql.Tx) error {
 		if _, err := tx.Exec(stmt); err != nil {
 			return fmt.Errorf("executing %q: %w", stmt[:min(40, len(stmt))], err)
 		}
+	}
+	return nil
+}
+
+// migration6 adds a composite index on (project_path, created_at) to speed up
+// the command-sequence self-join in KnowledgeStats.
+func migration6(tx *sql.Tx) error {
+	_, err := tx.Exec(`CREATE INDEX IF NOT EXISTS idx_outputs_project_created
+		ON outputs(project_path, created_at)`)
+	if err != nil {
+		return fmt.Errorf("creating composite index: %w", err)
 	}
 	return nil
 }
