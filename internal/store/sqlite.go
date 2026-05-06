@@ -31,7 +31,7 @@ func NewSQLiteStore(dataDir, projectPath string) (*SQLiteStore, error) {
 	dbFile := dbPath(dataDir, projectPath)
 
 	// Open with WAL mode for better concurrent read performance.
-	db, err := sql.Open("sqlite", dbFile+"?_journal_mode=WAL&_foreign_keys=on")
+	db, err := sql.Open("sqlite", dbFile+"?_journal_mode=WAL&_foreign_keys=on&_busy_timeout=5000")
 	if err != nil {
 		return nil, fmt.Errorf("opening database %s: %w", dbFile, err)
 	}
@@ -41,7 +41,9 @@ func NewSQLiteStore(dataDir, projectPath string) (*SQLiteStore, error) {
 
 	// Read-only connection for background analytics queries (KnowledgeStats).
 	// WAL mode allows multiple concurrent readers without blocking writers.
-	roDB, err := sql.Open("sqlite", dbFile+"?_journal_mode=WAL&_foreign_keys=on&mode=ro")
+	// Note: mode=ro requires file: URI prefix in modernc.org/sqlite — omit it
+	// here and rely on not calling any writes on this pool by convention.
+	roDB, err := sql.Open("sqlite", dbFile+"?_journal_mode=WAL&_foreign_keys=on&_busy_timeout=5000")
 	if err != nil {
 		db.Close()
 		return nil, fmt.Errorf("opening read-only database %s: %w", dbFile, err)
@@ -1061,6 +1063,7 @@ func (s *SQLiteStore) KnowledgeStats(ctx context.Context, projectPath string) (*
 	}
 
 	// Command sequences — co-occurrence within 5-minute window.
+	// Restricted to the last 30 days to keep the self-join fast on large tables.
 	seqRows, err := s.roDB.QueryContext(ctx, `
 		WITH pairs AS (
 			SELECT a.command AS first_cmd, b.command AS second_cmd, COUNT(*) AS co_count
@@ -1069,6 +1072,7 @@ func (s *SQLiteStore) KnowledgeStats(ctx context.Context, projectPath string) (*
 			               AND b.created_at > a.created_at
 			               AND b.created_at < a.created_at + 300
 			WHERE a.project_path = ?
+			  AND a.created_at > strftime('%s', 'now') - 30*24*3600
 			GROUP BY first_cmd, second_cmd
 			HAVING co_count >= 3
 		),
@@ -1076,6 +1080,7 @@ func (s *SQLiteStore) KnowledgeStats(ctx context.Context, projectPath string) (*
 			SELECT command, COUNT(*) AS total
 			FROM outputs
 			WHERE project_path = ?
+			  AND created_at > strftime('%s', 'now') - 30*24*3600
 			GROUP BY command
 		)
 		SELECT p.first_cmd, p.second_cmd,

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/config"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/knowledge"
@@ -56,7 +57,8 @@ func runKnowledge(args []string) error {
 	}
 	defer st.Close()
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 
 	switch action {
 	case "refresh":
