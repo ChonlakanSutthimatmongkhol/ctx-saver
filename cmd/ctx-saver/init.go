@@ -4,12 +4,41 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/configs"
 )
+
+const knowledgeRefLine = "\n<!-- ctx-saver -->\n" +
+	"See .ctx-saver/project-knowledge.md for learned project patterns " +
+	"(auto-generated, refresh with `ctx-saver knowledge refresh`).\n"
+
+// injectKnowledgeReference appends a one-line reference to project-knowledge.md
+// into the file at path. It is idempotent: if the file already contains
+// "project-knowledge.md" the function returns nil without modifying the file.
+// If the file does not exist, the function returns nil silently.
+func injectKnowledgeReference(path string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	if strings.Contains(string(data), "project-knowledge.md") {
+		return nil
+	}
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = fmt.Fprint(f, knowledgeRefLine)
+	return err
+}
 
 func runInit(args []string) error {
 	if len(args) == 0 {
@@ -84,6 +113,14 @@ func initClaude() error {
 		return err
 	}
 	fmt.Println("Done. Restart Claude Code to activate the hooks.")
+
+	// Inject knowledge reference into CLAUDE.md (non-fatal).
+	cwd, err := os.Getwd()
+	if err == nil {
+		if injErr := injectKnowledgeReference(filepath.Join(cwd, "CLAUDE.md")); injErr != nil {
+			slog.Warn("could not update CLAUDE.md with knowledge reference", "error", injErr)
+		}
+	}
 	return nil
 }
 
@@ -149,6 +186,11 @@ func initCopilotInstructions() error {
 			return fmt.Errorf("writing %s: %w", targetFile, err)
 		}
 		fmt.Printf("  Created %s\n", targetFile)
+	}
+
+	// Inject knowledge reference into copilot-instructions.md (non-fatal).
+	if injErr := injectKnowledgeReference(targetFile); injErr != nil {
+		slog.Warn("could not update copilot-instructions.md with knowledge reference", "error", injErr)
 	}
 
 	fmt.Println("Done. Commit .github/copilot-instructions.md to share rules with your team.")
