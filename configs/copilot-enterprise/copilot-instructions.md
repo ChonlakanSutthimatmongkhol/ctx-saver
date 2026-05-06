@@ -91,6 +91,14 @@ These notes survive `/compact` and are surfaced at next `ctx_session_init`. Use 
 - **`ctx_purge`** — use to clear stale/noisy cache when switching feature context or before a demo handover. Always requires `confirm="yes"`. Decision notes are preserved by default; pass `all=true` to delete them too. **Irreversible — confirm with user first.**
 - **`ctx_read_file` with `fields="signatures"`** — use to get only function/type/const declarations (with original line numbers) without reading the full file. Supported: Go (full), Python (~95%), Dart (basic regex). Omit for full content.
 
+### Rule 8: Read project-knowledge.md at session start (v0.7.0+)
+
+If `.ctx-saver/project-knowledge.md` exists, it contains pre-computed project patterns:
+most-read files, most-run commands, common command sequences, and high-importance decisions.
+
+`ctx_session_init` surfaces this automatically — no extra action needed.
+To regenerate it: `ctx-saver knowledge refresh` (run in terminal, not via MCP tool).
+
 ## Why these rules exist
 
 Sessions without these tools hit **80% context window usage within 10–15 turns** in this repo
@@ -106,3 +114,6 @@ Call `ctx_stats` every ~20 turns.
 - `adherence_score` should be > 80%
 
 If either metric is low, native tools are being over-used — re-read these rules.
+
+<!-- ctx-saver -->
+See .ctx-saver/project-knowledge.md for learned project patterns (auto-generated, refresh with `ctx-saver knowledge refresh`).

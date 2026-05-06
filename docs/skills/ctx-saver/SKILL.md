@@ -5,8 +5,10 @@ description: >
   Use when: running tests, builds, or any command with large output; reading large files (OpenAPI spec, logs, SQL migrations);
   fetching Confluence/Jira pages; searching previously stored outputs; retrieving full output by ID or line range;
   extracting a specific section from a long document by heading name; viewing only function/type signatures of a source file;
-  purging stale cache before switching context; saving or querying architectural decision notes.
+  purging stale cache before switching context; saving or querying architectural decision notes;
+  generating or viewing project-knowledge.md (learned project patterns from stored sessions).
   Tools: ctx_execute, ctx_read_file, ctx_search, ctx_get_full, ctx_outline, ctx_get_section, ctx_stats, ctx_purge, ctx_note.
+  CLI: ctx-saver knowledge refresh/show/reset.
 argument-hint: 'Describe the command or file you want to run/read'
 ---
 
@@ -28,6 +30,7 @@ ctx-saver is an MCP server that stores large command outputs in SQLite and retur
 | Get full output or specific line range | `ctx_get_full` |
 | Verify ctx-saver is saving context / check hook activity | `ctx_stats` |
 | Clear stale cache before switching context | `ctx_purge` |
+| Generate/view learned project patterns | `ctx-saver knowledge refresh` (CLI) |
 
 ## Core Decision Rule
 
@@ -172,6 +175,21 @@ Delete a project's default DB with `rm -rf .ctx-saver/` from project root.
 
 ---
 
+## Project Knowledge (v0.7.0+)
+
+After 3+ sessions, ctx-saver can generate `.ctx-saver/project-knowledge.md` containing
+learned patterns: most-read files, most-run commands, common sequences, and key decisions.
+
+```bash
+ctx-saver knowledge refresh   # generate/update
+ctx-saver knowledge show      # print to stdout (no file write)
+ctx-saver knowledge reset     # delete
+```
+
+`ctx_session_init` automatically surfaces this file when it exists — no extra action needed per session.
+
+---
+
 ## Configuration Override (`.ctx-saver.yaml` in project root)
 
 ```yaml
@@ -181,4 +199,10 @@ summary:
   head_lines: 30
   tail_lines: 10
   auto_index_threshold_bytes: 2048
+knowledge:
+  min_sessions: 3       # sessions required before first generation
+  idle_minutes: 30      # 0 = disable idle auto-refresh
+  top_files_limit: 10
+  top_commands_limit: 10
+  decisions_limit: 10
 ```

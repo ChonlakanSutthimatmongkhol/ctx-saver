@@ -479,10 +479,28 @@ Notes are scoped per-project, persist across sessions, and are surfaced in `ctx_
 ## Storage Location
 
 ```
-<project-root>/.ctx-saver/outputs.db   ← default SQLite DB (all outputs + FTS5 index)
-<project-root>/.ctx-saver/server.log   ← default log file
+<project-root>/.ctx-saver/outputs.db            ← SQLite DB (outputs + FTS5 index)
+<project-root>/.ctx-saver/server.log            ← log file
+<project-root>/.ctx-saver/project-knowledge.md ← learned project patterns (v0.7.0+)
 ```
 
-If `storage.data_dir` is set, files are stored there instead.
+If `storage.data_dir` is set, the DB and log are stored there instead.
+`project-knowledge.md` is always in `<project-root>/.ctx-saver/`.
 
 Delete all stored outputs for the current project (default path): `rm -rf .ctx-saver/`
+
+---
+
+## CLI Commands (v0.7.0+)
+
+ctx-saver exposes subcommands for offline/cron use — these are NOT MCP tools:
+
+| Command | Description |
+|---------|-------------|
+| `ctx-saver knowledge refresh` | Generate or update `.ctx-saver/project-knowledge.md` |
+| `ctx-saver knowledge show` | Print knowledge to stdout (no file write) |
+| `ctx-saver knowledge reset` | Delete `.ctx-saver/project-knowledge.md` |
+| `ctx-saver knowledge refresh --quiet` | For cron use: suppress all output except errors |
+| `ctx-saver init claude` | Install Claude Code hooks into `~/.claude/settings.json` |
+| `ctx-saver init copilot` | Install MCP entry into `.vscode/mcp.json` |
+| `ctx-saver init copilot-instructions` | Create/update `.github/copilot-instructions.md` |
