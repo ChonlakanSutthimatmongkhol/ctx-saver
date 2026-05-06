@@ -41,3 +41,13 @@ freshness:
     shell:npm:
       max_age_seconds: 600
       auto_refresh: false
+
+knowledge:
+  # Minimum distinct sessions before project-knowledge.md is generated.
+  min_sessions: 3
+  # Minutes of inactivity before MCP server auto-refreshes knowledge. 0 = disabled.
+  idle_minutes: 30
+  # Maximum rows per section in project-knowledge.md.
+  top_files_limit: 10
+  top_commands_limit: 10
+  decisions_limit: 10

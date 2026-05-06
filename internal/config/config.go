@@ -29,7 +29,28 @@ type Config struct {
 	Hooks        HooksConfig     `yaml:"hooks"`
 	Dedup        DedupConfig     `yaml:"dedup"`
 	Freshness    FreshnessConfig `yaml:"freshness"`
+	Knowledge    KnowledgeConfig `yaml:"knowledge"`
 	DenyCommands []string        `yaml:"deny_commands"`
+}
+
+// KnowledgeConfig controls materialized project-knowledge generation.
+type KnowledgeConfig struct {
+	// MinSessions is the minimum number of distinct sessions required before
+	// generating a knowledge file. Default: 3.
+	MinSessions int `yaml:"min_sessions"`
+
+	// IdleMinutes is how many minutes of inactivity before the MCP server
+	// auto-refreshes knowledge. Set to 0 to disable idle detection. Default: 30.
+	IdleMinutes int `yaml:"idle_minutes"`
+
+	// TopFilesLimit is the maximum number of files in the most-read section. Default: 10.
+	TopFilesLimit int `yaml:"top_files_limit"`
+
+	// TopCommandsLimit is the maximum number of commands in the most-run section. Default: 10.
+	TopCommandsLimit int `yaml:"top_commands_limit"`
+
+	// DecisionsLimit is the maximum number of decisions in the knowledge file. Default: 10.
+	DecisionsLimit int `yaml:"decisions_limit"`
 }
 
 // FreshnessConfig controls cache freshness policy (Phase 7).
@@ -138,6 +159,13 @@ func Default() *Config {
 				"shell:npm":     {MaxAgeSeconds: 600, AutoRefresh: false},
 			},
 		},
+		Knowledge: KnowledgeConfig{
+			MinSessions:      3,
+			IdleMinutes:      30,
+			TopFilesLimit:    10,
+			TopCommandsLimit: 10,
+			DecisionsLimit:   10,
+		},
 		DenyCommands: []string{
 			"rm -rf /",
 			"sudo *",
@@ -221,6 +249,12 @@ func validate(cfg *Config) error {
 	}
 	if cfg.Hooks.SessionHistoryLimit < 1 {
 		return fmt.Errorf("hooks.session_history_limit must be >= 1, got %d", cfg.Hooks.SessionHistoryLimit)
+	}
+	if cfg.Knowledge.IdleMinutes < 0 {
+		return fmt.Errorf("knowledge.idle_minutes must be >= 0, got %d", cfg.Knowledge.IdleMinutes)
+	}
+	if cfg.Knowledge.MinSessions < 1 {
+		return fmt.Errorf("knowledge.min_sessions must be >= 1, got %d", cfg.Knowledge.MinSessions)
 	}
 	return nil
 }

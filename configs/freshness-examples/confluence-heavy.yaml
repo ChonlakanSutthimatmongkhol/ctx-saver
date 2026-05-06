@@ -30,3 +30,11 @@ freshness:
     shell:git:
       max_age_seconds: 300
       auto_refresh: false
+
+knowledge:
+  # Refresh after 60 min idle — Confluence sessions tend to be longer.
+  min_sessions: 3
+  idle_minutes: 60
+  top_files_limit: 10
+  top_commands_limit: 10
+  decisions_limit: 10

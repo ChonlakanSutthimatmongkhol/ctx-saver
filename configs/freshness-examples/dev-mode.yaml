@@ -14,3 +14,11 @@ summary:
 
 freshness:
   enabled: false
+
+knowledge:
+  # Disable idle detection during dev/debug to avoid spurious refreshes.
+  idle_minutes: 0
+  min_sessions: 3
+  top_files_limit: 10
+  top_commands_limit: 10
+  decisions_limit: 10
