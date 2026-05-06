@@ -9,7 +9,7 @@ import (
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/store"
 )
 
-const knowledgeVersion = "0.7.0"
+const knowledgeVersion = "0.7.4"
 
 // nowFn returns the current time; overridden in tests for deterministic output.
 var nowFn = time.Now
