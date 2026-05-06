@@ -999,13 +999,15 @@ func (s *SQLiteStore) KnowledgeStats(ctx context.Context, projectPath string) (*
 	defer fileRows.Close()
 	for fileRows.Next() {
 		var (
-			f            FileFreq
-			lastHash     string
+			f             FileFreq
+			readCount     float64
+			lastHash      string
 			lastRefreshed int64
 		)
-		if err := fileRows.Scan(&f.Path, &f.ReadCount, &lastHash, &lastRefreshed); err != nil {
+		if err := fileRows.Scan(&f.Path, &readCount, &lastHash, &lastRefreshed); err != nil {
 			return nil, fmt.Errorf("knowledge stats: scanning file row: %w", err)
 		}
+		f.ReadCount = int(readCount)
 		f.LastChanged = time.Unix(lastRefreshed, 0)
 		f.HashStable = time.Since(f.LastChanged) > 3*24*time.Hour
 		data.TopFiles = append(data.TopFiles, f)
@@ -1030,10 +1032,16 @@ func (s *SQLiteStore) KnowledgeStats(ctx context.Context, projectPath string) (*
 	}
 	defer cmdRows.Close()
 	for cmdRows.Next() {
-		var c CommandFreq
-		if err := cmdRows.Scan(&c.Command, &c.RunCount, &c.AvgBytes); err != nil {
+		var (
+			c        CommandFreq
+			runCount float64
+			avgBytes float64
+		)
+		if err := cmdRows.Scan(&c.Command, &runCount, &avgBytes); err != nil {
 			return nil, fmt.Errorf("knowledge stats: scanning command row: %w", err)
 		}
+		c.RunCount = int(runCount)
+		c.AvgBytes = int64(avgBytes)
 		data.TopCommands = append(data.TopCommands, c)
 	}
 	if err := cmdRows.Err(); err != nil {

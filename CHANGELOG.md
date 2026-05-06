@@ -2,6 +2,11 @@
 
 All notable changes to ctx-saver will be documented in this file.
 
+## v0.7.1 — Bug Fix
+
+### Fixed
+- `knowledge refresh` / `knowledge show` crash: `sql: Scan error on column index 2, name "avg_bytes": converting driver.Value type float64 to int64` — SQLite `COUNT(*)` and `AVG()` aggregate functions return `float64`; scan into `float64` intermediates and convert to `int`/`int64` afterwards ([#sqlite.go](internal/store/sqlite.go))
+
 ## v0.7.0 — Materialized Project Knowledge
 
 ### Added
