@@ -7,9 +7,11 @@ import (
 	"time"
 
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/store"
+	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/version"
 )
 
-const knowledgeVersion = "0.7.5"
+// knowledgeVersion is derived from the canonical version — update internal/version/version.go.
+var knowledgeVersion = version.Version
 
 // nowFn returns the current time; overridden in tests for deterministic output.
 var nowFn = time.Now

@@ -9,6 +9,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/config"
+	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/version"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/handlers"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/knowledge"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/sandbox"
@@ -16,10 +17,10 @@ import (
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/store"
 )
 
-const (
-	serverName    = "ctx-saver"
-	serverVersion = "0.7.4"
-)
+const serverName = "ctx-saver"
+
+// serverVersion is the single source of truth — update internal/version/version.go.
+var serverVersion = version.Version
 
 // New constructs a fully configured *mcp.Server with all ctx-saver tools registered.
 // All dependencies are injected — no global state is used.

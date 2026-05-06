@@ -43,6 +43,7 @@ import (
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/sandbox"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/server"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/store"
+	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/version"
 )
 
 func main() {
@@ -59,7 +60,7 @@ func run() error {
 	// ── Version flag: ctx-saver --version / -v ────────────────────────────────
 	// Must be handled before any DB access to avoid flock UE state.
 	if len(args) >= 1 && (args[0] == "--version" || args[0] == "-v" || args[0] == "version") {
-		fmt.Println("ctx-saver 0.7.5")
+		fmt.Println("ctx-saver " + version.Version)
 		return nil
 	}
 
