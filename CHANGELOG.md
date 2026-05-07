@@ -2,6 +2,11 @@
 
 All notable changes to ctx-saver will be documented in this file.
 
+## v0.8.1 — Docs: README update for Codex CLI
+
+### Changed
+- README: added Codex CLI to Quick start, install section, tools table, and new "For Codex CLI users" section
+
 ## v0.8.0 — Codex CLI support
 
 ### Added
