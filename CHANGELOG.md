@@ -2,6 +2,19 @@
 
 All notable changes to ctx-saver will be documented in this file.
 
+## v0.8.0 — Codex CLI support
+
+### Added
+- `ctx-saver init codex` — installs MCP server into `~/.codex/config.toml`
+  and hooks (PreToolUse, PostToolUse, SessionStart) into `~/.codex/hooks.json`
+- `ctx-saver init agents-md` — creates AGENTS.md instruction file at project root
+  (teaches Codex to use ctx-saver tools instead of native Shell/read)
+- `configs/codex/AGENTS.md` template
+
+### Result
+ctx-saver now supports 3 AI coding hosts: Claude Code, Copilot Enterprise, and Codex CLI.
+Hook formatter already supported Codex — no logic changes needed.
+
 ## v0.7.2 — Fix: read-only connection for KnowledgeStats
 
 ### Fixed

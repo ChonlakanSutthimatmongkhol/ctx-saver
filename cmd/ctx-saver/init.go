@@ -52,6 +52,10 @@ func runInit(args []string) error {
 		return initCopilot()
 	case "copilot-instructions":
 		return initCopilotInstructions()
+	case "codex":
+		return initCodex()
+	case "agents-md":
+		return initAgentsMd()
 	default:
 		printInitUsage()
 		return fmt.Errorf("unknown platform %q", args[0])
@@ -65,6 +69,8 @@ Platforms:
   claude                — Install hooks into ~/.claude/settings.json
   copilot               — Install MCP server into .vscode/mcp.json (current directory)
   copilot-instructions  — Install .github/copilot-instructions.md (current directory)
+  codex                 — Install MCP server + hooks into ~/.codex/
+  agents-md             — Install AGENTS.md (current directory)
 `)
 }
 
@@ -194,6 +200,120 @@ func initCopilotInstructions() error {
 	}
 
 	fmt.Println("Done. Commit .github/copilot-instructions.md to share rules with your team.")
+	return nil
+}
+
+func initCodex() error {
+	bin, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("finding binary path: %w", err)
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("finding home directory: %w", err)
+	}
+
+	codexDir := filepath.Join(home, ".codex")
+	if err := os.MkdirAll(codexDir, 0700); err != nil {
+		return fmt.Errorf("creating ~/.codex directory: %w", err)
+	}
+
+	configPath := filepath.Join(codexDir, "config.toml")
+	if err := appendCodexMCPConfig(configPath, bin); err != nil {
+		return err
+	}
+
+	hooksPath := filepath.Join(codexDir, "hooks.json")
+	hookPatch := map[string]any{
+		"PreToolUse": []any{
+			map[string]any{"script": bin + " hook pretooluse"},
+		},
+		"PostToolUse": []any{
+			map[string]any{"script": bin + " hook posttooluse"},
+		},
+		"SessionStart": []any{
+			map[string]any{"script": bin + " hook sessionstart"},
+		},
+	}
+	fmt.Printf("Installing ctx-saver hooks for Codex CLI → %s\n", hooksPath)
+	if err := mergeJSONFile(hooksPath, hookPatch); err != nil {
+		return err
+	}
+
+	cwd, err := os.Getwd()
+	if err == nil {
+		if injErr := injectKnowledgeReference(filepath.Join(cwd, "AGENTS.md")); injErr != nil {
+			slog.Warn("could not update AGENTS.md with knowledge reference", "error", injErr)
+		}
+	}
+
+	fmt.Println("Done. Restart Codex CLI to activate.")
+	return nil
+}
+
+func appendCodexMCPConfig(configPath, bin string) error {
+	if data, err := os.ReadFile(configPath); err == nil {
+		if strings.Contains(string(data), "[mcp_servers.ctx-saver]") {
+			fmt.Printf("  ctx-saver MCP already configured in %s\n", configPath)
+			return nil
+		}
+	}
+
+	block := fmt.Sprintf("\n[mcp_servers.ctx-saver]\ncommand = %q\n", bin)
+
+	f, err := os.OpenFile(configPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+	if err != nil {
+		return fmt.Errorf("opening %s: %w", configPath, err)
+	}
+	defer f.Close()
+
+	if _, err := fmt.Fprint(f, block); err != nil {
+		return fmt.Errorf("writing MCP config to %s: %w", configPath, err)
+	}
+
+	fmt.Printf("  written: %s\n", configPath)
+	return nil
+}
+
+func initAgentsMd() error {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("getting working directory: %w", err)
+	}
+	targetFile := filepath.Join(cwd, "AGENTS.md")
+
+	if _, err := os.Stat(targetFile); err == nil {
+		fmt.Printf("  %s already exists.\n", targetFile)
+		fmt.Print("  Append ctx-saver rules? [y/N] ")
+		reader := bufio.NewReader(os.Stdin)
+		confirm, _ := reader.ReadString('\n')
+		confirm = strings.TrimSpace(confirm)
+		if confirm != "y" && confirm != "Y" {
+			fmt.Println("  Skipped.")
+			return nil
+		}
+		f, err := os.OpenFile(targetFile, os.O_APPEND|os.O_WRONLY, 0644)
+		if err != nil {
+			return fmt.Errorf("opening %s: %w", targetFile, err)
+		}
+		defer f.Close()
+		if _, err := fmt.Fprintf(f, "\n---\n\n%s", configs.AgentsMdTemplate); err != nil {
+			return fmt.Errorf("appending to %s: %w", targetFile, err)
+		}
+		fmt.Printf("  Appended ctx-saver rules to %s\n", targetFile)
+	} else {
+		if err := os.WriteFile(targetFile, []byte(configs.AgentsMdTemplate), 0644); err != nil {
+			return fmt.Errorf("writing %s: %w", targetFile, err)
+		}
+		fmt.Printf("  Created %s\n", targetFile)
+	}
+
+	if injErr := injectKnowledgeReference(targetFile); injErr != nil {
+		slog.Warn("could not update AGENTS.md with knowledge reference", "error", injErr)
+	}
+
+	fmt.Println("Done. Commit AGENTS.md to share rules with your team.")
 	return nil
 }
 

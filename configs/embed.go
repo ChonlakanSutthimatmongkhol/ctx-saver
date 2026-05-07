@@ -8,3 +8,9 @@ import _ "embed"
 //
 //go:embed copilot-enterprise/copilot-instructions.md
 var CopilotInstructionsTemplate string
+
+// AgentsMdTemplate is the AGENTS.md template that teaches Codex CLI
+// to prefer ctx-saver tools.
+//
+//go:embed codex/AGENTS.md
+var AgentsMdTemplate string
