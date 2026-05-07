@@ -75,20 +75,39 @@ Or globally in VS Code `settings.json`:
 
 Verify: Command Palette → **MCP: List Servers** — should show `ctx-saver` with 11 tools.
 
-### Install Claude hooks and Copilot server entry
-
-Claude hooks enable automatic routing of large-output commands and session history restoration.
-For VS Code Copilot, this step only registers the `ctx-saver` MCP server entry.
-
+**Codex CLI** — run from any project root:
 ```bash
-# Claude Code
-ctx-saver init claude
-
-# VS Code Copilot (run from your project root; registers MCP server only)
-ctx-saver init copilot
+ctx-saver init codex
 ```
 
-Both commands detect the binary path automatically, back up your existing config, and merge JSON safely without overwriting unrelated settings. No `jq` required.
+This writes `~/.codex/config.toml` (MCP server entry) and `~/.codex/hooks.json` (PreToolUse, PostToolUse, SessionStart) automatically.
+
+### Install hooks and instruction files
+
+Hooks enable automatic routing of large-output commands and session history restoration.
+
+```bash
+# Claude Code — hooks + CLAUDE.md knowledge reference
+ctx-saver init claude
+
+# VS Code Copilot — MCP server entry in .vscode/mcp.json
+ctx-saver init copilot
+
+# Codex CLI — MCP server entry + hooks in ~/.codex/
+ctx-saver init codex
+```
+
+Add instruction files to teach the AI to use ctx-saver tools:
+
+```bash
+# Copilot Enterprise (.github/copilot-instructions.md)
+ctx-saver init copilot-instructions
+
+# Codex CLI (AGENTS.md at project root)
+ctx-saver init agents-md
+```
+
+All commands detect the binary path automatically, back up existing config, and merge safely without overwriting unrelated settings. No `jq` required.
 
 > **Repo clone users:** `./scripts/install-hooks.sh claude` and `./scripts/install-hooks.sh copilot` also work (require `jq`).
 
@@ -114,7 +133,7 @@ See [Hook behaviour](#hooks) below for what each hook does.
 
 | Tool | Purpose |
 |------|---------|
-| `ctx_session_init` ⭐ | **Call first in every new session.** Returns project rules, recent events, cached output inventory, and config. Copilot Enterprise must call this explicitly; Claude Code uses the SessionStart hook automatically. |
+| `ctx_session_init` ⭐ | **Call first in every new session.** Returns project rules, recent events, cached output inventory, and config. Claude Code and Codex CLI use the SessionStart hook automatically; Copilot Enterprise must call this explicitly. |
 | `ctx_execute` | Run shell/python/go/node; large output stored + summarised (format-aware). Shows `duplicate_hint` if the same command ran within the last 30 min. |
 | `ctx_read_file` | Read a file, optionally piped through a processing script. Use `fields="signatures"` to return only function/type/const declarations with original line numbers (Go, Python, Dart). |
 | `ctx_outline` | Extract headings / table-of-contents from a stored output. Includes `freshness` field. |
@@ -371,6 +390,27 @@ ctx-saver init copilot
 # 3. Add Copilot instruction rules to your repo
 ctx-saver init copilot-instructions
 ```
+
+## For Codex CLI users
+
+```bash
+# 1. Install ctx-saver binary
+go install github.com/ChonlakanSutthimatmongkhol/ctx-saver/cmd/ctx-saver@latest
+
+# 2. Install MCP server + hooks into ~/.codex/
+ctx-saver init codex
+
+# 3. Add Codex instruction rules to your repo
+ctx-saver init agents-md
+```
+
+`ctx-saver init codex` writes:
+- `~/.codex/config.toml` — MCP server entry (idempotent; safe to run twice)
+- `~/.codex/hooks.json` — PreToolUse, PostToolUse, SessionStart hooks
+
+`ctx-saver init agents-md` creates `AGENTS.md` at the project root. Commit it to share ctx-saver routing rules with your team.
+
+Restart Codex CLI after running `init codex` to activate the hooks.
 
 ## Project Knowledge
 
