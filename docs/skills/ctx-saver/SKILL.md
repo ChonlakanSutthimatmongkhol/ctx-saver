@@ -140,12 +140,12 @@ Returns: `output_id`, `command`, `created_at`, `size_bytes`, `lines` — newest 
 
 ## Fetching Confluence / Jira Pages
 
-Fetch via `ctx_execute` with the `atlassian` CLI, then search the stored result:
+Fetch via `ctx_execute` with the `dx` CLI, then search the stored result:
 
 ```json
 {
   "language": "shell",
-  "code": "./ai-workflow/atlassian confluence <URL> --ai",
+  "code": "dx confluence read <URL> --ai",
   "intent": "fetch API spec"
 }
 ```
