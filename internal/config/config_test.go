@@ -21,6 +21,8 @@ func TestDefault_HasSaneValues(t *testing.T) {
 	assert.Equal(t, 5, cfg.Summary.TailLines)
 	assert.Equal(t, 32768, cfg.Summary.AutoIndexThresholdBytes)
 	assert.NotEmpty(t, cfg.DenyCommands)
+	assert.Equal(t, 14400, cfg.Freshness.DefaultMaxAgeSeconds)
+	assert.Equal(t, 600, cfg.Freshness.Sources["shell:git"].MaxAgeSeconds)
 }
 
 func TestLoad_NoConfigFile_UsesDefaults(t *testing.T) {

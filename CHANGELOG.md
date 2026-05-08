@@ -2,6 +2,20 @@
 
 All notable changes to ctx-saver will be documented in this file.
 
+## v0.8.2 — Git allowlist + TTL tuning
+
+### Fixed
+- git add/commit/push/fetch/pull/merge/rebase/checkout/switch/restore/reset/stash no longer
+  trigger redirect hints — safe write commands with small output
+- git commit messages containing words like "log" or "diff" no longer falsely trigger hints
+- git log/diff/blame now show soft redirect hint only (not block) — large output benefits from ctx_execute
+- Default cache TTL raised 3600 → 14400 seconds (4h) — reduces false stale warnings in long sessions
+- shell:git TTL raised 120 → 600 seconds (10 min)
+
+### Added
+- README Troubleshooting section: duplicate tool names (multi-host expected behavior) and
+  ctx_session_init not called automatically
+
 ## v0.8.1 — Docs: README update for Codex CLI
 
 ### Changed

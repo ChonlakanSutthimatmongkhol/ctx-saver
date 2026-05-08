@@ -271,6 +271,28 @@ make install
 - [Claude Code config notes](configs/claude-code/README.md)
 - [VS Code Copilot config notes](configs/vscode-copilot/README.md)
 
+## การแก้ปัญหาเบื้องต้น
+
+### ชื่อ tool ซ้ำกัน
+
+เมื่อใช้หลาย AI host พร้อมกัน (Claude Code + Copilot + Codex) อาจเห็นชื่อ tool ซ้ำ เช่น:
+- `mcp__ctx-saver__ctx_execute`
+- `mcp__plugin__claude_ctx-saver__ctx_execute`
+
+**นี่คือพฤติกรรมที่ถูกต้อง** แต่ละ host ลงทะเบียน ctx-saver ภายใต้ namespace ของตัวเอง
+ทั้งสองชื่อชี้ไปยัง server และ database เดียวกัน — ไม่มีการซ้ำซ้อนหรือ conflict ของข้อมูล
+AI host แต่ละตัวจะเรียก namespace ของตัวเองโดยอัตโนมัติ ไม่ต้องตั้งค่าเพิ่มเติม
+
+### ctx_session_init ไม่ถูกเรียกอัตโนมัติ
+
+บาง host (เช่น Copilot Enterprise) ต้องทำ `ToolSearch` ก่อนเรียก MCP tools
+ทำให้ `ctx_session_init` ถูกข้ามไปในช่วงต้น session
+
+**วิธีแก้:** เพิ่มบรรทัดนี้ในไฟล์คำสั่ง (CLAUDE.md / AGENTS.md / copilot-instructions.md):
+
+    Your first tool call in every new session must be ctx_session_init.
+    Call it before any other tool, including ToolSearch.
+
 ## Design Notes
 
 ctx-saver ตั้งใจใช้ subprocess และ SQLite ในเครื่อง แทนการพึ่ง remote service ภัยหลักที่แก้คือ context pollution จาก output ขนาดใหญ่ ไม่ใช่การ sandbox software ที่ไม่น่าเชื่อถือ เป้าหมายคือทำให้ AI coding session โฟกัสขึ้น ค้นย้อนหลังได้ และ audit ง่าย

@@ -54,6 +54,20 @@ func TestRoutePreToolUse(t *testing.T) {
 
 		// Redirect: find.
 		{"find redirect", "Shell", "find /home -type f", false},
+
+		// Git safe commands — always allowed, no block.
+		{"git add", "Shell", "git add .", true},
+		{"git commit", "Shell", "git commit -m 'fix'", true},
+		{"git push", "Shell", "git push origin main", true},
+		{"git fetch", "Shell", "git fetch --all", true},
+		{"git pull", "Shell", "git pull", true},
+		{"git checkout", "Shell", "git checkout main", true},
+		{"git stash", "Shell", "git stash pop", true},
+
+		// Git large output — allow (not block).
+		{"git log large", "Shell", "git log --oneline -50", true},
+		{"git diff large", "Shell", "git diff HEAD~5", true},
+		{"git blame", "Shell", "git blame main.go", true},
 	}
 
 	for _, tt := range tests {
@@ -62,6 +76,38 @@ func TestRoutePreToolUse(t *testing.T) {
 			if d.allow != tt.wantAllow {
 				t.Errorf("routePreToolUse(%q, %q) allow=%v, want %v (reason: %s)",
 					tt.tool, tt.cmd, d.allow, tt.wantAllow, d.reason)
+			}
+		})
+	}
+}
+
+func TestRouteNativeToolUsage(t *testing.T) {
+	tests := []struct {
+		name     string
+		tool     string
+		cmd      string
+		wantHint bool
+	}{
+		// Git safe — no hint.
+		{"git add no hint", "Shell", "git add .", false},
+		{"git commit no hint", "Shell", "git commit -m 'fix'", false},
+		{"git push no hint", "Shell", "git push origin main", false},
+		// git commit with "log" in message — must not trigger hint.
+		{"git commit log msg", "Shell", `git commit -m "update log format"`, false},
+		// Git large — hint expected.
+		{"git log hint", "Shell", "git log --oneline -50", true},
+		{"git diff hint", "Shell", "git diff HEAD~5", true},
+		{"git blame hint", "Shell", "git blame main.go", true},
+		// Non-shell, non-read tool — no hint.
+		{"non-shell", "mcp__ctx_execute", "git log", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := routeNativeToolUsage(tt.tool, tt.cmd)
+			hasHint := got != ""
+			if hasHint != tt.wantHint {
+				t.Errorf("routeNativeToolUsage(%q, %q) hint=%v, want %v (got: %q)",
+					tt.tool, tt.cmd, hasHint, tt.wantHint, got)
 			}
 		})
 	}

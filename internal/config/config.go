@@ -146,14 +146,14 @@ func Default() *Config {
 		},
 		Freshness: FreshnessConfig{
 			Enabled:                     true,
-			DefaultMaxAgeSeconds:        3600,   // 1 hour
+			DefaultMaxAgeSeconds:        14400,  // 4 hours
 			UserConfirmThresholdSeconds: 604800, // 7 days
 			Sources: map[string]FreshnessRule{
 				"shell:acli":    {MaxAgeSeconds: 300, AutoRefresh: true},
 				"shell:jira":    {MaxAgeSeconds: 300, AutoRefresh: true},
 				"shell:kubectl": {MaxAgeSeconds: 60, AutoRefresh: true},
 				"shell:docker":  {MaxAgeSeconds: 60, AutoRefresh: true},
-				"shell:git":     {MaxAgeSeconds: 120, AutoRefresh: false},
+				"shell:git":     {MaxAgeSeconds: 600, AutoRefresh: false},
 				"shell:flutter": {MaxAgeSeconds: 600, AutoRefresh: false},
 				"shell:go":      {MaxAgeSeconds: 600, AutoRefresh: false},
 				"shell:npm":     {MaxAgeSeconds: 600, AutoRefresh: false},

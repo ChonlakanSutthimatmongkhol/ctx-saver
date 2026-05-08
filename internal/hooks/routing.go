@@ -54,6 +54,23 @@ type redirectRule struct {
 	suggestion string
 }
 
+// gitSafePatterns matches git write/admin commands that are always safe
+// to run natively — output is small and sandboxing adds no value.
+var gitSafePatterns = []*regexp.Regexp{
+	regexp.MustCompile(`(?i)\bgit\s+(add|commit|push|fetch|pull|merge|rebase|checkout|switch|restore|reset|stash)\b`),
+}
+
+// isGitSafeCommand reports whether cmd is a git write/admin operation
+// that should always be allowed natively without redirect.
+func isGitSafeCommand(cmd string) bool {
+	for _, re := range gitSafePatterns {
+		if re.MatchString(cmd) {
+			return true
+		}
+	}
+	return false
+}
+
 // curlSafePatterns matches curl invocations that produce small/no output and
 // should NOT be redirected to ctx_execute.
 var curlSafePatterns = []*regexp.Regexp{
@@ -176,7 +193,7 @@ func isNativeReadTool(toolName string) bool {
 // for the context window.  Used to suppress nudge hints on trivial commands.
 func looksLargeOutput(cmd string) bool {
 	patterns := []string{
-		"build", "test", "log", "diff",
+		"build", "test", "log", "diff", "blame",
 		"kubectl", "docker", "acli", "jira",
 		"find", "grep", "curl", "wget",
 	}
@@ -195,6 +212,10 @@ func looksLargeOutput(cmd string) bool {
 func routeNativeToolUsage(toolName, cmd string) string {
 	switch {
 	case isNativeShellTool(toolName):
+		// Git write/admin commands are always safe — never hint redirect.
+		if isGitSafeCommand(cmd) {
+			return ""
+		}
 		if looksLargeOutput(cmd) {
 			return "💡 Hint: Use ctx_execute instead of " + toolName +
 				" for this command to avoid flooding the context window."
