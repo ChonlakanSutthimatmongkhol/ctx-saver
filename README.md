@@ -2,288 +2,214 @@
 
 **English** | [ภาษาไทย](README.th.md)
 
-A self-hosted MCP server (Go) that reduces AI context window usage by sandboxing large tool outputs and returning compact summaries instead of raw text.
+ctx-saver is a self-hosted MCP server for AI coding agents. It keeps large command output out of the chat context by storing the full text locally and returning a compact summary instead.
 
-## Why
+No cloud. No telemetry. No account. Local SQLite only.
 
-Large-output commands burn through your context window fast:
+## The Problem
 
-- **Infrastructure**: `kubectl get pods -A`, `docker ps -a --no-trunc`, `aws s3 ls --recursive`
-- **Logs & monitoring**: `journalctl`, `docker logs`, `npm install` (build logs), `git log --all --oneline`
-- **Search**: `find / -name "*.ts"`, `grep -r pattern`, `curl https://api.example.com/users`
-- **Package mgmt**: `pip list`, `go mod graph`, `npm ls --all`
-- **Data**: `cat large_file.json`, `jira issue list`, `ls -la /var/log/`
+AI agents often need to inspect big outputs:
 
-ctx-saver intercepts these, stores outputs in local SQLite with FTS5 indexing, and returns only a head+tail summary. When you need more, use `ctx_search` or `ctx_get_full`.
+- `go test -race -v ./...`
+- `docker logs`, `journalctl`, `kubectl get pods -A`
+- `git log --all`, `git diff`, `grep -r`, `find`
+- large JSON files, API responses, Jira exports, build logs
 
-**No cloud. No telemetry. No account. 100% auditable code.**
+Sending all of that text into the model burns context fast. ctx-saver gives the agent the useful summary first, then lets it search or retrieve details only when needed.
 
-## Quick start (5 minutes)
+## How It Works
 
-### Option A — go install (requires Go 1.25+)
+```mermaid
+flowchart LR
+  A[AI agent] -->|calls MCP tool| B[ctx-saver]
+  B --> C{Output size}
+  C -->|small| D[Return output directly]
+  C -->|large| E[Store full output in local SQLite]
+  E --> F[Return compact summary + output_id]
+  F --> G[Search with ctx_search]
+  F --> H[Retrieve exact lines with ctx_get_full]
+```
+
+The main idea is simple: keep noisy output searchable, but do not spend the whole context window on it.
+
+## Quick Start
+
+### 1. Install
+
+Requires Go 1.25+.
 
 ```bash
 go install github.com/ChonlakanSutthimatmongkhol/ctx-saver/cmd/ctx-saver@latest
 ```
 
-The binary lands in `$(go env GOPATH)/bin/`. Make sure that directory is in your `PATH`:
+Make sure your Go binary directory is in `PATH`:
 
 ```bash
-# Add to ~/.zshrc or ~/.bashrc (one-time setup)
 export PATH="$PATH:$(go env GOPATH)/bin"
 ```
 
-### Option B — clone and build
+Or build from source:
 
 ```bash
 git clone https://github.com/ChonlakanSutthimatmongkhol/ctx-saver.git
 cd ctx-saver
-make install        # build + copy to /usr/local/bin/ctx-saver
+make install
 ```
 
-### Configure your AI client
+### 2. Connect Your AI Client
 
 **Claude Code**
-```bash
-claude mcp add ctx-saver -- $(go env GOPATH)/bin/ctx-saver
-```
-
-**VS Code Copilot** — create `.vscode/mcp.json` in any project root:
-```json
-{
-  "servers": {
-    "ctx-saver": {
-      "command": "/usr/local/bin/ctx-saver"
-    }
-  }
-}
-```
-
-> **Option A users** (`go install`): replace the path above with `$(go env GOPATH)/bin/ctx-saver`.
-> Or run `ctx-saver init copilot` — it detects the binary path automatically (no `jq` required).
-
-Or globally in VS Code `settings.json`:
-```json
-{
-  "mcp.servers": {
-    "ctx-saver": {
-      "command": "/Users/<you>/go/bin/ctx-saver"
-    }
-  }
-}
-```
-
-Verify: Command Palette → **MCP: List Servers** — should show `ctx-saver` with 11 tools.
-
-**Codex CLI** — run from any project root:
-```bash
-ctx-saver init codex
-```
-
-This writes `~/.codex/config.toml` (MCP server entry) and `~/.codex/hooks.json` (PreToolUse, PostToolUse, SessionStart) automatically.
-
-### Install hooks and instruction files
-
-Hooks enable automatic routing of large-output commands and session history restoration.
 
 ```bash
-# Claude Code — hooks + CLAUDE.md knowledge reference
 ctx-saver init claude
-
-# VS Code Copilot — MCP server entry in .vscode/mcp.json
-ctx-saver init copilot
-
-# Codex CLI — MCP server entry + hooks in ~/.codex/
-ctx-saver init codex
 ```
 
-Add instruction files to teach the AI to use ctx-saver tools:
+**Codex CLI**
 
 ```bash
-# Copilot Enterprise (.github/copilot-instructions.md)
-ctx-saver init copilot-instructions
-
-# Codex CLI (AGENTS.md at project root)
+ctx-saver init codex
 ctx-saver init agents-md
 ```
 
-All commands detect the binary path automatically, back up existing config, and merge safely without overwriting unrelated settings. No `jq` required.
+Restart Codex CLI after installing hooks.
 
-> **Repo clone users:** `./scripts/install-hooks.sh claude` and `./scripts/install-hooks.sh copilot` also work (require `jq`).
+**VS Code Copilot**
 
-For VS Code Copilot, `.vscode/mcp.json` currently accepts `servers` but rejects a top-level `hooks` key.
-
-In short:
-- Copilot can use `ctx-saver` MCP tools normally
-- Copilot does not run lifecycle hooks automatically (`pretooluse`, `posttooluse`, `sessionstart`)
-- Automatic hooks are currently supported via Claude Code only (`~/.claude/settings.json`)
-
-Note: You can still run `ctx-saver hook <event>` manually for one-off testing.
-
-To remove Claude hooks:
 ```bash
-./scripts/uninstall-hooks.sh claude
+ctx-saver init copilot
+ctx-saver init copilot-instructions
 ```
 
-To remove VS Code Copilot server entry, delete `servers.ctx-saver` from `.vscode/mcp.json`.
+Copilot can use ctx-saver MCP tools, but it does not currently run lifecycle hooks automatically. See [Copilot Enterprise Setup](docs/copilot-enterprise-setup.md) for company/enterprise setup notes.
 
-See [Hook behaviour](#hooks) below for what each hook does.
+## Daily Usage
 
-## Tools
+Most users only need these tools:
 
-| Tool | Purpose |
-|------|---------|
-| `ctx_session_init` ⭐ | **Call first in every new session.** Returns project rules, recent events, cached output inventory, and config. Claude Code and Codex CLI use the SessionStart hook automatically; Copilot Enterprise must call this explicitly. |
-| `ctx_execute` | Run shell/python/go/node; large output stored + summarised (format-aware). Shows `duplicate_hint` if the same command ran within the last 30 min. |
-| `ctx_read_file` | Read a file, optionally piped through a processing script. Use `fields="signatures"` to return only function/type/const declarations with original line numbers (Go, Python, Dart). |
-| `ctx_outline` | Extract headings / table-of-contents from a stored output. Includes `freshness` field. |
-| `ctx_get_section` | Extract a specific section by heading text (use after `ctx_outline` to navigate long docs). Includes `freshness` + `user_confirmation_required` fields. |
-| `ctx_search` | FTS5 full-text search across stored outputs (supports `context_lines`). Per-match `freshness` field. Special characters auto-escaped; LIKE fallback on parse errors. |
-| `ctx_get_full` | Retrieve complete output or a specific line range. Includes `freshness` + `user_confirmation_required` fields. Set `accept_stale: true` to bypass confirmation gate. |
-| `ctx_stats` | Report storage, hook statistics, and adherence score (scope: `session\|today\|7d\|all`). Use `view="outputs"` to list all cached outputs (replaces `ctx_list_outputs`). |
-| `ctx_note` | Save or list architectural decisions that survive `/compact`. Use `action="list"` to query saved notes (replaces `ctx_list_notes`). |
-| `ctx_purge` | **[DESTRUCTIVE]** Delete all cached outputs and session events for this project. Requires `confirm="yes"`. Decision notes are preserved by default; pass `all=true` to delete them too. |
+| Tool | Use it for |
+|------|------------|
+| `ctx_session_init` | Start a session with project rules, recent activity, cached outputs, and saved decisions. |
+| `ctx_execute` | Run shell, Python, Go, or Node commands while storing large output safely. |
+| `ctx_read_file` | Read large files without flooding the model context. |
+| `ctx_search` | Search stored outputs using full-text search. |
+| `ctx_get_full` | Retrieve a full output or exact line range when needed. |
 
-### Cache Purge (v0.6.0)
+Typical agent flow:
 
-Use `ctx_purge` to clear cached data when switching feature context, the cache is noisy/stale, or before a demo handover.
+```mermaid
+sequenceDiagram
+  participant User
+  participant Agent
+  participant Saver as ctx-saver
+  participant DB as Local SQLite
 
-```
-ctx_purge(confirm="yes")          # deletes outputs + events; keeps notes
-ctx_purge(confirm="yes", all=true) # also deletes ctx_note entries
-```
-
-| Target | Default | `all=true` |
-|--------|---------|------------|
-| Cached outputs | ✅ deleted | ✅ deleted |
-| Session events | ✅ deleted | ✅ deleted |
-| Decision notes | ❌ kept | ✅ deleted |
-
-> ⚠️ Irreversible. Deleted outputs cannot be recovered.
-
-### Decision Log (v0.5.1)
-
-Use `ctx_note` to record any non-obvious design choice, discovered constraint, or confirmed tradeoff so future sessions (and post-`/compact` context) can recover the reasoning.
-
-```
-ctx_note(
-  text="Chose WithFreshness builder pattern; positional arg would break 15 test sites",
-  tags=["arch", "phase7"],
-  importance="high"
-)
-
-ctx_note(action="list", scope="session")
-ctx_note(action="list", tags=["arch"], min_importance="high")
+  User->>Agent: "Run tests and inspect failures"
+  Agent->>Saver: ctx_execute("go test -race -v ./...")
+  Saver->>DB: Store full test output
+  Saver-->>Agent: Summary + output_id
+  Agent->>Saver: ctx_search("FAIL", output_id)
+  Saver-->>Agent: Relevant failing lines
+  Agent-->>User: Short diagnosis, not 800 lines of logs
 ```
 
-Decisions are scoped per-project, persist across sessions, and are automatically injected into `ctx_session_init` (up to 10 most recent normal+high importance items from the last 7 days).
+## What You Get Back
 
-### Cache Freshness Policy (v0.5.0)
+Large outputs return a compact summary instead of raw text:
 
-Every retrieval response includes a `freshness` object:
-
-```json
-{
-  "freshness": {
-    "source_kind": "shell:kubectl",
-    "cached_at": "2026-04-26T03:00:00Z",
-    "age_seconds": 7200,
-    "age_human": "2h ago",
-    "stale_level": "aging",
-    "refresh_hint": ""
-  }
-}
+```text
+format: go_test
+packages: 18 passed, 1 failed
+failed:
+  internal/store TestKnowledgeStatsScan
+stored_as: out_20260508_ab12cd34
 ```
 
-| `stale_level` | Age | AI behaviour |
-|---|---|---|
-| `fresh` | < 1 h | Use data as-is |
-| `aging` | 1–24 h | Use data as-is; note age if relevant |
-| `stale` | 1–7 days | Warn user; offer to refresh via `ctx_execute` |
-| `critical` | > 7 days | **Do not use for decisions.** `user_confirmation_required: true` is set — the AI must surface the prompt to the user and wait for approval |
+When more detail is needed, the agent can ask for:
 
-**Auto-refresh**: sources with `auto_refresh: true` (e.g. `shell:kubectl`, `shell:acli`) are silently re-run on retrieval when stale. The original `output_id` is preserved.
-
-**Bypass**: pass `accept_stale: true` in any retrieval input to skip the confirmation gate.
-
-**Disable entirely**: set `freshness.enabled: false` in config.
-
-See [docs/migration-v0.5.md](docs/migration-v0.5.md) for the full upgrade guide and [configs/freshness-examples/](configs/freshness-examples/) for sample configurations.
-
-### Smart Summarizer
-
-`ctx_execute` automatically detects the output format and produces a compact, structured summary:
-
-| Format | Detected when | Summary includes |
-|--------|--------------|------------------|
-| `flutter_test` | command contains `flutter test`, or output has `All tests passed!` / `Some tests failed.` | pass/fail/skip counts, failed test names, duration |
-| `go_test` | command contains `go test`, or output has `=== RUN` + `--- PASS/FAIL` | package pass/fail counts, failed test details, coverage % |
-| `json` | output is valid JSON starting with `{` or `[` | top-level keys + types, array length, sample value |
-| `git_log` | command contains `git log`, or output starts with `commit <hash>` | commit count, newest/oldest commits, top authors |
-| `generic` | fallback for everything else | head + tail lines with omitted-line count |
-
-Set `summary.smart_format: false` in config to always use the generic summariser.
-
-### Search features
-
-**Auto-escape** — special characters (`#`, `-`, `|`, `:`, `*`, `(`, `)`) in `ctx_search` queries are automatically wrapped as FTS5 phrase literals. You never need to escape them manually.
-
-**LIKE fallback** — if FTS5 still fails (malformed input), the search retries with a LIKE scan automatically. The response includes `search_mode: "fts5"` or `search_mode: "like_fallback"`.
-
-**Synonym expansion** — queries are automatically expanded using a built-in dictionary. `api_path` expands to `[api_path, endpoint, route, url, path]`; `authentication` expands to `[auth, login, jwt, oauth, bearer, token]`; etc. The response includes `expanded_queries` so you can see exactly what was searched.
-
-To add project-specific synonyms, create `.ctx-saver-synonyms.yaml` in your project root:
-
-```yaml
-payment_flow: [checkout, billing, invoice, transaction]
-user_model: [account, profile, member]
+```text
+ctx_search("TestKnowledgeStatsScan", output_id="out_20260508_ab12cd34")
+ctx_get_full(output_id="out_20260508_ab12cd34", line_range=[120, 170])
 ```
 
-Project overrides replace (not merge) any built-in entry with the same key.
+## Token Savings
 
-## How it works
+Measured from real commands run through `ctx_execute` in this repository.
 
+| Command | Raw | Summary | Saving |
+|---------|-----|---------|--------|
+| `go test -race -v ./...` | 39 KB | 115 B | 99.7% |
+| `git log --oneline -500` | 8.7 KB | 155 B | 98.2% |
+| Jira JSON export | 88 KB | 320 B | 99.6% |
+| `app.log` with 2,000 lines | 177 KB | 1.5 KB | 99.2% |
+| `git diff HEAD~5` | 22 KB | 750 B | 96.6% |
+
+Overall benchmark snapshot: 391 KB raw output reduced to 6.1 KB of summaries, about 98.4% smaller.
+
+Run the benchmark locally:
+
+```bash
+scripts/benchmark.sh
 ```
-Claude Code / VS Code Copilot
-        │
-        ▼  MCP (stdio)
-  ctx-saver server (Go binary)
-        │
-        ├── ctx_execute: subprocess → capture output
-        │       ├── small (≤5KB) → return directly
-        │       └── large (>5KB) → store in SQLite + return summary
-        │
-        └── SQLite (~/.local/share/ctx-saver/<hash>.db)
-                ├── outputs table  (full text, metadata)
-                └── outputs_fts    (FTS5 + BM25 ranking)
-```
 
-## Real usage: token reduction
+## Key Features
 
-Measured from real commands executed through `ctx_execute` in this repository.
+### Smart Summaries
 
-Benchmark snapshot (`2026-05-06`). Assumption for token estimate: `1 token ≈ 4 bytes`.
+`ctx_execute` detects common output formats and summarizes them with structure:
 
-| Command | Format | Raw (bytes) | Summary (bytes) | Saving | Tokens saved |
-|---------|--------|-------------|-----------------|--------|--------------|
-| `go test -race -v ./...` (790 lines) | `go_test` ✦ | 39,313 | 115 | **99.7%** | ~9,800 |
-| `git log --oneline -500` | `git_log` ✦ | 8,701 | 155 | **98.2%** | ~2,135 |
-| jira 200 issues (JSON) | `json` ✦ | 87,938 | 320 | **99.6%** | ~21,905 |
-| `kubectl get pods` (100 pods) | `generic` | 6,153 | 1,850 | **69.9%** | ~1,076 |
-| `app.log` (2,000 lines) | `generic` | 176,998 | 1,500 | **99.2%** | ~43,875 |
-| `git diff HEAD~5` (398 lines) | `generic` | 21,795 | 750 | **96.6%** | ~5,261 |
-| `grep -rn 'func' ./...` (500 matches) | `generic` | 50,344 | 1,450 | **97.1%** | ~12,224 |
-| **Total** | | **391,242** | **6,140** | **98.4%** | **~96,276** |
+| Format | Summary includes |
+|--------|------------------|
+| `go_test` | package counts, failed tests, coverage |
+| `flutter_test` | pass/fail/skip counts, failed test names |
+| `json` | top-level keys, array length, sample values |
+| `git_log` | commit count, newest/oldest commits, top authors |
+| `generic` | head + tail lines with omitted-line count |
 
-✦ Smart-format summariser: extracts structured metadata instead of head/tail truncation.
+### Searchable Output
 
-Overall reduction in this run: **98.4%** (from 391,242 bytes to 6,140 bytes).
+Stored outputs are indexed with SQLite FTS5. `ctx_search` supports:
 
-For a dry-run comparison (head-20 + tail-5 simulation), run `scripts/benchmark.sh`.
+- special-character auto escaping
+- LIKE fallback if FTS5 rejects a query
+- synonym expansion for common engineering terms
+- optional project-specific synonyms in `.ctx-saver-synonyms.yaml`
+
+### Freshness Checks
+
+Retrieval tools include a `freshness` field so the agent knows whether cached data is still safe to use.
+
+| Level | Age | Agent behavior |
+|-------|-----|----------------|
+| `fresh` | under 1 hour | use as-is |
+| `aging` | 1-24 hours | use as-is, mention age when relevant |
+| `stale` | 1-7 days | warn and offer refresh |
+| `critical` | over 7 days | ask before using for decisions |
+
+### Hooks
+
+Claude Code and Codex CLI can use hooks for automatic behavior:
+
+| Hook | What it does |
+|------|--------------|
+| PreToolUse | Blocks dangerous commands and routes likely-large outputs through `ctx_execute`. |
+| PostToolUse | Records tool-call summaries for session restoration. |
+| SessionStart | Injects project rules and recent history at the start of a session. |
 
 ## Configuration
 
-Default config lives at `~/.config/ctx-saver/config.yaml`.  Per-project overrides go in `.ctx-saver.yaml` at the project root.
+Default config:
+
+```text
+~/.config/ctx-saver/config.yaml
+```
+
+Project override:
+
+```text
+.ctx-saver.yaml
+```
+
+Small example:
 
 ```yaml
 sandbox:
@@ -297,229 +223,54 @@ storage:
 summary:
   head_lines: 20
   tail_lines: 5
-  auto_index_threshold_bytes: 32768  # 32 KB (v0.6.0+)
-  smart_format: true                  # format-aware summariser (flutter_test | go_test | json | git_log | generic)
-  enabled_formatters: []              # empty = all enabled; list names to restrict
-
-dedup:
-  enabled: true
-  window_minutes: 30   # show duplicate_hint if same command ran within this window
-
-logging:
-  level: info
-  file: ~/.local/share/ctx-saver/server.log
-
-hooks:
-  session_history_limit: 10   # max events injected into SessionStart context
-
-deny_commands:
-  - "rm -rf /"
-  - "sudo *"
-  - "dd if=*"
-
-freshness:
-  enabled: true
-  default_max_age_seconds: 3600        # 1 hour for unknown sources
-  user_confirm_threshold_seconds: 604800  # 7 days → ask user before use
-  sources:
-    shell:kubectl: { max_age_seconds: 60,  auto_refresh: true }
-    shell:acli:    { max_age_seconds: 300, auto_refresh: true }
-    shell:git:     { max_age_seconds: 120, auto_refresh: false }
-    # see configs/freshness-examples/ for more presets
+  auto_index_threshold_bytes: 32768
+  smart_format: true
 ```
 
-## Token efficiency tuning
-
-The `auto_index_threshold_bytes` setting controls when outputs are returned inline
-vs stored with an `output_id`:
-
-| Value  | Effect |
-|--------|--------|
-| `32768` (default) | Typical Go/Python source files (300–500 lines) return inline — no round-trip needed |
-| `65536` | Keeps medium build outputs inline; uses more per-turn tokens but fewer tool calls |
-| `5120` | Legacy v0.5.x behavior — forces `output_id` flow for most files |
-
-Configure in `~/.config/ctx-saver/config.yaml`:
-
-```yaml
-summary:
-  auto_index_threshold_bytes: 32768  # adjust to taste
-```
-
-## Hooks
-
-Hooks run as lightweight subprocesses alongside the AI agent.  They share the same binary (`ctx-saver hook <event>`) so no extra installation is needed after `make install`.
-
-| Hook | Event | What it does |
-|------|-------|-------------|
-| PreToolUse | Before any shell/bash tool call | Blocks dangerous commands (`rm -rf`, pipe-to-shell, `eval`, `sudo -s`); redirects large-output commands (`curl`, `wget`, `cat *.log`, `find`, `journalctl`) to equivalent `ctx_execute` calls |
-| PostToolUse | After every tool call | Records a summary of the tool call to the per-project SQLite DB for session restoration |
-| SessionStart | At the start of every session | Injects routing rules and recent session history (up to `hooks.session_history_limit` deduplicated events) into the model's context |
-
-### Safe curl variants
-
-`curl --version`, `curl -I`, `curl --head`, and `curl -o /dev/null` are **not** redirected — only requests that are likely to return large bodies are sent through `ctx_execute`.
-
-### Dangerous command patterns blocked by PreToolUse
-
-- `rm -rf` / `rm -fr` / any `rm -[rRfF]+` variant
-- `find / … -delete`
-- Redirect to raw disk (`> /dev/sda`, `> /dev/nvme0`)
-- Pipe to shell interpreter (`curl … | bash`, `wget … | sh`, `| zsh`, …)
-- Any form of `eval`
-- `sudo -s`, `sudo rm`, `sudo dd`
-- Reads of credential files (`.env`, `id_rsa`, `.pem`, `.key`)
-
-## For Copilot Enterprise users
-
-If you are using GitHub Copilot in an enterprise context (e.g., at a bank or fintech), see the [Copilot Enterprise Setup Guide](docs/copilot-enterprise-setup.md) for:
-- Required admin policies (MCP server allowlist)
-- Installation steps specific to VS Code Copilot Agent mode
-- Verification procedure (`ctx_session_init` call)
-- Troubleshooting tool-adherence issues
-- How to engage IT/Security for MCP approval
-
-**Quick start:**
-```bash
-# 1. Install ctx-saver binary
-go install github.com/ChonlakanSutthimatmongkhol/ctx-saver/cmd/ctx-saver@latest
-
-# 2. Add MCP server to VS Code (run from your project directory)
-ctx-saver init copilot
-
-# 3. Add Copilot instruction rules to your repo
-ctx-saver init copilot-instructions
-```
-
-## For Codex CLI users
-
-```bash
-# 1. Install ctx-saver binary
-go install github.com/ChonlakanSutthimatmongkhol/ctx-saver/cmd/ctx-saver@latest
-
-# 2. Install MCP server + hooks into ~/.codex/
-ctx-saver init codex
-
-# 3. Add Codex instruction rules to your repo
-ctx-saver init agents-md
-```
-
-`ctx-saver init codex` writes:
-- `~/.codex/config.toml` — MCP server entry (idempotent; safe to run twice)
-- `~/.codex/hooks.json` — PreToolUse, PostToolUse, SessionStart hooks
-
-`ctx-saver init agents-md` creates `AGENTS.md` at the project root. Commit it to share ctx-saver routing rules with your team.
-
-Restart Codex CLI after running `init codex` to activate the hooks.
+Freshness presets are in [configs/freshness-examples](configs/freshness-examples).
 
 ## Project Knowledge
 
-The longer you use ctx-saver with a project, the more it learns about it.
-After 3+ sessions, ctx-saver can generate a `.ctx-saver/project-knowledge.md`
-file containing:
+After a few sessions, ctx-saver can generate `.ctx-saver/project-knowledge.md` so future AI sessions start with useful project memory:
 
-- **Most-read files** — with cache stability (hash unchanged or frequently changing)
-- **Most-run commands** — with average output size
-- **Common sequences** — command pairs that tend to run together
-- **High-importance decisions** — notes tagged with `importance=high`
-- **Session patterns** — session and output counts
-
-This file is referenced from `CLAUDE.md` / `copilot-instructions.md` so every
-AI session starts with project context at zero extra token cost per turn.
-
-### Generating knowledge
+- most-read files
+- most-run commands
+- common command sequences
+- high-importance decisions
+- session patterns
 
 ```bash
-ctx-saver knowledge refresh          # generate/update project-knowledge.md
-ctx-saver knowledge show             # print to stdout (no file write)
-ctx-saver knowledge reset            # delete project-knowledge.md
-ctx-saver knowledge refresh --quiet  # suppress output (for cron)
-```
-
-### Cron setup (recommended)
-
-```bash
-# macOS/Linux — refresh every weeknight at 23:00
-crontab -e
-# Add:
-0 23 * * 1-5 cd /path/to/project && ctx-saver knowledge refresh --quiet
-
-# View server log
-tail -f ~/.local/share/ctx-saver/server.log
-```
-
-**Idle detection** runs automatically while the MCP server is active: after
-`knowledge.idle_minutes` (default 30) of inactivity, knowledge is refreshed
-in the background — no cron needed during active sessions.
-
-### Configuration
-
-```yaml
-knowledge:
-  min_sessions: 3        # sessions required before first generation
-  idle_minutes: 30       # 0 = disable idle detection
-  top_files_limit: 10
-  top_commands_limit: 10
-  decisions_limit: 10
-```
-
-## Build
-
-```bash
-# Requires Go 1.25+
-make build          # → bin/ctx-saver
-make test           # unit tests
-make lint           # golangci-lint
-make install        # → /usr/local/bin/ctx-saver
+ctx-saver knowledge refresh
+ctx-saver knowledge show
+ctx-saver knowledge reset
 ```
 
 ## Security
 
-- SQLite database permissions: `0600` (owner read/write only)
-- Command deny list checked before execution
-- Binary output (null bytes) rejected
-- Path traversal resolved via `filepath.Abs` + `filepath.Clean`
-- Log file truncates command strings to 120 chars to avoid logging secrets
-- No network access — purely local
+- SQLite database permissions are `0600`
+- command deny list is checked before execution
+- binary output with null bytes is rejected
+- paths are cleaned with `filepath.Abs` and `filepath.Clean`
+- command strings in logs are truncated to reduce secret exposure
+- no external service is required
 
-## Repository structure
+## Build
 
-```
-cmd/ctx-saver/main.go          entry point
-internal/config/               YAML config loader
-internal/sandbox/              execution interface (subprocess + srt stub)
-internal/store/                SQLite + FTS5 storage layer
-internal/summary/              smart summariser: format-aware (flutter_test, go_test, json, git_log) + generic fallback
-  internal/summary/formats/      one file per formatter + tests
-internal/search/               synonym expansion (builtin YAML + project override)
-internal/handlers/             one file per MCP tool
-internal/hooks/                PreToolUse / PostToolUse / SessionStart hooks
-internal/server/               MCP server wiring
-tests/                         integration tests + testdata
-scripts/                       install.sh, install-hooks.sh, uninstall-hooks.sh, benchmark.sh
-configs/                       setup guides and hook config templates per platform
+```bash
+make build
+make test
+make lint
+make install
 ```
 
-## Design decisions
+## More Documentation
 
-### Subprocess sandbox (not containers or VMs)
+- [Copilot Enterprise setup](docs/copilot-enterprise-setup.md)
+- [Freshness migration guide](docs/migration-v0.5.md)
+- [Cache purge migration guide](docs/migration-v0.6.md)
+- [Claude Code config notes](configs/claude-code/README.md)
+- [VS Code Copilot config notes](configs/vscode-copilot/README.md)
 
-**Why**: Simplicity and instant startup. Containers add 50–200ms overhead per execution; subprocess spawns in ~1ms. For tools that run in your session anyway (like AI chat), sandboxing via `exec.Command` with resource limits is sufficient. We focus on isolation of **outputs**, not **processes** — the threat model is context pollution, not malware.
+## Design Notes
 
-**Future**: Anthropic's `srt` (Secure Runtime) can be added for enforced OS-level isolation when needed (toggle via `sandbox.use_srt: true`).
-
-### FTS5 over traditional indexing
-
-**Why**: BM25 ranking in FTS5 is built-in and tuned for natural language search. Matching "pod status" across 50MB of `kubectl` logs returns relevant lines first, not just substring matches. No extra query complexity — just `SELECT … FROM outputs_fts WHERE outputs_fts MATCH 'pod status'`.
-
-### SQLite instead of Redis/Postgres
-
-**Why**: Self-hosted. No external services to manage. `sqlite` lives in a single `~/.local/share/ctx-saver/<hash>.db` file — permissions are `0600`, backups are trivial, and you own your data. For a tool that runs locally on your machine, zero-config beats "set up a database server."
-
-### Per-project database hash
-
-**Why**: Isolation. Your `~/projects/backend` database is separate from `~/projects/frontend`. Tools and configs are independent per project, but stats can still be queried across all projects (scope: `all`).
-
-### Head+tail summaries instead of full-text extraction
-
-**Why**: Bounded context. Taking the first 20 lines + last 5 lines of a 1000-line JSON response guarantees ~100 tokens instead of ~3000. You see structure and key info instantly, can search for details if needed, and spend context on what matters.
+ctx-saver intentionally uses local subprocesses and SQLite instead of remote services. The threat model is context pollution from huge outputs, not running untrusted software. The goal is to make AI coding sessions more focused, searchable, and recoverable while staying simple enough to audit.
