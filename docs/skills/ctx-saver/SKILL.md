@@ -138,24 +138,6 @@ Returns: `output_id`, `command`, `created_at`, `size_bytes`, `lines` — newest 
 
 ---
 
-## Fetching Confluence / Jira Pages
-
-Fetch via `ctx_execute` with the `dx` CLI, then search the stored result:
-
-```json
-{
-  "language": "shell",
-  "code": "dx confluence read <URL> --ai",
-  "intent": "fetch API spec"
-}
-```
-
-**Rule of thumb:**
-- Page **<50 lines** → use regular bash (no ctx needed)
-- Page **≥50 lines** → use `ctx_execute` → then `ctx_search` for specific fields
-
----
-
 ## Output ID Format
 
 `out_YYYYMMDD_<8hex>` — e.g. `out_20260422_76b3de65`
