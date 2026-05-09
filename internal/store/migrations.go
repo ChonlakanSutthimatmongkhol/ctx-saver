@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-const currentSchemaVersion = 6
+const currentSchemaVersion = 7
 
 // runMigrations applies any pending schema migrations to db.
 // It is idempotent and safe to call on every server start.
@@ -39,6 +39,10 @@ func applyMigration(db *sql.DB, version int) error {
 	defer tx.Rollback() //nolint:errcheck
 
 	switch version {
+	case 7:
+		if err := migration7(tx); err != nil {
+			return err
+		}
 	case 1:
 		if err := migration1(tx); err != nil {
 			return err
@@ -184,6 +188,43 @@ func migration6(tx *sql.Tx) error {
 		ON outputs(project_path, created_at)`)
 	if err != nil {
 		return fmt.Errorf("creating composite index: %w", err)
+	}
+	return nil
+}
+
+// migration7 adds a UNIQUE constraint on session_events to prevent duplicate
+// records when a hook insert is retried.  Because SQLite cannot add a UNIQUE
+// constraint to an existing table via ALTER TABLE, we recreate the table with
+// the constraint and copy existing rows.
+func migration7(tx *sql.Tx) error {
+	stmts := []string{
+		`CREATE TABLE session_events_new (
+			id           INTEGER PRIMARY KEY AUTOINCREMENT,
+			session_id   TEXT    NOT NULL,
+			project_path TEXT    NOT NULL,
+			event_type   TEXT    NOT NULL,
+			tool_name    TEXT    NOT NULL DEFAULT '',
+			tool_input   TEXT    NOT NULL DEFAULT '',
+			tool_output  TEXT    NOT NULL DEFAULT '',
+			summary      TEXT    NOT NULL DEFAULT '',
+			created_at   INTEGER NOT NULL,
+			UNIQUE (session_id, event_type, tool_name, tool_input, summary, created_at)
+		)`,
+		`INSERT OR IGNORE INTO session_events_new
+			(id, session_id, project_path, event_type, tool_name,
+			 tool_input, tool_output, summary, created_at)
+		SELECT id, session_id, project_path, event_type, tool_name,
+			   tool_input, tool_output, summary, created_at
+		FROM session_events`,
+		`DROP TABLE session_events`,
+		`ALTER TABLE session_events_new RENAME TO session_events`,
+		`CREATE INDEX idx_session_events_session ON session_events(session_id, created_at)`,
+		`CREATE INDEX idx_session_events_project ON session_events(project_path, created_at)`,
+	}
+	for _, stmt := range stmts {
+		if _, err := tx.Exec(stmt); err != nil {
+			return fmt.Errorf("migration7: %w", err)
+		}
 	}
 	return nil
 }

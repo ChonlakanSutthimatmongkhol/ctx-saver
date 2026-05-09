@@ -338,20 +338,30 @@ func (s *SQLiteStore) searchFTS5(ctx context.Context, query, outputID string, ma
 		maxResults = 5
 	}
 
-	// Use a generous fetch limit so we have enough rows to filter when outputID is set.
-	fetchLimit := maxResults
+	var (
+		rows *sql.Rows
+		err  error
+	)
 	if outputID != "" {
-		fetchLimit = maxResults * 20
+		rows, err = s.db.QueryContext(ctx, `
+			SELECT output_id, line_no,
+			       snippet(outputs_fts, 2, '[[', ']]', '...', 20) AS snip,
+			       rank
+			FROM outputs_fts
+			WHERE outputs_fts MATCH ?
+			  AND output_id = ?
+			ORDER BY rank
+			LIMIT ?`, query, outputID, maxResults)
+	} else {
+		rows, err = s.db.QueryContext(ctx, `
+			SELECT output_id, line_no,
+			       snippet(outputs_fts, 2, '[[', ']]', '...', 20) AS snip,
+			       rank
+			FROM outputs_fts
+			WHERE outputs_fts MATCH ?
+			ORDER BY rank
+			LIMIT ?`, query, maxResults)
 	}
-
-	rows, err := s.db.QueryContext(ctx, `
-		SELECT output_id, line_no,
-		       snippet(outputs_fts, 2, '[[', ']]', '...', 20) AS snip,
-		       rank
-		FROM outputs_fts
-		WHERE outputs_fts MATCH ?
-		ORDER BY rank
-		LIMIT ?`, query, fetchLimit)
 	if err != nil {
 		return nil, fmt.Errorf("FTS search for %q: %w", query, err)
 	}
@@ -365,13 +375,7 @@ func (s *SQLiteStore) searchFTS5(ctx context.Context, query, outputID string, ma
 			return nil, fmt.Errorf("scanning search row: %w", err)
 		}
 		m.Score = -rank // FTS5 rank is negative; flip so higher = more relevant
-		if outputID != "" && m.OutputID != outputID {
-			continue
-		}
 		matches = append(matches, &m)
-		if len(matches) >= maxResults {
-			break
-		}
 	}
 	return matches, rows.Err()
 }

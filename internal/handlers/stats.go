@@ -34,6 +34,7 @@ type StatsOutput struct {
 	OutputsStored         int              `json:"outputs_stored,omitempty"`
 	RawBytes              int64            `json:"raw_bytes,omitempty"`
 	EstimatedSummaryBytes int64            `json:"estimated_summary_bytes,omitempty"`
+	EstimatedTokensSaved  int64            `json:"estimated_tokens_saved,omitempty"`
 	SavingPercent         float64          `json:"saving_percent,omitempty"`
 	AvgDurationMs         int64            `json:"avg_duration_ms,omitempty"`
 	TopCommands           []CommandStatOut `json:"top_commands,omitempty"`
@@ -135,12 +136,14 @@ func (h *StatsHandler) handleStats(ctx context.Context, input StatsInput) (*mcp.
 	estimatedSummaryBytes := estPerOutput * int64(stats.OutputsStored)
 
 	savingPercent := 0.0
+	var estimatedTokensSaved int64
 	if stats.RawBytes > 0 {
 		saved := stats.RawBytes - estimatedSummaryBytes
 		if saved < 0 {
 			saved = 0
 		}
 		savingPercent = float64(saved) / float64(stats.RawBytes) * 100
+		estimatedTokensSaved = saved / 4
 	}
 
 	// Compute adherence score (0–100).
@@ -160,6 +163,7 @@ func (h *StatsHandler) handleStats(ctx context.Context, input StatsInput) (*mcp.
 		OutputsStored:         stats.OutputsStored,
 		RawBytes:              stats.RawBytes,
 		EstimatedSummaryBytes: estimatedSummaryBytes,
+		EstimatedTokensSaved:  estimatedTokensSaved,
 		SavingPercent:         savingPercent,
 		AvgDurationMs:         stats.AvgDurationMs,
 		HookStats: HookStatsOut{
