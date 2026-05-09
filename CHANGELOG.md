@@ -2,6 +2,12 @@
 
 All notable changes to ctx-saver will be documented in this file.
 
+## v0.8.3 — Store reliability + FTS5 performance
+
+### Fixed
+- **session_events duplicate records** (migration v7): added `UNIQUE (session_id, event_type, tool_name, tool_input, summary, created_at)` constraint to prevent double-counting when a hook insert is retried. Existing duplicates are silently dropped during migration via `INSERT OR IGNORE`.
+- **FTS5 overfetch**: when searching within a specific output (`outputID` filter), the previous implementation fetched `maxResults × 20` rows then discarded non-matching rows in Go. The filter is now pushed into SQL (`AND output_id = ?`), reducing rows read by up to 20×.
+
 ## v0.8.2 — Git allowlist + TTL tuning
 
 ### Fixed
