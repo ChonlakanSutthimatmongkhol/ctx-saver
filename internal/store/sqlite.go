@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -1077,6 +1078,7 @@ func (s *SQLiteStore) KnowledgeStats(ctx context.Context, projectPath string) (*
 		WHERE project_path = ?
 		  AND command NOT LIKE '%read%'
 		GROUP BY command
+		HAVING COUNT(*) >= 2
 		ORDER BY runs DESC
 		LIMIT 10`,
 		projectPath,
@@ -1181,6 +1183,16 @@ func (s *SQLiteStore) KnowledgeStats(ctx context.Context, projectPath string) (*
 	}
 	if err := decRows.Err(); err != nil {
 		return nil, fmt.Errorf("knowledge stats: iterating decision rows: %w", err)
+	}
+
+	// Recent git commits — best-effort, skip silently if not a git repo.
+	if out, err := exec.CommandContext(ctx, "git", "-C", projectPath,
+		"log", "--oneline", "-7").Output(); err == nil {
+		for _, l := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+			if l != "" {
+				data.RecentCommits = append(data.RecentCommits, l)
+			}
+		}
 	}
 
 	return data, nil

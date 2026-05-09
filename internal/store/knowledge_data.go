@@ -9,10 +9,11 @@ type KnowledgeData struct {
 	OutputCount   int
 	DecisionCount int
 
-	TopFiles     []FileFreq    // most-read files with hash stability
-	TopCommands  []CommandFreq // most-run commands with avg size
-	Sequences    []CmdSequence // co-occurrence patterns
-	KeyDecisions []DecisionOut // high-importance decisions
+	TopFiles      []FileFreq    // most-read files with hash stability
+	TopCommands   []CommandFreq // most-run commands with avg size
+	Sequences     []CmdSequence // co-occurrence patterns
+	KeyDecisions  []DecisionOut // high-importance decisions
+	RecentCommits []string      // last 7 git commits, "--oneline" format
 }
 
 // FileFreq is one row from the most-read-files aggregation.

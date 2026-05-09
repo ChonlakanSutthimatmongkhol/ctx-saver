@@ -70,6 +70,16 @@ func Render(data *store.KnowledgeData) string {
 		}
 	}
 
+	// Recent git commits
+	fmt.Fprintf(&sb, "\n## Recent commits\n")
+	if len(data.RecentCommits) == 0 {
+		fmt.Fprintf(&sb, "_No git history available._\n")
+	} else {
+		for _, c := range data.RecentCommits {
+			fmt.Fprintf(&sb, "- %s\n", c)
+		}
+	}
+
 	// High-importance decisions
 	fmt.Fprintf(&sb, "\n## High-importance decisions\n")
 	if len(data.KeyDecisions) == 0 {

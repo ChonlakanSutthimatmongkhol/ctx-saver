@@ -2,6 +2,14 @@
 
 All notable changes to ctx-saver will be documented in this file.
 
+## v0.8.5 — Knowledge quality improvements
+
+### Changed
+- **Top Commands filter**: only commands run ≥ 2 times appear in `project-knowledge.md` —
+  one-off grep/search exploration commands no longer dominate the list
+- **Recent commits section**: `project-knowledge.md` now includes last 7 git commits
+  (`--oneline`) so AI sessions start with context of recent codebase changes
+
 ## v0.8.4 — PostToolUse git safe annotation fix
 
 ### Fixed
