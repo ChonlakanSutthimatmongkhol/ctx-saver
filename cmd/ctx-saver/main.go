@@ -191,7 +191,18 @@ func runServer() error {
 	}
 
 	// ── Sandbox ────────────────────────────────────────────────────────────────
-	sb := sandbox.NewSubprocess(cfg.DenyCommands)
+	var sb sandbox.Sandbox
+	if cfg.Sandbox.Type == "srt" || cfg.Sandbox.UseSRT {
+		srtSB, err := sandbox.NewSRT(cfg.DenyCommands)
+		if err != nil {
+			slog.Warn("srt sandbox not available, falling back to subprocess", "error", err)
+			sb = sandbox.NewSubprocess(cfg.DenyCommands)
+		} else {
+			sb = srtSB
+		}
+	} else {
+		sb = sandbox.NewSubprocess(cfg.DenyCommands)
+	}
 
 	// ── MCP Server ─────────────────────────────────────────────────────────────
 	srv := server.New(cfg, sb, st, projectPath, projectPath, serverStart)
