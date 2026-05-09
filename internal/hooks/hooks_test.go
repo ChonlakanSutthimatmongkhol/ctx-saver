@@ -197,6 +197,39 @@ func TestRunPostToolUse_StoreEvent(t *testing.T) {
 	}
 }
 
+func TestRunPostToolUse_GitSafeNoAnnotation(t *testing.T) {
+	cases := []struct {
+		cmd  string
+		want bool // true = expect NATIVE_SHELL annotation
+	}{
+		{"git commit -m 'fix'", false},
+		{"git push origin main", false},
+		{"git add .", false},
+		{"git fetch --all", false},
+		{"ls -la", true},
+		{"go build ./...", true},
+	}
+	for _, tc := range cases {
+		st := newMemStore()
+		input := HookInput{
+			SessionID: "sess-x",
+			Cwd:       "/tmp/proj",
+			ToolName:  "Shell",
+			ToolInput: map[string]any{"cmd": tc.cmd},
+		}
+		b, _ := json.Marshal(input)
+		var buf bytes.Buffer
+		if err := RunPostToolUse(st, bytes.NewBuffer(b), &buf); err != nil {
+			t.Fatalf("cmd=%q: %v", tc.cmd, err)
+		}
+		hasAnnotation := strings.Contains(st.events[0].Summary, "NATIVE_SHELL")
+		if hasAnnotation != tc.want {
+			t.Errorf("cmd=%q: NATIVE_SHELL annotation=%v, want %v (summary: %s)",
+				tc.cmd, hasAnnotation, tc.want, st.events[0].Summary)
+		}
+	}
+}
+
 func TestRunPostToolUse_NilStore(t *testing.T) {
 	input := HookInput{ToolName: "Shell", ToolInput: map[string]any{"cmd": "ls"}}
 	b, _ := json.Marshal(input)

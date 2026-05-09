@@ -32,8 +32,11 @@ func RunPostToolUse(st store.Store, r io.Reader, w io.Writer) error {
 	summary := buildSummary(input.ToolName, input.ToolInput, toolOutputStr)
 
 	// Annotate native tool usage so adherence tracking can identify it.
+	// Git write/admin commands are intentionally run natively — skip annotation.
 	if isNativeShellTool(input.ToolName) {
-		summary = "⚠️  NATIVE_SHELL: " + summary + " (consider ctx_execute)"
+		if !isGitSafeCommand(extractCmd(input.ToolInput)) {
+			summary = "⚠️  NATIVE_SHELL: " + summary + " (consider ctx_execute)"
+		}
 	} else if isNativeReadTool(input.ToolName) {
 		summary = "⚠️  NATIVE_READ: " + summary + " (consider ctx_read_file)"
 	}
