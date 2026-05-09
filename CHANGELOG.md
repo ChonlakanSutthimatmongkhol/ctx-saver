@@ -2,6 +2,13 @@
 
 All notable changes to ctx-saver will be documented in this file.
 
+## v0.8.4 — PostToolUse git safe annotation fix
+
+### Fixed
+- `git add/commit/push/fetch/pull` and other write commands no longer annotated
+  as `⚠️ NATIVE_SHELL` in session history — they are intentional native operations
+  that ctx_execute cannot replace. This fixes false negatives in `adherence_score`.
+
 ## v0.8.3 — Store reliability + FTS5 performance + Token savings counter
 
 ### Fixed
