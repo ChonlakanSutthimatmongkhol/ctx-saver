@@ -51,6 +51,13 @@ This returns:
 
 Skipping this leads to re-running commands that already have cached results.
 
+If `ctx_session_init` is not exposed by the current MCP client/toolset:
+- State that limitation explicitly.
+- Run a manual init fallback:
+  1. Read project workflow instructions via `ctx_read_file`.
+  2. Check recent architectural notes with `ctx_note(action="list")`.
+  3. Continue using `ctx_execute` / `ctx_read_file` / `ctx_note` as the baseline ctx flow.
+
 ### Rule 5: Respect cache freshness before acting on retrieved data
 
 Every retrieval response (`ctx_get_full`, `ctx_get_section`, `ctx_search`, `ctx_stats(view=outputs)`, `ctx_outline`) includes a `freshness` field with `stale_level`:

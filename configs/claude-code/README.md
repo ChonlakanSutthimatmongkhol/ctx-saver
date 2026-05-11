@@ -11,8 +11,9 @@ claude mcp add ctx-saver -- /usr/local/bin/ctx-saver
 
 ```bash
 claude mcp list
-# Should show ctx-saver with 5 tools:
-#   ctx_execute, ctx_read_file, ctx_search, ctx_get_full, ctx_stats, ctx_note ...
+# Should show ctx-saver with 10 tools, including:
+#   ctx_session_init, ctx_execute, ctx_read_file, ctx_search, ctx_get_full,
+#   ctx_outline, ctx_get_section, ctx_stats, ctx_note, ctx_purge
 ```
 
 ## Usage examples inside Claude Code

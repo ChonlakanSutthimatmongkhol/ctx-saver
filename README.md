@@ -288,14 +288,18 @@ namespace automatically.
 
 ### ctx_session_init not called automatically
 
-Some hosts (Copilot Enterprise) require `ToolSearch` before calling MCP tools,
-which can cause `ctx_session_init` to be skipped in the first few turns.
+VS Code Copilot may require `ToolSearch` before calling deferred MCP tools,
+which can cause `ctx_session_init` to be unavailable in the first turn. Copilot
+Enterprise tools are expected to be pre-registered; if `ctx_session_init` is not
+visible there, state the limitation and use the manual fallback from the project
+instructions.
 
 **Fix:** Add this line to your instruction file (CLAUDE.md / AGENTS.md /
 copilot-instructions.md):
 
     Your first tool call in every new session must be ctx_session_init.
-    Call it before any other tool, including ToolSearch.
+    If VS Code Copilot has not loaded ctx tools yet, run:
+    tool_search("ctx_session_init ctx_execute ctx_read_file ctx_stats ctx_note")
 
 ## Design Notes
 

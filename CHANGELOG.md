@@ -2,6 +2,13 @@
 
 All notable changes to ctx-saver will be documented in this file.
 
+## v0.9.1 — Copilot tool discovery docs
+
+### Fixed
+- Clarified VS Code Copilot deferred tool discovery via `tool_search` before `ctx_session_init`.
+- Updated Claude Code and VS Code Copilot setup docs to reflect the current 10-tool surface.
+- Documented the manual init fallback when `ctx_session_init` is not exposed by the current MCP client/toolset.
+
 ## v0.9.0 — Task scope + session handoff
 
 ### Added
