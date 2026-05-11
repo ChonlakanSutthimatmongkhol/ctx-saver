@@ -40,6 +40,22 @@ func TestSaveDecision_Basic(t *testing.T) {
 	assert.Equal(t, d.Tags, got.Tags)
 }
 
+func TestSaveDecision_TaskRoundTrip(t *testing.T) {
+	st := newDecisionStore(t)
+	d := &store.Decision{
+		ProjectPath: "/proj",
+		Text:        "handoff state",
+		Task:        "retirement-feature",
+		Importance:  store.ImportanceHigh,
+	}
+	require.NoError(t, st.SaveDecision(context.Background(), d))
+
+	got, err := st.GetDecision(context.Background(), d.DecisionID)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Equal(t, "retirement-feature", got.Task)
+}
+
 func TestSaveDecision_AutoFillsDefaults(t *testing.T) {
 	st := newDecisionStore(t)
 	d := &store.Decision{
@@ -176,6 +192,41 @@ func TestListDecisions_ImportanceFilter(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Len(t, all, 3)
+}
+
+func TestListDecisions_TaskFilter(t *testing.T) {
+	st := newDecisionStore(t)
+	require.NoError(t, st.SaveDecision(context.Background(), &store.Decision{
+		ProjectPath: "/proj", Text: "general", Importance: store.ImportanceNormal,
+	}))
+	require.NoError(t, st.SaveDecision(context.Background(), &store.Decision{
+		ProjectPath: "/proj", Text: "retirement", Task: "retirement-feature", Importance: store.ImportanceNormal,
+	}))
+	require.NoError(t, st.SaveDecision(context.Background(), &store.Decision{
+		ProjectPath: "/proj", Text: "tax", Task: "tax-feature", Importance: store.ImportanceNormal,
+	}))
+
+	all, err := st.ListDecisions(context.Background(), store.ListDecisionsOptions{
+		ProjectPath: "/proj", Scope: "all",
+	})
+	require.NoError(t, err)
+	assert.Len(t, all, 3)
+
+	emptyTask := ""
+	unscoped, err := st.ListDecisions(context.Background(), store.ListDecisionsOptions{
+		ProjectPath: "/proj", Scope: "all", Task: &emptyTask,
+	})
+	require.NoError(t, err)
+	require.Len(t, unscoped, 1)
+	assert.Equal(t, "general", unscoped[0].Text)
+
+	task := "retirement-feature"
+	scoped, err := st.ListDecisions(context.Background(), store.ListDecisionsOptions{
+		ProjectPath: "/proj", Scope: "all", Task: &task,
+	})
+	require.NoError(t, err)
+	require.Len(t, scoped, 1)
+	assert.Equal(t, "retirement", scoped[0].Text)
 }
 
 func TestListDecisions_LimitAndOrder(t *testing.T) {

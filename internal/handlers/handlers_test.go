@@ -125,11 +125,36 @@ func (m *mockStore) SaveDecision(_ context.Context, d *store.Decision) error {
 func (m *mockStore) ListDecisions(_ context.Context, opts store.ListDecisionsOptions) ([]*store.Decision, error) {
 	var out []*store.Decision
 	for _, d := range m.decisions {
-		if d.ProjectPath == opts.ProjectPath {
-			out = append(out, d)
+		if d.ProjectPath != opts.ProjectPath {
+			continue
+		}
+		if opts.Task != nil && d.Task != *opts.Task {
+			continue
+		}
+		if opts.MinImportance != "" && !importanceAtLeast(d.Importance, opts.MinImportance) {
+			continue
+		}
+		out = append(out, d)
+		if opts.Limit > 0 && len(out) >= opts.Limit {
+			break
 		}
 	}
 	return out, nil
+}
+
+func importanceAtLeast(got, min string) bool {
+	rank := map[string]int{
+		store.ImportanceLow:    1,
+		store.ImportanceNormal: 2,
+		store.ImportanceHigh:   3,
+	}
+	if min == "" {
+		return true
+	}
+	if got == "" {
+		got = store.ImportanceNormal
+	}
+	return rank[got] >= rank[min]
 }
 
 func (m *mockStore) GetDecision(_ context.Context, id string) (*store.Decision, error) {

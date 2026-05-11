@@ -6,6 +6,7 @@ description: >
   fetching Confluence/Jira pages; searching previously stored outputs; retrieving full output by ID or line range;
   extracting a specific section from a long document by heading name; viewing only function/type signatures of a source file;
   purging stale cache before switching context; saving or querying architectural decision notes;
+  creating task-scoped session handoffs with ctx_note(action="handoff", task="...");
   generating or viewing project-knowledge.md (learned project patterns from stored sessions).
   Tools: ctx_execute, ctx_read_file, ctx_search, ctx_get_full, ctx_outline, ctx_get_section, ctx_stats, ctx_purge, ctx_note.
   CLI: ctx-saver knowledge refresh/show/reset.
@@ -30,6 +31,7 @@ ctx-saver is an MCP server that stores large command outputs in SQLite and retur
 | Get full output or specific line range | `ctx_get_full` |
 | Verify ctx-saver is saving context / check hook activity | `ctx_stats` |
 | Clear stale cache before switching context | `ctx_purge` |
+| Save or resume task-scoped handoff notes | `ctx_note` with `action="handoff"` / `ctx_session_init` with `task` |
 | Generate/view learned project patterns | `ctx-saver knowledge refresh` (CLI) |
 
 ## Core Decision Rule
@@ -136,6 +138,37 @@ Omit `line_range` to retrieve all lines.
 
 Returns: `output_id`, `command`, `created_at`, `size_bytes`, `lines` — newest first.
 
+### 7. Saving decisions and handoffs
+
+Use `ctx_note` for durable decisions. Add `task` when the note belongs to a specific feature or bug:
+
+```json
+{
+  "text": "Chose migration v8 as additive-only to preserve existing databases.",
+  "tags": ["arch", "sqlite"],
+  "importance": "normal",
+  "task": "task-handoff"
+}
+```
+
+When ending a session that another host or future session should continue, save a handoff:
+
+```json
+{
+  "action": "handoff",
+  "task": "task-handoff",
+  "text": "Schema/store changes are done; next update handler tests and docs."
+}
+```
+
+Resume by calling `ctx_session_init` with the same task:
+
+```json
+{ "task": "task-handoff" }
+```
+
+Without `task`, `ctx_session_init` returns only unscoped recent decisions so unrelated sessions stay clean.
+
 ---
 
 ## Output ID Format
@@ -160,7 +193,7 @@ Delete a project's default DB with `rm -rf .ctx-saver/` from project root.
 ## Project Knowledge (v0.7.0+)
 
 After 3+ sessions, ctx-saver can generate `.ctx-saver/project-knowledge.md` containing
-learned patterns: most-read files, most-run commands, common sequences, and key decisions.
+learned patterns: most-read files, most-run commands, common sequences, and key decisions grouped by task.
 
 ```bash
 ctx-saver knowledge refresh   # generate/update

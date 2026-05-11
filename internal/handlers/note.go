@@ -13,14 +13,15 @@ import (
 
 // NoteInput is the input for ctx_note.
 type NoteInput struct {
-	// Discriminator: "save" (default if text is provided) or "list" (default if text is empty).
+	// Discriminator: "save" (default if text is provided), "list" (default if text is empty), or "handoff".
 	Action string `json:"action,omitempty"`
 
-	// Save fields (used when action="save" or omitted with non-empty text).
+	// Save / handoff fields (used when action="save", action="handoff", or omitted with non-empty text).
 	Text       string   `json:"text,omitempty"`
 	Tags       []string `json:"tags,omitempty"`
 	LinksTo    []string `json:"links_to,omitempty"`
 	Importance string   `json:"importance,omitempty"`
+	Task       string   `json:"task,omitempty" jsonschema:"optional task scope (kebab-case e.g. 'retirement-feature'). Use the same task with ctx_session_init to resume scoped notes."`
 
 	// List fields (used when action="list" or omitted with empty text).
 	Scope         string `json:"scope,omitempty"`
@@ -83,9 +84,23 @@ func (h *NoteHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, input 
 		return h.handleSave(ctx, input)
 	case "list":
 		return h.handleList(ctx, input)
+	case "handoff":
+		return h.handleHandoff(ctx, input)
 	default:
-		return nil, NoteOutput{}, fmt.Errorf("unknown action %q (expected 'save' or 'list')", action)
+		return nil, NoteOutput{}, fmt.Errorf("unknown action %q (expected 'save', 'list', or 'handoff')", action)
 	}
+}
+
+func (h *NoteHandler) handleHandoff(ctx context.Context, input NoteInput) (*mcp.CallToolResult, NoteOutput, error) {
+	if strings.TrimSpace(input.Text) == "" {
+		return nil, NoteOutput{}, fmt.Errorf("handoff requires text describing session state")
+	}
+	if strings.TrimSpace(input.Task) == "" {
+		return nil, NoteOutput{}, fmt.Errorf("handoff requires task field")
+	}
+	input.Importance = store.ImportanceHigh
+	input.Tags = appendUnique(input.Tags, "handoff", "session-end")
+	return h.handleSave(ctx, input)
 }
 
 func (h *NoteHandler) handleSave(ctx context.Context, input NoteInput) (*mcp.CallToolResult, NoteOutput, error) {
@@ -124,6 +139,7 @@ func (h *NoteHandler) handleSave(ctx context.Context, input NoteInput) (*mcp.Cal
 		Tags:        cleanTags,
 		LinksTo:     input.LinksTo,
 		Importance:  importance,
+		Task:        strings.TrimSpace(input.Task),
 	}
 
 	if err := h.st.SaveDecision(ctx, d); err != nil {
@@ -164,14 +180,20 @@ func (h *NoteHandler) handleList(ctx context.Context, input NoteInput) (*mcp.Cal
 		limit = 100
 	}
 
-	decisions, err := h.st.ListDecisions(ctx, store.ListDecisionsOptions{
+	opts := store.ListDecisionsOptions{
 		ProjectPath:   h.projectPath,
 		SessionID:     mcpSessionID,
 		Scope:         scope,
 		MinImportance: input.MinImportance,
 		Tags:          input.Tags,
 		Limit:         limit,
-	})
+	}
+	if strings.TrimSpace(input.Task) != "" {
+		task := strings.TrimSpace(input.Task)
+		opts.Task = &task
+	}
+
+	decisions, err := h.st.ListDecisions(ctx, opts)
 	if err != nil {
 		return nil, NoteOutput{}, fmt.Errorf("listing decisions: %w", err)
 	}
@@ -201,6 +223,34 @@ func (h *NoteHandler) handleList(ctx context.Context, input NoteInput) (*mcp.Cal
 		})
 	}
 	return nil, out, nil
+}
+
+func appendUnique(existing []string, additions ...string) []string {
+	seen := make(map[string]bool, len(existing)+len(additions))
+	out := make([]string, 0, len(existing)+len(additions))
+	for _, t := range existing {
+		t = strings.TrimSpace(t)
+		if t == "" {
+			continue
+		}
+		if seen[t] {
+			continue
+		}
+		seen[t] = true
+		out = append(out, t)
+	}
+	for _, t := range additions {
+		t = strings.TrimSpace(t)
+		if t == "" {
+			continue
+		}
+		if seen[t] {
+			continue
+		}
+		seen[t] = true
+		out = append(out, t)
+	}
+	return out
 }
 
 // humanAgeShort returns a compact human-readable age string: "<1m", "5m", "3h", "2d".

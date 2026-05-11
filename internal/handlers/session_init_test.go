@@ -179,6 +179,35 @@ func TestSessionInit_IncludesRecentDecisions(t *testing.T) {
 	assert.NotEmpty(t, out.RecentDecisions[0].Text)
 }
 
+func TestSessionInit_DefaultOnlyIncludesUnscopedDecisions(t *testing.T) {
+	st := &sessionInitStore{}
+	st.decisions = []*store.Decision{
+		{DecisionID: "dec_general", ProjectPath: "/test-project", Text: "general", Importance: store.ImportanceNormal, CreatedAt: time.Now()},
+		{DecisionID: "dec_task", ProjectPath: "/test-project", Text: "task handoff", Task: "retirement-feature", Importance: store.ImportanceHigh, CreatedAt: time.Now()},
+	}
+	h := newSessionInitHandler(st)
+
+	_, out, err := h.Handle(context.Background(), nil, handlers.SessionInitInput{})
+	require.NoError(t, err)
+	require.Len(t, out.RecentDecisions, 1)
+	assert.Equal(t, "dec_general", out.RecentDecisions[0].DecisionID)
+}
+
+func TestSessionInit_TaskIncludesOnlyMatchingDecisions(t *testing.T) {
+	st := &sessionInitStore{}
+	st.decisions = []*store.Decision{
+		{DecisionID: "dec_general", ProjectPath: "/test-project", Text: "general", Importance: store.ImportanceNormal, CreatedAt: time.Now()},
+		{DecisionID: "dec_task", ProjectPath: "/test-project", Text: "task handoff", Task: "retirement-feature", Importance: store.ImportanceHigh, CreatedAt: time.Now()},
+		{DecisionID: "dec_other", ProjectPath: "/test-project", Text: "other handoff", Task: "tax-feature", Importance: store.ImportanceHigh, CreatedAt: time.Now()},
+	}
+	h := newSessionInitHandler(st)
+
+	_, out, err := h.Handle(context.Background(), nil, handlers.SessionInitInput{Task: "retirement-feature"})
+	require.NoError(t, err)
+	require.Len(t, out.RecentDecisions, 1)
+	assert.Equal(t, "dec_task", out.RecentDecisions[0].DecisionID)
+}
+
 func TestSessionInit_ExcludesLowImportance(t *testing.T) {
 	// The mock ListDecisions filters by ProjectPath only; filtering by importance
 	// is tested at the store level. Here we verify the handler passes MinImportance:"normal"

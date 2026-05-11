@@ -66,6 +66,19 @@ func TestNoteHandler_DefaultImportance(t *testing.T) {
 	assert.Equal(t, store.ImportanceNormal, st.decisions[0].Importance)
 }
 
+func TestNoteHandler_SaveWithTask(t *testing.T) {
+	st := &mockStore{}
+	h := handlers.NewNoteHandler(st, "/proj")
+	_, out, err := h.Handle(context.Background(), nil, handlers.NoteInput{
+		Text: "continue retirement forms",
+		Task: "retirement-feature",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "save", out.Action)
+	require.Len(t, st.decisions, 1)
+	assert.Equal(t, "retirement-feature", st.decisions[0].Task)
+}
+
 func TestNoteHandler_TagsSanitized(t *testing.T) {
 	st := &mockStore{}
 	h := handlers.NewNoteHandler(st, "/proj")
@@ -132,6 +145,58 @@ func TestNoteHandler_ActionList_Lists(t *testing.T) {
 	_, out, err := h.Handle(context.Background(), nil, handlers.NoteInput{Action: "list"})
 	require.NoError(t, err)
 	assert.Equal(t, "list", out.Action)
+}
+
+func TestNoteHandler_ActionList_WithTaskFilters(t *testing.T) {
+	st := &mockStore{}
+	st.decisions = []*store.Decision{
+		{DecisionID: "dec_task", ProjectPath: "/proj", Text: "scoped", Task: "retirement-feature", Importance: store.ImportanceNormal},
+		{DecisionID: "dec_other", ProjectPath: "/proj", Text: "other", Task: "tax-feature", Importance: store.ImportanceNormal},
+		{DecisionID: "dec_general", ProjectPath: "/proj", Text: "general", Importance: store.ImportanceNormal},
+	}
+	h := handlers.NewNoteHandler(st, "/proj")
+	_, out, err := h.Handle(context.Background(), nil, handlers.NoteInput{
+		Action: "list",
+		Task:   "retirement-feature",
+	})
+	require.NoError(t, err)
+	require.Len(t, out.Decisions, 1)
+	assert.Equal(t, "dec_task", out.Decisions[0].DecisionID)
+}
+
+func TestNoteHandler_ActionHandoff_RequiresTextAndTask(t *testing.T) {
+	h := handlers.NewNoteHandler(&mockStore{}, "/proj")
+	_, _, err := h.Handle(context.Background(), nil, handlers.NoteInput{
+		Action: "handoff",
+		Task:   "retirement-feature",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "text")
+
+	_, _, err = h.Handle(context.Background(), nil, handlers.NoteInput{
+		Action: "handoff",
+		Text:   "state",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "task")
+}
+
+func TestNoteHandler_ActionHandoff_AutoSetsImportanceAndTags(t *testing.T) {
+	st := &mockStore{}
+	h := handlers.NewNoteHandler(st, "/proj")
+	_, out, err := h.Handle(context.Background(), nil, handlers.NoteInput{
+		Action:     "handoff",
+		Text:       "parser is green; next wire UI",
+		Task:       "retirement-feature",
+		Tags:       []string{"arch", "handoff"},
+		Importance: store.ImportanceLow,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "save", out.Action)
+	require.Len(t, st.decisions, 1)
+	assert.Equal(t, store.ImportanceHigh, st.decisions[0].Importance)
+	assert.Equal(t, "retirement-feature", st.decisions[0].Task)
+	assert.Equal(t, []string{"arch", "handoff", "session-end"}, st.decisions[0].Tags)
 }
 
 func TestNoteHandler_ActionBogus_Error(t *testing.T) {

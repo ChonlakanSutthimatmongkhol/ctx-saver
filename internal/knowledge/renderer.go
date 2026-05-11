@@ -85,12 +85,27 @@ func Render(data *store.KnowledgeData) string {
 	if len(data.KeyDecisions) == 0 {
 		fmt.Fprintf(&sb, "_No high-importance decisions recorded yet._\n")
 	} else {
+		order := make([]string, 0)
+		byTask := make(map[string][]store.DecisionOut)
 		for _, d := range data.KeyDecisions {
-			prefix := ""
-			if len(d.Tags) > 0 {
-				prefix = "[" + strings.Join(d.Tags, ",") + "] "
+			task := d.Task
+			if task == "" {
+				task = "General"
 			}
-			fmt.Fprintf(&sb, "- %s%s\n", prefix, d.Text)
+			if _, ok := byTask[task]; !ok {
+				order = append(order, task)
+			}
+			byTask[task] = append(byTask[task], d)
+		}
+		for _, task := range order {
+			fmt.Fprintf(&sb, "### %s\n", task)
+			for _, d := range byTask[task] {
+				prefix := ""
+				if len(d.Tags) > 0 {
+					prefix = "[" + strings.Join(d.Tags, ",") + "] "
+				}
+				fmt.Fprintf(&sb, "- %s%s\n", prefix, d.Text)
+			}
 		}
 	}
 

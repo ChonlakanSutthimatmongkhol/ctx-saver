@@ -18,6 +18,7 @@ type Decision struct {
 	Tags        []string
 	LinksTo     []string // related output_ids
 	Importance  string   // "low" | "normal" | "high"
+	Task        string   // optional work item scope for handoff/resume workflows
 	CreatedAt   time.Time
 }
 
@@ -36,6 +37,7 @@ type ListDecisionsOptions struct {
 	MinImportance string   // "low" | "normal" | "high"
 	Tags          []string // OR-match
 	Limit         int      // 0 = default (50), max 200
+	Task          *string  // nil = no filter; "" = unscoped only; value = exact task
 }
 
 // newDecisionID generates a unique ID for a decision.

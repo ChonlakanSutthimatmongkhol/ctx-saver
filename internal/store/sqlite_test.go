@@ -2,8 +2,10 @@ package store_test
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -531,6 +533,95 @@ func TestMigration_v3_BackfillRefreshedAt(t *testing.T) {
 	got, err := st.Get(ctx, "out_backfill_001")
 	require.NoError(t, err)
 	assert.WithinDuration(t, out.CreatedAt, got.RefreshedAt, time.Second)
+}
+
+func TestMigration_v8_TaskColumnAndIndexOnFreshDB(t *testing.T) {
+	dataDir := filepath.Join(t.TempDir(), ".ctx-saver")
+	st, err := store.NewSQLiteStore(dataDir, "/test/project")
+	require.NoError(t, err)
+	t.Cleanup(func() { st.Close() })
+
+	ctx := context.Background()
+	d := &store.Decision{
+		ProjectPath: "/test/project",
+		Text:        "handoff",
+		Task:        "retirement-feature",
+		Importance:  store.ImportanceHigh,
+	}
+	require.NoError(t, st.SaveDecision(ctx, d))
+	got, err := st.GetDecision(ctx, d.DecisionID)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Equal(t, "retirement-feature", got.Task)
+
+	assertDecisionTaskIndexExists(t, filepath.Join(dataDir, "outputs.db"))
+}
+
+func TestMigration_v8_AppliesToExistingV7DB(t *testing.T) {
+	dataDir := filepath.Join(t.TempDir(), ".ctx-saver")
+	require.NoError(t, os.MkdirAll(dataDir, 0700))
+	dbFile := filepath.Join(dataDir, "outputs.db")
+	db, err := sql.Open("sqlite", dbFile)
+	require.NoError(t, err)
+	_, err = db.Exec(`CREATE TABLE schema_version (version INTEGER NOT NULL PRIMARY KEY)`)
+	require.NoError(t, err)
+	_, err = db.Exec(`INSERT INTO schema_version(version) VALUES (7)`)
+	require.NoError(t, err)
+	_, err = db.Exec(`CREATE TABLE decisions (
+		id           INTEGER PRIMARY KEY AUTOINCREMENT,
+		decision_id  TEXT    NOT NULL UNIQUE,
+		session_id   TEXT    NOT NULL DEFAULT '',
+		project_path TEXT    NOT NULL,
+		text         TEXT    NOT NULL,
+		tags         TEXT    NOT NULL DEFAULT '',
+		links_to     TEXT    NOT NULL DEFAULT '',
+		importance   TEXT    NOT NULL DEFAULT 'normal',
+		created_at   INTEGER NOT NULL
+	)`)
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
+
+	st, err := store.NewSQLiteStore(dataDir, "/test/project")
+	require.NoError(t, err)
+	t.Cleanup(func() { st.Close() })
+
+	ctx := context.Background()
+	d := &store.Decision{ProjectPath: "/test/project", Text: "migrated", Task: "retirement-feature"}
+	require.NoError(t, st.SaveDecision(ctx, d))
+	got, err := st.GetDecision(ctx, d.DecisionID)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Equal(t, "retirement-feature", got.Task)
+
+	assertDecisionTaskIndexExists(t, dbFile)
+}
+
+func assertDecisionTaskIndexExists(t *testing.T, dbFile string) {
+	t.Helper()
+	db, err := sql.Open("sqlite", dbFile)
+	require.NoError(t, err)
+	defer db.Close()
+
+	rows, err := db.Query(`PRAGMA index_list(decisions)`)
+	require.NoError(t, err)
+	defer rows.Close()
+
+	found := false
+	for rows.Next() {
+		var (
+			seq     int
+			name    string
+			unique  int
+			origin  string
+			partial int
+		)
+		require.NoError(t, rows.Scan(&seq, &name, &unique, &origin, &partial))
+		if name == "idx_decisions_task" {
+			found = true
+		}
+	}
+	require.NoError(t, rows.Err())
+	assert.True(t, found, "idx_decisions_task should exist")
 }
 
 func TestClassifySource(t *testing.T) {

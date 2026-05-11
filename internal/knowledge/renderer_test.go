@@ -59,6 +59,12 @@ func TestRender_GoldenFile(t *testing.T) {
 				Tags:      []string{"build"},
 				CreatedAt: fixedNow.Add(-24 * time.Hour),
 			},
+			{
+				Text:      "Resume from parser validation",
+				Tags:      []string{"handoff"},
+				Task:      "retirement-feature",
+				CreatedAt: fixedNow.Add(-2 * time.Hour),
+			},
 		},
 	}
 

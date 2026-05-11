@@ -88,11 +88,12 @@ Most users only need these tools:
 
 | Tool | Use it for |
 |------|------------|
-| `ctx_session_init` | Start a session with project rules, recent activity, cached outputs, and saved decisions. |
+| `ctx_session_init` | Start a session with project rules, recent activity, cached outputs, and saved decisions. Pass `task="..."` to resume task-scoped handoffs. |
 | `ctx_execute` | Run shell, Python, Go, or Node commands while storing large output safely. |
 | `ctx_read_file` | Read large files without flooding the model context. |
 | `ctx_search` | Search stored outputs using full-text search. |
 | `ctx_get_full` | Retrieve a full output or exact line range when needed. |
+| `ctx_note` | Save/list durable decisions, or use `action="handoff"` with `task="..."` to resume work across sessions. |
 
 Typical agent flow:
 
@@ -236,7 +237,7 @@ After a few sessions, ctx-saver can generate `.ctx-saver/project-knowledge.md` s
 - most-read files
 - most-run commands
 - common command sequences
-- high-importance decisions
+- high-importance decisions grouped by task
 - session patterns
 
 ```bash

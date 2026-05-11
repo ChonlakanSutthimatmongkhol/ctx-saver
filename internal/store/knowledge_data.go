@@ -42,5 +42,6 @@ type CmdSequence struct {
 type DecisionOut struct {
 	Text      string
 	Tags      []string
+	Task      string
 	CreatedAt time.Time
 }

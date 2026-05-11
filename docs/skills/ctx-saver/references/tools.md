@@ -10,7 +10,10 @@ Full content is always retrievable on demand.
 
 **Call first in every new session.** Returns project rules, recent session activity, cached output inventory, and active configuration in a single call.
 
-**Input:** none (no parameters required).
+**Input**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `task` | string | N | Optional task scope. When set, `recent_decisions` contains notes for that task. When omitted, only unscoped notes are returned. |
 
 **Output**
 | Field | Description |
@@ -20,6 +23,7 @@ Full content is always retrievable on demand.
 | `recent_events` | Up to 10 recent tool calls (deduplicated, newest first) |
 | `recent_events[].ago_seconds` | Seconds since the event |
 | `recent_events[].summary` | One-line description of the tool call |
+| `recent_decisions` | Recent normal/high decisions matching the requested task scope |
 | `cached_outputs.total_outputs` | Number of outputs stored in last 7 days |
 | `cached_outputs.total_size_bytes` | Total raw bytes stored |
 | `cached_outputs.top_commands` | Up to 5 most-run commands |
@@ -39,6 +43,7 @@ Full content is always retrievable on demand.
 **Session startup behaviour:**
 - **Claude Code** — `SessionStart` hook calls `ctx_session_init` automatically via `~/.claude/settings.json`.
 - **Copilot Enterprise** — agent must call `ctx_session_init` explicitly as its first tool call.
+- Pass `task` when continuing a specific feature/bug; omit it for unrelated sessions.
 
 ---
 
@@ -437,26 +442,46 @@ Use when switching feature context, cache is noisy/stale, or before a demo hando
 
 ## ctx_note
 
-**[DECISION LOG]** Save an architectural decision or constraint that should survive `/compact` and future sessions.
+**[DECISION LOG]** Save an architectural decision, constraint, or task handoff that should survive `/compact` and future sessions.
 
 Use for: non-obvious design choices, discovered constraints, confirmed tradeoffs.
 Do NOT use for: routine progress, tool output summaries, obvious code facts.
 
 Notes are scoped per-project, persist across sessions, and are surfaced in `ctx_session_init`.
+Add `task` to scope a note to a feature/bug. Use `ctx_session_init(task="...")` to resume that task.
 
 **Input**
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `text` | string | **Y** | Note content (1–2 sentences ideal, max 2000 chars) |
 | `tags` | string[] | N | Topic tags e.g. `["arch", "perf", "security"]` |
-| `importance` | string | N | `"normal"` (default) or `"high"` |
+| `importance` | string | N | `"low"`, `"normal"` (default), or `"high"` |
 | `links_to` | string[] | N | Output IDs this decision relates to |
+| `task` | string | N | Optional task scope, e.g. `"retirement-feature"` |
 
 **Output**
 | Field | Description |
 |-------|-------------|
+| `action` | `"save"` |
 | `decision_id` | Unique ID for this note |
-| `message` | Confirmation message |
+| `saved_at` | Save timestamp |
+| `echo` | Short echo of saved text |
+
+---
+
+## ctx_note (action="handoff")
+
+**[SESSION HANDOFF]** Save the current task state so another host or future session can resume.
+
+**Input**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `action` | string | Y | Must be `"handoff"` |
+| `task` | string | **Y** | Task scope used later with `ctx_session_init(task="...")` |
+| `text` | string | **Y** | Current state, blockers, and next steps |
+| `tags` | string[] | N | Extra tags; `handoff` and `session-end` are added automatically |
+
+`handoff` forces `importance="high"` and auto-adds tags `handoff` and `session-end`.
 
 ---
 
@@ -471,8 +496,9 @@ Notes are scoped per-project, persist across sessions, and are surfaced in `ctx_
 | `scope` | string | N | `session`, `today`, `7d` (default), or `all` |
 | `tags` | string[] | N | Filter by tags (OR match) |
 | `min_importance` | string | N | `"normal"` (default) or `"high"` |
+| `task` | string | N | Optional exact task filter |
 
-**Output:** list of decision entries, each with `decision_id`, `text`, `tags`, `importance`, `ago`.
+**Output:** list of decision entries, each with `decision_id`, `text`, `tags`, `links_to`, `importance`, `ago_seconds`, `ago_human`, and `saved_at`.
 
 ---
 

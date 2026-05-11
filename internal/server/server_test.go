@@ -108,9 +108,22 @@ func TestToolDescriptions_NoRegression(t *testing.T) {
 		byName[tool.Name] = true
 	}
 
+	assert.Len(t, tools, len(expected), "tool count must stay stable for Copilot Enterprise")
 	for _, name := range expected {
 		assert.True(t, byName[name], "expected tool %q to be registered", name)
 	}
+}
+
+func TestToolDescriptions_TaskHandoff(t *testing.T) {
+	tools := listTools(t)
+	byName := make(map[string]string, len(tools))
+	for _, tool := range tools {
+		byName[tool.Name] = tool.Description
+	}
+
+	assert.Contains(t, byName["ctx_note"], "handoff")
+	assert.Contains(t, byName["ctx_note"], "task")
+	assert.Contains(t, byName["ctx_session_init"], "task")
 }
 
 // ── Task 7.4 / F1: freshness reference in retrieval tool descriptions ──────

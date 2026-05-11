@@ -2,6 +2,21 @@
 
 All notable changes to ctx-saver will be documented in this file.
 
+## v0.9.0 — Task scope + session handoff
+
+### Added
+- `ctx_note` supports optional `task` scoping and `action="handoff"` for
+  cross-session, multi-host continuation workflows.
+- `ctx_session_init(task="...")` loads recent decisions for a specific task;
+  default session init now returns only unscoped notes to avoid unrelated noise.
+
+### Changed
+- High-importance decisions in `project-knowledge.md` are grouped by task.
+- Codex and Copilot instruction templates document task-scoped handoff usage.
+
+### Migration
+- Schema v8 adds `decisions.task` and an index on `(project_path, task, created_at DESC)`.
+
 ## v0.8.5 — Knowledge quality improvements
 
 ### Changed

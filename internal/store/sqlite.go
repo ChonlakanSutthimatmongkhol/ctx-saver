@@ -750,8 +750,8 @@ func (s *SQLiteStore) SaveDecision(ctx context.Context, d *Decision) error {
 	}
 	_, err := s.db.ExecContext(ctx, `
 		INSERT INTO decisions
-			(decision_id, session_id, project_path, text, tags, links_to, importance, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+			(decision_id, session_id, project_path, text, tags, links_to, importance, task, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`,
 		d.DecisionID,
 		d.SessionID,
@@ -760,6 +760,7 @@ func (s *SQLiteStore) SaveDecision(ctx context.Context, d *Decision) error {
 		strings.Join(d.Tags, ","),
 		strings.Join(d.LinksTo, ","),
 		d.Importance,
+		d.Task,
 		d.CreatedAt.Unix(),
 	)
 	if err != nil {
@@ -819,9 +820,13 @@ func (s *SQLiteStore) ListDecisions(ctx context.Context, opts ListDecisionsOptio
 		}
 		clauses = append(clauses, "("+strings.Join(tagClauses, " OR ")+")")
 	}
+	if opts.Task != nil {
+		clauses = append(clauses, "task = ?")
+		args = append(args, *opts.Task)
+	}
 
 	query := fmt.Sprintf(`
-		SELECT id, decision_id, session_id, project_path, text, tags, links_to, importance, created_at
+		SELECT id, decision_id, session_id, project_path, text, tags, links_to, importance, task, created_at
 		FROM decisions
 		WHERE %s
 		ORDER BY created_at DESC
@@ -845,7 +850,7 @@ func (s *SQLiteStore) ListDecisions(ctx context.Context, opts ListDecisionsOptio
 		)
 		if err := rows.Scan(
 			&d.ID, &d.DecisionID, &d.SessionID, &d.ProjectPath,
-			&d.Text, &tagsCSV, &linksCSV, &d.Importance, &createdAt,
+			&d.Text, &tagsCSV, &linksCSV, &d.Importance, &d.Task, &createdAt,
 		); err != nil {
 			return nil, fmt.Errorf("scanning decision row: %w", err)
 		}
@@ -864,7 +869,7 @@ func (s *SQLiteStore) ListDecisions(ctx context.Context, opts ListDecisionsOptio
 // GetDecision implements Store.
 func (s *SQLiteStore) GetDecision(ctx context.Context, decisionID string) (*Decision, error) {
 	row := s.db.QueryRowContext(ctx, `
-		SELECT id, decision_id, session_id, project_path, text, tags, links_to, importance, created_at
+		SELECT id, decision_id, session_id, project_path, text, tags, links_to, importance, task, created_at
 		FROM decisions
 		WHERE decision_id = ?
 	`, decisionID)
@@ -877,7 +882,7 @@ func (s *SQLiteStore) GetDecision(ctx context.Context, decisionID string) (*Deci
 	)
 	err := row.Scan(
 		&d.ID, &d.DecisionID, &d.SessionID, &d.ProjectPath,
-		&d.Text, &tagsCSV, &linksCSV, &d.Importance, &createdAt,
+		&d.Text, &tagsCSV, &linksCSV, &d.Importance, &d.Task, &createdAt,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -1154,7 +1159,7 @@ func (s *SQLiteStore) KnowledgeStats(ctx context.Context, projectPath string) (*
 
 	// High-importance decisions.
 	decRows, err := s.roDB.QueryContext(ctx, `
-		SELECT text, tags, created_at
+		SELECT text, tags, task, created_at
 		FROM decisions
 		WHERE project_path = ?
 		  AND importance = 'high'
@@ -1172,7 +1177,7 @@ func (s *SQLiteStore) KnowledgeStats(ctx context.Context, projectPath string) (*
 			tagsCSV   string
 			createdAt int64
 		)
-		if err := decRows.Scan(&d.Text, &tagsCSV, &createdAt); err != nil {
+		if err := decRows.Scan(&d.Text, &tagsCSV, &d.Task, &createdAt); err != nil {
 			return nil, fmt.Errorf("knowledge stats: scanning decision row: %w", err)
 		}
 		if tagsCSV != "" {

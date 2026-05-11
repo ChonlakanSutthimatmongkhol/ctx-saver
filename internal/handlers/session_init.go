@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -13,8 +14,10 @@ import (
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/store"
 )
 
-// SessionInitInput is the typed input for ctx_session_init (no parameters).
-type SessionInitInput struct{}
+// SessionInitInput is the typed input for ctx_session_init.
+type SessionInitInput struct {
+	Task string `json:"task,omitempty" jsonschema:"optional task scope. When set, recent_decisions include only notes for this task; when empty, only unscoped notes are returned."`
+}
 
 // SessionInitOutput is the typed output for ctx_session_init.
 type SessionInitOutput struct {
@@ -100,7 +103,7 @@ func NewSessionInitHandler(cfg *config.Config, st store.Store, projectPath strin
 }
 
 // Handle processes a ctx_session_init request.
-func (h *SessionInitHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, _ SessionInitInput) (*mcp.CallToolResult, SessionInitOutput, error) {
+func (h *SessionInitHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, input SessionInitInput) (*mcp.CallToolResult, SessionInitOutput, error) {
 	out := SessionInitOutput{
 		ProjectPath:      h.projectPath,
 		ProjectRules:     sessionRulesText,
@@ -169,11 +172,13 @@ func (h *SessionInitHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest,
 	}
 
 	// Inject recent decisions (last 10, normal+high importance from past 7 days).
+	task := strings.TrimSpace(input.Task)
 	decisions, derr := h.st.ListDecisions(ctx, store.ListDecisionsOptions{
 		ProjectPath:   h.projectPath,
 		Scope:         "7d",
 		MinImportance: "normal",
 		Limit:         10,
+		Task:          &task,
 	})
 	if derr == nil {
 		now := time.Now()

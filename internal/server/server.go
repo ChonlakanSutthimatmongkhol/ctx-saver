@@ -221,7 +221,8 @@ Skipping this tool leads to:
 • Missing project-specific routing rules
 
 Cost: ~500–1000 tokens. Benefit: saves 10–50× more tokens over the session.
-No arguments required.`,
+Optional task parameter scopes recent_decisions to notes for that task.
+Without task, only unscoped notes are returned so unrelated sessions stay clean.`,
 	}, sessionInitH.Handle)
 
 	statsH := handlers.NewStatsHandler(cfg, st, projectPath, serverStart)
@@ -262,18 +263,26 @@ Returns freshness.stale_level field — see ctx_session_init for usage policy.`,
 	noteH := handlers.NewNoteHandler(st, projectPath)
 	mcp.AddTool(srv, &mcp.Tool{
 		Name: "ctx_note",
-		Description: `[DECISION LOG] Save or list architectural decisions, design rationale, and important reasoning that should survive /compact and future sessions.
+		Description: `[DECISION LOG] Save, list, or hand off architectural decisions and session state.
 
 Action 'save' (default if ` + "`text`" + ` is provided):
 - Use when you make a non-obvious design choice, discover a constraint, or finalize a tradeoff
 - Keep notes short (1-2 sentences ideal, max 2000 chars)
 - Tag with topics like 'arch', 'perf', 'security' for filterability
+- Optional task='<feature-name>' scopes the note to a specific work item
 - Set importance='high' only for genuinely critical decisions you'd want flagged at session start
 - DO NOT use for routine progress updates or tool output summaries
 
 Action 'list' (default if ` + "`text`" + ` is empty):
 - Use when resuming work after /compact, investigating prior decisions, or filtering by tag/importance
 - Default scope is "7d" (last 7 days). Use "session", "today", or "all" to widen.
+- Optional task='<feature-name>' filters to that work item
+
+Action 'handoff':
+- Use when ending a session so a future session can resume the same task
+- REQUIRES text and task fields
+- Auto-sets importance='high' and tags=[handoff, session-end]
+- Future session calls ctx_session_init(task='<same-task>') to retrieve
 
 Notes are scoped per-project, persist across sessions, and are surfaced in ctx_session_init.`,
 	}, noteH.Handle)

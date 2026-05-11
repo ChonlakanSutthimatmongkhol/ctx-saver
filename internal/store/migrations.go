@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-const currentSchemaVersion = 7
+const currentSchemaVersion = 8
 
 // runMigrations applies any pending schema migrations to db.
 // It is idempotent and safe to call on every server start.
@@ -39,6 +39,10 @@ func applyMigration(db *sql.DB, version int) error {
 	defer tx.Rollback() //nolint:errcheck
 
 	switch version {
+	case 8:
+		if err := migration8(tx); err != nil {
+			return err
+		}
 	case 7:
 		if err := migration7(tx); err != nil {
 			return err
@@ -225,6 +229,18 @@ func migration7(tx *sql.Tx) error {
 		if _, err := tx.Exec(stmt); err != nil {
 			return fmt.Errorf("migration7: %w", err)
 		}
+	}
+	return nil
+}
+
+// migration8 adds task scoping to decision notes for multi-host handoff workflows.
+func migration8(tx *sql.Tx) error {
+	if _, err := tx.Exec(`ALTER TABLE decisions ADD COLUMN task TEXT NOT NULL DEFAULT ''`); err != nil {
+		return fmt.Errorf("migration8 add decisions.task: %w", err)
+	}
+	if _, err := tx.Exec(`CREATE INDEX IF NOT EXISTS idx_decisions_task
+		ON decisions(project_path, task, created_at DESC)`); err != nil {
+		return fmt.Errorf("migration8 create task index: %w", err)
 	}
 	return nil
 }

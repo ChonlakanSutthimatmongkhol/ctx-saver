@@ -75,6 +75,14 @@ When you make a non-obvious design choice or learn a constraint that future-you 
 ctx_note(text="...", tags=["arch", "<area>"], importance="high"|"normal")
 ```
 
+For task-specific work, add `task="<feature-name>"` and resume later with
+`ctx_session_init(task="<feature-name>")`. When ending a session that another
+host or future session must continue, use:
+
+```
+ctx_note(action="handoff", task="<feature-name>", text="current state and next steps")
+```
+
 Examples to log:
 - "Chose X over Y because Z" (design choices)
 - "Cannot use approach A because of constraint B" (discovered limits)
@@ -84,7 +92,9 @@ Examples NOT to log:
 - "Starting task 3" (routine progress)
 - "Read file foo.go" (already in session_events)
 
-These notes survive `/compact` and are surfaced at next `ctx_session_init`. Use `ctx_note(action="list")` to review past decisions.
+These notes survive `/compact` and are surfaced at next `ctx_session_init`.
+Use `ctx_note(action="list")` to review past decisions, or
+`ctx_note(action="list", task="<feature-name>")` for one task.
 
 ### Rule 7: Additional tools (v0.6.0+)
 
