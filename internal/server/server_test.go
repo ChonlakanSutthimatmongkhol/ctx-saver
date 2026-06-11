@@ -78,12 +78,20 @@ func TestToolDescriptions_MentionAlternative(t *testing.T) {
 			strings.Contains(execDesc, "Shell") ||
 			strings.Contains(execDesc, "Bash"),
 		"ctx_execute description must mention at least one native tool alternative (runInTerminal/Shell/Bash)")
+	assert.Contains(t, execDesc, "Git write/admin commands",
+		"ctx_execute description must identify sanctioned native git writes")
+	assert.Contains(t, execDesc, "auto_index_threshold_bytes",
+		"ctx_execute description must explain the large-output routing boundary")
+	assert.NotContains(t, execDesc, "for ALL commands",
+		"ctx_execute description must not conflict with sanctioned native commands")
 
 	readDesc, ok := byName["ctx_read_file"]
 	require.True(t, ok, "ctx_read_file not registered")
 	assert.True(t,
 		strings.Contains(readDesc, "readFile") || strings.Contains(readDesc, "read_file"),
 		"ctx_read_file description must mention native alternative (readFile/read_file)")
+	assert.Contains(t, readDesc, "intend to EDIT",
+		"ctx_read_file description must identify sanctioned edit-target reads")
 }
 
 func TestToolDescriptions_NoRegression(t *testing.T) {

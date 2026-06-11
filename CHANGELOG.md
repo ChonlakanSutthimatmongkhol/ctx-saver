@@ -2,6 +2,16 @@
 
 All notable changes to ctx-saver will be documented in this file.
 
+## v0.11.1 — Instruction consistency fix
+
+### Fixed
+- Aligned the `ctx_execute` tool description with `ctx_session_init`: commands
+  that may produce large output should use ctx-saver, while git write/admin
+  commands remain sanctioned native operations.
+- Documented `auto_index_threshold_bytes` as the routing boundary and added
+  regression tests preventing the conflicting "ALL commands" guidance from
+  returning.
+
 ## v0.11.0 — Adherence measurement fix
 
 ### Added

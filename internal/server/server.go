@@ -109,8 +109,9 @@ func registerTools(srv *mcp.Server, cfg *config.Config, sb sandbox.Sandbox, st s
 		Name: "ctx_execute",
 		Description: `[PREFERRED for command execution] Run shell, python, go, or node code in a sandboxed subprocess.
 
-CRITICAL: Use this instead of runInTerminal / Shell / Bash / execute_in_terminal for ALL commands.
-Why: native tools inject 10–50 KB output into context per call; ctx_execute stores it and returns ~2 KB summary — prevents context overflow and forgotten requirements.
+Use this instead of runInTerminal / Shell / Bash / execute_in_terminal when a
+command may produce multi-line or large output. ctx_execute stores the full
+output and returns a compact summary, preventing context overflow.
 
 When to use (default choice):
 • Build / test / lint: flutter build, flutter test, go test, go build, npm run, cargo test
@@ -121,6 +122,7 @@ When to use (default choice):
 
 When native terminal is acceptable:
 • Single-line informational: pwd, whoami, date, echo "…"
+• Git write/admin commands: git add, commit, push, tag, branch, checkout
 • Interactive TTY commands (rare)
 
 After calling this tool:
@@ -133,7 +135,8 @@ Configuration:
 • code: the command or script to run
 • intent: optional human-readable goal (helps search ranking)
 
-If unsure whether to use this — USE IT. Over-using ctx_execute is harmless; under-using it silently destroys context.`,
+If output size is uncertain, prefer ctx_execute. The key rule is that output
+larger than auto_index_threshold_bytes must not flow through native tools.`,
 	}, execH.Handle)
 
 	readFileH := handlers.NewReadFileHandler(cfg, sb, st, projectPath, workdir).WithRedactor(redactor)

@@ -145,6 +145,9 @@ func TestSessionInit_RulesPresent(t *testing.T) {
 		"project_rules must mention ctx_execute")
 	assert.True(t, strings.Contains(out.ProjectRules, "ctx_read_file"),
 		"project_rules must mention ctx_read_file")
+	assert.Contains(t, out.ProjectRules, "missed_large_outputs should be 0")
+	assert.Contains(t, out.ProjectRules, "git write/admin commands")
+	assert.Contains(t, out.ProjectRules, "reads of files you edit")
 }
 
 func TestSessionInit_ConfigSummary(t *testing.T) {
