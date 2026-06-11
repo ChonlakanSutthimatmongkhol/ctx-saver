@@ -520,6 +520,24 @@ func TestGetAdherenceStats_ReadEditPairing(t *testing.T) {
 	assert.Equal(t, int64(9000), stats.MissedLargeBytes)
 }
 
+func TestGetAdherenceStats_CopilotCreatePairsRead(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+	now := time.Now()
+	events := []*store.SessionEvent{
+		{SessionID: "s1", ProjectPath: "/test/project", EventType: "posttooluse", ToolName: "view", ToolInput: `{"path":"/repo/new.go"}`, Summary: store.NativeReadAnnotation + " view", CreatedAt: now},
+		{SessionID: "s1", ProjectPath: "/test/project", EventType: "posttooluse", ToolName: "create", ToolInput: `{"path":"/repo/new.go"}`, Summary: "create", CreatedAt: now.Add(time.Second)},
+	}
+	for _, event := range events {
+		require.NoError(t, st.SaveSessionEvent(ctx, event))
+	}
+
+	stats, err := st.GetAdherenceStats(ctx, "/test/project", time.Time{}, 5000)
+	require.NoError(t, err)
+	assert.Equal(t, 1, stats.SanctionedReads)
+	assert.Equal(t, 0, stats.NativeReadCount)
+}
+
 func TestGetAdherenceStats_DeniedEventsSkipped(t *testing.T) {
 	st := newTestStore(t)
 	ctx := context.Background()

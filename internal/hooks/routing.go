@@ -186,7 +186,8 @@ func isNativeReadTool(toolName string) bool {
 	}
 	return strings.Contains(lower, "readfile") ||
 		strings.Contains(lower, "read_file") ||
-		lower == "read"
+		lower == "read" ||
+		lower == "view"
 }
 
 // looksLargeOutput reports whether cmd is likely to produce output too large

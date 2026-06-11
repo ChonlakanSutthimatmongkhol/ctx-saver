@@ -806,7 +806,7 @@ func addMissedLargeOutput(stats *AdherenceStats, outputBytes int64, threshold in
 
 func isEditTool(toolName string) bool {
 	name := strings.ToLower(toolName)
-	for _, marker := range []string{"edit", "write", "str_replace", "multiedit", "applypatch", "apply_patch"} {
+	for _, marker := range []string{"edit", "write", "str_replace", "multiedit", "applypatch", "apply_patch", "create"} {
 		if strings.Contains(name, marker) {
 			return true
 		}
