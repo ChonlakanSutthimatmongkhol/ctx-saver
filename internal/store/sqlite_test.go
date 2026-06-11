@@ -470,7 +470,7 @@ func TestGetStats_HookCounts(t *testing.T) {
 	assert.Equal(t, 1, stats.RedirectedToMCP)
 }
 
-func TestGetStats_ToolUsageCounts(t *testing.T) {
+func TestGetAdherenceStats_AnnotationBasedCounting(t *testing.T) {
 	st := newTestStore(t)
 	ctx := context.Background()
 
@@ -478,24 +478,102 @@ func TestGetStats_ToolUsageCounts(t *testing.T) {
 		{SessionID: "s1", ProjectPath: "/test/project", EventType: "posttooluse", ToolName: "ctx_execute", Summary: "ran go test"},
 		{SessionID: "s1", ProjectPath: "/test/project", EventType: "posttooluse", ToolName: "ctx_execute", Summary: "ran flutter build"},
 		{SessionID: "s1", ProjectPath: "/test/project", EventType: "posttooluse", ToolName: "ctx_read_file", Summary: "read spec.yaml"},
-		{SessionID: "s1", ProjectPath: "/test/project", EventType: "posttooluse", ToolName: "runInTerminal", Summary: "ran pwd"},
-		{SessionID: "s1", ProjectPath: "/test/project", EventType: "posttooluse", ToolName: "Bash", Summary: "ran ls"},
-		{SessionID: "s1", ProjectPath: "/test/project", EventType: "posttooluse", ToolName: "Read", Summary: "read package.json"},
+		{SessionID: "s1", ProjectPath: "/test/project", EventType: "posttooluse", ToolName: "Bash", Summary: store.NativeShellAnnotation + " [Bash] go test"},
+		{SessionID: "s1", ProjectPath: "/test/project", EventType: "posttooluse", ToolName: "Read", Summary: store.NativeReadAnnotation + " [Read] package.json"},
+		// A git-safe native event has no annotation and must not be counted.
+		{SessionID: "s1", ProjectPath: "/test/project", EventType: "posttooluse", ToolName: "Bash", Summary: "[Bash] git commit"},
 		// pretooluse events should NOT be counted in tool usage adherence.
-		{SessionID: "s1", ProjectPath: "/test/project", EventType: "pretooluse", ToolName: "runInTerminal", Summary: "allowed pwd"},
+		{SessionID: "s1", ProjectPath: "/test/project", EventType: "pretooluse", ToolName: "Bash", Summary: store.NativeShellAnnotation + " allowed"},
 	}
 	for _, e := range toolEvents {
 		e.CreatedAt = time.Now()
 		require.NoError(t, st.SaveSessionEvent(ctx, e))
 	}
 
-	stats, err := st.GetStats(ctx, "/test/project", time.Time{})
+	stats, err := st.GetAdherenceStats(ctx, "/test/project", time.Time{}, 1024)
 	require.NoError(t, err)
 
 	assert.Equal(t, 2, stats.CtxExecuteCount, "ctx_execute count")
 	assert.Equal(t, 1, stats.CtxReadFileCount, "ctx_read_file count")
-	assert.Equal(t, 2, stats.NativeShellCount, "native shell count (runInTerminal + Bash)")
+	assert.Equal(t, 1, stats.NativeShellCount, "annotated native shell count")
 	assert.Equal(t, 1, stats.NativeReadCount, "native read count (Read)")
+}
+
+func TestGetAdherenceStats_ReadEditPairing(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+	now := time.Now()
+	events := []*store.SessionEvent{
+		{SessionID: "s1", ProjectPath: "/test/project", EventType: "posttooluse", ToolName: "Read", ToolInput: `{"file_path":"/repo/dir/../a.go"}`, Summary: store.NativeReadAnnotation + " read A", OutputBytes: 9000, CreatedAt: now},
+		{SessionID: "s1", ProjectPath: "/test/project", EventType: "posttooluse", ToolName: "apply_patch", ToolInput: `{"path":"/repo/a.go"}`, Summary: "edited A", CreatedAt: now.Add(time.Second)},
+		{SessionID: "s1", ProjectPath: "/test/project", EventType: "posttooluse", ToolName: "Read", ToolInput: `{"filePath":"/repo/b.go"}`, Summary: store.NativeReadAnnotation + " read B", OutputBytes: 9000, CreatedAt: now.Add(2 * time.Second)},
+	}
+	for _, event := range events {
+		require.NoError(t, st.SaveSessionEvent(ctx, event))
+	}
+
+	stats, err := st.GetAdherenceStats(ctx, "/test/project", time.Time{}, 5000)
+	require.NoError(t, err)
+	assert.Equal(t, 1, stats.SanctionedReads)
+	assert.Equal(t, 1, stats.NativeReadCount)
+	assert.Equal(t, 1, stats.MissedLargeOutputs)
+	assert.Equal(t, int64(9000), stats.MissedLargeBytes)
+}
+
+func TestGetAdherenceStats_PairingDoesNotCrossSessions(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+	now := time.Now()
+	events := []*store.SessionEvent{
+		{SessionID: "read-session", ProjectPath: "/test/project", EventType: "posttooluse", ToolName: "Read", ToolInput: `{"path":"/repo/a.go"}`, Summary: store.NativeReadAnnotation + " read", CreatedAt: now},
+		{SessionID: "edit-session", ProjectPath: "/test/project", EventType: "posttooluse", ToolName: "Edit", ToolInput: `{"path":"/repo/a.go"}`, Summary: "edit", CreatedAt: now.Add(time.Second)},
+	}
+	for _, event := range events {
+		require.NoError(t, st.SaveSessionEvent(ctx, event))
+	}
+
+	stats, err := st.GetAdherenceStats(ctx, "/test/project", time.Time{}, 5000)
+	require.NoError(t, err)
+	assert.Equal(t, 0, stats.SanctionedReads)
+	assert.Equal(t, 1, stats.NativeReadCount)
+}
+
+func TestGetAdherenceStats_MissedLargeAndUnknownSize(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+	now := time.Now()
+	events := []*store.SessionEvent{
+		{SessionID: "s1", ProjectPath: "/test/project", EventType: "posttooluse", ToolName: "Bash", Summary: store.NativeShellAnnotation + " exact threshold", OutputBytes: 5000, CreatedAt: now},
+		{SessionID: "s1", ProjectPath: "/test/project", EventType: "posttooluse", ToolName: "Bash", Summary: store.NativeShellAnnotation + " large", OutputBytes: 5001, CreatedAt: now.Add(time.Second)},
+		{SessionID: "s1", ProjectPath: "/test/project", EventType: "posttooluse", ToolName: "Bash", Summary: store.NativeShellAnnotation + " old row", OutputBytes: 0, CreatedAt: now.Add(2 * time.Second)},
+	}
+	for _, event := range events {
+		require.NoError(t, st.SaveSessionEvent(ctx, event))
+	}
+
+	stats, err := st.GetAdherenceStats(ctx, "/test/project", time.Time{}, 5000)
+	require.NoError(t, err)
+	assert.Equal(t, 3, stats.NativeShellCount)
+	assert.Equal(t, 1, stats.MissedLargeOutputs)
+	assert.Equal(t, int64(5001), stats.MissedLargeBytes)
+}
+
+func TestGetAdherenceStats_TruncatedToolInputRegexFallback(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+	now := time.Now()
+	events := []*store.SessionEvent{
+		{SessionID: "s1", ProjectPath: "/test/project", EventType: "posttooluse", ToolName: "Read", ToolInput: `{"file_path":"/repo/a.go","truncated":`, Summary: store.NativeReadAnnotation + " read", CreatedAt: now},
+		{SessionID: "s1", ProjectPath: "/test/project", EventType: "posttooluse", ToolName: "Write", ToolInput: `{"file_path":"/repo/a.go"}`, Summary: "write", CreatedAt: now.Add(time.Second)},
+	}
+	for _, event := range events {
+		require.NoError(t, st.SaveSessionEvent(ctx, event))
+	}
+
+	stats, err := st.GetAdherenceStats(ctx, "/test/project", time.Time{}, 5000)
+	require.NoError(t, err)
+	assert.Equal(t, 1, stats.SanctionedReads)
+	assert.Equal(t, 0, stats.NativeReadCount)
 }
 
 // ── Phase 7: migration v3 + freshness metadata tests ─────────────────────
@@ -579,6 +657,19 @@ func TestMigration_v8_AppliesToExistingV7DB(t *testing.T) {
 		created_at   INTEGER NOT NULL
 	)`)
 	require.NoError(t, err)
+	_, err = db.Exec(`CREATE TABLE session_events (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		session_id TEXT NOT NULL,
+		project_path TEXT NOT NULL,
+		event_type TEXT NOT NULL,
+		tool_name TEXT NOT NULL DEFAULT '',
+		tool_input TEXT NOT NULL DEFAULT '',
+		tool_output TEXT NOT NULL DEFAULT '',
+		summary TEXT NOT NULL DEFAULT '',
+		created_at INTEGER NOT NULL,
+		UNIQUE (session_id, event_type, tool_name, tool_input, summary, created_at)
+	)`)
+	require.NoError(t, err)
 	require.NoError(t, db.Close())
 
 	st, err := store.NewSQLiteStore(dataDir, "/test/project")
@@ -594,6 +685,52 @@ func TestMigration_v8_AppliesToExistingV7DB(t *testing.T) {
 	assert.Equal(t, "retirement-feature", got.Task)
 
 	assertDecisionTaskIndexExists(t, dbFile)
+}
+
+func TestMigration_v9_AppliesToExistingV8DB(t *testing.T) {
+	dataDir := filepath.Join(t.TempDir(), ".ctx-saver")
+	require.NoError(t, os.MkdirAll(dataDir, 0700))
+	dbFile := filepath.Join(dataDir, "outputs.db")
+	db, err := sql.Open("sqlite", dbFile)
+	require.NoError(t, err)
+	_, err = db.Exec(`CREATE TABLE schema_version (version INTEGER NOT NULL PRIMARY KEY)`)
+	require.NoError(t, err)
+	_, err = db.Exec(`INSERT INTO schema_version(version) VALUES (8)`)
+	require.NoError(t, err)
+	_, err = db.Exec(`CREATE TABLE session_events (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		session_id TEXT NOT NULL,
+		project_path TEXT NOT NULL,
+		event_type TEXT NOT NULL,
+		tool_name TEXT NOT NULL DEFAULT '',
+		tool_input TEXT NOT NULL DEFAULT '',
+		tool_output TEXT NOT NULL DEFAULT '',
+		summary TEXT NOT NULL DEFAULT '',
+		created_at INTEGER NOT NULL,
+		UNIQUE (session_id, event_type, tool_name, tool_input, summary, created_at)
+	)`)
+	require.NoError(t, err)
+	_, err = db.Exec(`INSERT INTO session_events
+		(session_id, project_path, event_type, tool_name, tool_input, tool_output, summary, created_at)
+		VALUES ('s1', '/test/project', 'posttooluse', 'Bash', '{}', 'old', 'old row', 1)`)
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
+
+	st, err := store.NewSQLiteStore(dataDir, "/test/project")
+	require.NoError(t, err)
+	t.Cleanup(func() { st.Close() })
+
+	events, err := st.ListSessionEvents(context.Background(), "s1", 10)
+	require.NoError(t, err)
+	require.Len(t, events, 1)
+	assert.Equal(t, int64(0), events[0].OutputBytes)
+
+	db, err = sql.Open("sqlite", dbFile)
+	require.NoError(t, err)
+	defer db.Close()
+	var version int
+	require.NoError(t, db.QueryRow(`SELECT MAX(version) FROM schema_version`).Scan(&version))
+	assert.Equal(t, 9, version)
 }
 
 func assertDecisionTaskIndexExists(t *testing.T, dbFile string) {
@@ -719,7 +856,7 @@ func TestListCachedFiles_IgnoresNonFileOutputs(t *testing.T) {
 	st := newTestStore(t)
 	ctx := context.Background()
 
-	require.NoError(t, st.Save(ctx, sampleOutput("out_shell_1")))             // [shell] echo hello
+	require.NoError(t, st.Save(ctx, sampleOutput("out_shell_1"))) // [shell] echo hello
 	require.NoError(t, st.Save(ctx, fileOutput("out_file_1", "/repo/x.go", time.Now())))
 
 	files, err := st.ListCachedFiles(ctx, "/test/project", 10)

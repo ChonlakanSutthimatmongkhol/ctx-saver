@@ -346,9 +346,10 @@ When `found=false` the tool returns successfully — it is **not** an error.
 
 Key metrics:
 - `saving_percent` — should be > 80% in healthy sessions
-- `adherence_score` — 0–100 score; ctx-saver calls / (ctx-saver + native) * 100. Aim for > 80%
-- `adherence_note` — plain-English assessment: Excellent (≥90), Good (≥70), Mixed (≥50), Low (<50)
-- `native_shell_count` / `native_read_count` — how many times native Shell/Read was used instead of ctx-saver
+- `missed_large_outputs` — primary health metric; above-threshold native outputs should be 0
+- `adherence_score` — informational 0–100 ratio retained for compatibility
+- `adherence_note` — severity based on missed large outputs, not native-tool frequency
+- `native_shell_count` / `native_read_count` — annotated native calls only
 - `ctx_execute_count` / `ctx_read_file_count` — ctx-saver tool usage counts
 
 **Input**
@@ -370,12 +371,16 @@ Key metrics:
 | `hook_stats.dangerous_blocked` | Commands blocked by PreToolUse deny list |
 | `hook_stats.redirected_to_mcp` | Commands redirected to ctx_execute by PreToolUse |
 | `hook_stats.events_captured` | Total hook events recorded |
-| `adherence_score` | 0–100 — ctx-saver calls / total tracked calls * 100 |
-| `adherence_note` | Plain-English assessment: Excellent / Good / Mixed / Low |
-| `native_shell_count` | runInTerminal / Shell / Bash calls detected (posttooluse) |
-| `native_read_count` | readFile / read_file / Read calls detected (posttooluse) |
+| `adherence_score` | Informational 0–100 ratio of ctx-saver calls to tracked calls |
+| `adherence_note` | Context-health assessment driven by missed large outputs |
+| `native_shell_count` | Annotated native Shell calls; git-safe calls are excluded |
+| `native_read_count` | Annotated native Read calls after sanctioned reads are excluded |
 | `ctx_execute_count` | ctx_execute calls in scope |
 | `ctx_read_file_count` | ctx_read_file calls in scope |
+| `missed_large_outputs` | Native calls whose output exceeded the configured threshold |
+| `missed_large_bytes` | Total bytes from missed large outputs |
+| `sanctioned_reads` | Native reads paired with edits of the same path and session |
+| `savings_note` | Neutral explanation when no output required summarisation |
 
 **Example**
 ```json
@@ -390,6 +395,9 @@ Key metrics:
   "raw_bytes": 1843200,
   "estimated_summary_bytes": 26400,
   "saving_percent": 98.6,
+  "missed_large_outputs": 0,
+  "sanctioned_reads": 3,
+  "adherence_note": "✅ Healthy. Native tool usage is high but no large outputs leaked into context — typical for edit/git-heavy sessions.",
   "avg_duration_ms": 340,
   "top_commands": [
     { "command": "[shell] go test ./...", "count": 4, "total_bytes": 720000 }

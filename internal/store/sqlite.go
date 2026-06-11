@@ -5,11 +5,13 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -524,14 +526,15 @@ func (s *SQLiteStore) SaveSessionEvent(ctx context.Context, event *SessionEvent)
 	_, err := s.db.ExecContext(ctx, `
 		INSERT INTO session_events
 			(session_id, project_path, event_type, tool_name, tool_input,
-			 tool_output, summary, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			 tool_output, output_bytes, summary, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		event.SessionID,
 		event.ProjectPath,
 		event.EventType,
 		event.ToolName,
 		event.ToolInput,
 		event.ToolOutput,
+		event.OutputBytes,
 		event.Summary,
 		event.CreatedAt.Unix(),
 	)
@@ -548,7 +551,7 @@ func (s *SQLiteStore) ListSessionEvents(ctx context.Context, sessionID string, l
 	}
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, session_id, project_path, event_type, tool_name,
-		       tool_input, tool_output, summary, created_at
+		       tool_input, tool_output, output_bytes, summary, created_at
 		FROM session_events
 		WHERE session_id = ?
 		ORDER BY created_at ASC
@@ -568,7 +571,7 @@ func (s *SQLiteStore) ListProjectSessionEvents(ctx context.Context, projectPath 
 	}
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, session_id, project_path, event_type, tool_name,
-		       tool_input, tool_output, summary, created_at
+		       tool_input, tool_output, output_bytes, summary, created_at
 		FROM session_events
 		WHERE project_path = ?
 		ORDER BY created_at DESC
@@ -595,7 +598,7 @@ func scanSessionEvents(rows *sql.Rows) ([]*SessionEvent, error) {
 		var createdAt int64
 		if err := rows.Scan(
 			&e.ID, &e.SessionID, &e.ProjectPath, &e.EventType,
-			&e.ToolName, &e.ToolInput, &e.ToolOutput, &e.Summary, &createdAt,
+			&e.ToolName, &e.ToolInput, &e.ToolOutput, &e.OutputBytes, &e.Summary, &createdAt,
 		); err != nil {
 			return nil, fmt.Errorf("scanning session event: %w", err)
 		}
@@ -702,45 +705,128 @@ func (s *SQLiteStore) GetStats(ctx context.Context, projectPath string, since ti
 		return nil, fmt.Errorf("scanning redirected count: %w", err)
 	}
 
-	// --- tool usage adherence counts ---
-	// Count posttooluse events per tool_name so we can compute adherence_score.
-	trows, err := s.db.QueryContext(ctx, `
-		SELECT tool_name, COUNT(*)
+	return stats, nil
+}
+
+type adherenceEvent struct {
+	sessionID   string
+	toolName    string
+	toolInput   string
+	summary     string
+	outputBytes int64
+}
+
+// GetAdherenceStats classifies PostToolUse events using hook annotations as
+// the source of truth for native-tool violations.
+func (s *SQLiteStore) GetAdherenceStats(ctx context.Context, projectPath string, since time.Time, largeThresholdBytes int) (*AdherenceStats, error) {
+	sinceUnix := int64(0)
+	if !since.IsZero() {
+		sinceUnix = since.Unix()
+	}
+
+	rows, err := s.roDB.QueryContext(ctx, `
+		SELECT session_id, tool_name, tool_input, summary, output_bytes
 		FROM session_events
 		WHERE project_path = ?
 		  AND (? = 0 OR created_at >= ?)
-		  AND event_type = 'posttooluse'
-		GROUP BY tool_name`,
+		  AND event_type = 'posttooluse'`,
 		projectPath, sinceUnix, sinceUnix)
 	if err != nil {
-		return nil, fmt.Errorf("querying tool usage counts: %w", err)
+		return nil, fmt.Errorf("querying adherence events: %w", err)
 	}
-	defer trows.Close()
-	for trows.Next() {
-		var name string
-		var n int
-		if err := trows.Scan(&name, &n); err != nil {
-			return nil, fmt.Errorf("scanning tool usage row: %w", err)
+	defer rows.Close()
+
+	var events []adherenceEvent
+	for rows.Next() {
+		var event adherenceEvent
+		if err := rows.Scan(
+			&event.sessionID,
+			&event.toolName,
+			&event.toolInput,
+			&event.summary,
+			&event.outputBytes,
+		); err != nil {
+			return nil, fmt.Errorf("scanning adherence event: %w", err)
 		}
-		lower := strings.ToLower(name)
-		switch {
-		case strings.Contains(lower, "terminal") ||
-			strings.Contains(lower, "bash") ||
-			strings.Contains(lower, "shell"):
-			stats.NativeShellCount += n
-		case strings.Contains(lower, "readfile") || lower == "read":
-			stats.NativeReadCount += n
-		case name == "ctx_execute":
-			stats.CtxExecuteCount += n
-		case name == "ctx_read_file":
-			stats.CtxReadFileCount += n
-		}
+		events = append(events, event)
 	}
-	if err := trows.Err(); err != nil {
-		return nil, fmt.Errorf("iterating tool usage rows: %w", err)
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterating adherence events: %w", err)
 	}
 
+	editedPaths := make(map[string]map[string]struct{})
+	for _, event := range events {
+		if !isEditTool(event.toolName) {
+			continue
+		}
+		path := extractEventPath(event.toolInput)
+		if path == "" {
+			continue
+		}
+		if editedPaths[event.sessionID] == nil {
+			editedPaths[event.sessionID] = make(map[string]struct{})
+		}
+		editedPaths[event.sessionID][filepath.Clean(path)] = struct{}{}
+	}
+
+	stats := &AdherenceStats{}
+	for _, event := range events {
+		switch {
+		case event.toolName == "ctx_execute":
+			stats.CtxExecuteCount++
+		case event.toolName == "ctx_read_file":
+			stats.CtxReadFileCount++
+		case strings.HasPrefix(event.summary, NativeShellAnnotation):
+			stats.NativeShellCount++
+			addMissedLargeOutput(stats, event.outputBytes, largeThresholdBytes)
+		case strings.HasPrefix(event.summary, NativeReadAnnotation):
+			path := extractEventPath(event.toolInput)
+			if path != "" {
+				if _, ok := editedPaths[event.sessionID][filepath.Clean(path)]; ok {
+					stats.SanctionedReads++
+					continue
+				}
+			}
+			stats.NativeReadCount++
+			addMissedLargeOutput(stats, event.outputBytes, largeThresholdBytes)
+		}
+	}
 	return stats, nil
+}
+
+func addMissedLargeOutput(stats *AdherenceStats, outputBytes int64, threshold int) {
+	if outputBytes > 0 && outputBytes > int64(threshold) {
+		stats.MissedLargeOutputs++
+		stats.MissedLargeBytes += outputBytes
+	}
+}
+
+func isEditTool(toolName string) bool {
+	name := strings.ToLower(toolName)
+	for _, marker := range []string{"edit", "write", "str_replace", "multiedit", "applypatch", "apply_patch"} {
+		if strings.Contains(name, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+var eventPathPattern = regexp.MustCompile(`"(?:file_path|filePath|path)"\s*:\s*"([^"]+)"`)
+
+func extractEventPath(toolInput string) string {
+	var input map[string]any
+	if err := json.Unmarshal([]byte(toolInput), &input); err == nil {
+		for _, key := range []string{"file_path", "filePath", "path"} {
+			if path, ok := input[key].(string); ok {
+				return path
+			}
+		}
+	}
+	match := eventPathPattern.FindStringSubmatch(toolInput)
+	if len(match) == 2 {
+		return match[1]
+	}
+	return ""
 }
 
 // FindRecentSameCommand returns the most recent output for the same normalised

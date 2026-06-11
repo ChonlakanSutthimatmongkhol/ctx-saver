@@ -30,6 +30,11 @@ ctx_search(queries=["error", "timeout"], output_id="out_20260422_a3f8")
 ctx_get_full(output_id="out_20260422_a3f8", line_range=[100, 150])
 ```
 
+Native reads of files you are about to edit and git write commands are
+sanctioned. The important routing rule is to keep output larger than
+`auto_index_threshold_bytes` out of native tools. Use `ctx_stats` to monitor
+`missed_large_outputs`; `adherence_score` is informational.
+
 ## Per-project config (optional)
 
 Create `.ctx-saver.yaml` in your project root to override defaults:

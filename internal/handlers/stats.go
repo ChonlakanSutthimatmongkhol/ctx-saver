@@ -42,12 +42,16 @@ type StatsOutput struct {
 	HookStats             HookStatsOut     `json:"hook_stats,omitempty"`
 
 	// Adherence fields — how consistently ctx-saver tools are being used.
-	AdherenceScore   float64 `json:"adherence_score,omitempty"`
-	NativeShellCount int     `json:"native_shell_count,omitempty"`
-	NativeReadCount  int     `json:"native_read_count,omitempty"`
-	CtxExecuteCount  int     `json:"ctx_execute_count,omitempty"`
-	CtxReadFileCount int     `json:"ctx_read_file_count,omitempty"`
-	AdherenceNote    string  `json:"adherence_note,omitempty"`
+	AdherenceScore     float64 `json:"adherence_score,omitempty"`
+	NativeShellCount   int     `json:"native_shell_count,omitempty"`
+	NativeReadCount    int     `json:"native_read_count,omitempty"`
+	CtxExecuteCount    int     `json:"ctx_execute_count,omitempty"`
+	CtxReadFileCount   int     `json:"ctx_read_file_count,omitempty"`
+	AdherenceNote      string  `json:"adherence_note,omitempty"`
+	MissedLargeOutputs int     `json:"missed_large_outputs"`
+	MissedLargeBytes   int64   `json:"missed_large_bytes,omitempty"`
+	SanctionedReads    int     `json:"sanctioned_reads,omitempty"`
+	SavingsNote        string  `json:"savings_note,omitempty"`
 
 	// Outputs view field (when View == "outputs").
 	Outputs []OutputEntry `json:"outputs,omitempty"`
@@ -131,6 +135,15 @@ func (h *StatsHandler) handleStats(ctx context.Context, input StatsInput) (*mcp.
 	if err != nil {
 		return nil, StatsOutput{}, fmt.Errorf("fetching stats: %w", err)
 	}
+	adherence, err := h.st.GetAdherenceStats(
+		ctx,
+		h.projectPath,
+		since,
+		h.cfg.Summary.AutoIndexThresholdBytes,
+	)
+	if err != nil {
+		return nil, StatsOutput{}, fmt.Errorf("fetching adherence stats: %w", err)
+	}
 
 	estPerOutput := int64(h.cfg.Summary.HeadLines*80 + h.cfg.Summary.TailLines*80 + 200)
 	estimatedSummaryBytes := estPerOutput * int64(stats.OutputsStored)
@@ -147,15 +160,13 @@ func (h *StatsHandler) handleStats(ctx context.Context, input StatsInput) (*mcp.
 	}
 
 	// Compute adherence score (0–100).
-	nativeTotal := stats.NativeShellCount + stats.NativeReadCount
-	ctxTotal := stats.CtxExecuteCount + stats.CtxReadFileCount
+	nativeTotal := adherence.NativeShellCount + adherence.NativeReadCount
+	ctxTotal := adherence.CtxExecuteCount + adherence.CtxReadFileCount
 	total := nativeTotal + ctxTotal
 	adherenceScore := 0.0
 	if total > 0 {
 		adherenceScore = float64(ctxTotal) / float64(total) * 100
 	}
-
-	adherenceNote := adherenceNote(adherenceScore, total)
 
 	out := StatsOutput{
 		View:                  "stats",
@@ -171,12 +182,18 @@ func (h *StatsHandler) handleStats(ctx context.Context, input StatsInput) (*mcp.
 			RedirectedToMCP:  stats.RedirectedToMCP,
 			EventsCaptured:   stats.EventsCaptured,
 		},
-		AdherenceScore:   adherenceScore,
-		NativeShellCount: stats.NativeShellCount,
-		NativeReadCount:  stats.NativeReadCount,
-		CtxExecuteCount:  stats.CtxExecuteCount,
-		CtxReadFileCount: stats.CtxReadFileCount,
-		AdherenceNote:    adherenceNote,
+		AdherenceScore:     adherenceScore,
+		NativeShellCount:   adherence.NativeShellCount,
+		NativeReadCount:    adherence.NativeReadCount,
+		CtxExecuteCount:    adherence.CtxExecuteCount,
+		CtxReadFileCount:   adherence.CtxReadFileCount,
+		AdherenceNote:      adherenceNote(adherence),
+		MissedLargeOutputs: adherence.MissedLargeOutputs,
+		MissedLargeBytes:   adherence.MissedLargeBytes,
+		SanctionedReads:    adherence.SanctionedReads,
+	}
+	if stats.OutputsStored == 0 {
+		out.SavingsNote = "No outputs exceeded auto_index_threshold in this scope — nothing required summarizing. A zero here is normal for edit/commit sessions."
 	}
 	for _, c := range stats.TopCommands {
 		out.TopCommands = append(out.TopCommands, CommandStatOut{
@@ -216,23 +233,47 @@ func (h *StatsHandler) handleListOutputs(ctx context.Context, input StatsInput) 
 	return nil, StatsOutput{View: "outputs", Outputs: entries}, nil
 }
 
-// adherenceNote returns a plain-English assessment of the current adherence score.
-// When total is 0, no note is returned (not enough data yet).
-func adherenceNote(score float64, total int) string {
+// adherenceNote assesses context-window health. Severity is driven by missed
+// large outputs rather than raw native-tool counts.
+func adherenceNote(stats *store.AdherenceStats) string {
+	total := stats.CtxExecuteCount + stats.CtxReadFileCount +
+		stats.NativeShellCount + stats.NativeReadCount
 	if total == 0 {
 		return ""
 	}
 	switch {
-	case score >= 90:
-		return "✅ Excellent adherence. ctx-saver tools are being used consistently."
-	case score >= 70:
-		return "👍 Good adherence. Some native tool usage detected — review tool descriptions if this is Copilot."
-	case score >= 50:
-		return "⚠️  Mixed adherence. Context window is at risk. Re-read ctx_session_init rules."
+	case stats.MissedLargeOutputs == 0:
+		if stats.NativeShellCount+stats.NativeReadCount >
+			stats.CtxExecuteCount+stats.CtxReadFileCount {
+			return "✅ Healthy. Native tool usage is high but no large outputs leaked into context — typical for edit/git-heavy sessions."
+		}
+		return "✅ Excellent. ctx-saver tools used consistently; no large outputs leaked."
+	case stats.MissedLargeOutputs <= 2:
+		return fmt.Sprintf(
+			"⚠️  %d large output(s) (%s) went through native tools — route those through ctx_execute/ctx_read_file next time.",
+			stats.MissedLargeOutputs,
+			humanBytes(stats.MissedLargeBytes),
+		)
 	default:
-		return "🚨 Low adherence. Native tools dominating — session may fail early. " +
-			"Call ctx_session_init to refresh rules; ensure .github/copilot-instructions.md is present."
+		return fmt.Sprintf(
+			"🚨 %d large outputs (%s total) bypassed ctx-saver — context window at risk. Call ctx_session_init to refresh rules.",
+			stats.MissedLargeOutputs,
+			humanBytes(stats.MissedLargeBytes),
+		)
 	}
+}
+
+func humanBytes(size int64) string {
+	const unit = int64(1024)
+	if size < unit {
+		return fmt.Sprintf("%d B", size)
+	}
+	div, exp := unit, 0
+	for n := size / unit; n >= unit && exp < 3; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %ciB", float64(size)/float64(div), "KMGT"[exp])
 }
 
 // resolveSince maps a scope string to the earliest time.Time to include.

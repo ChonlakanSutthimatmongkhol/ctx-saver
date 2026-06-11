@@ -10,6 +10,8 @@ import (
 	"unicode/utf8"
 
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/store"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // ── Routing tests ──────────────────────────────────────────────────────────
@@ -311,6 +313,9 @@ func (m *memStore) Close() error                                     { return ni
 func (m *memStore) GetStats(_ context.Context, _ string, _ time.Time) (*store.Stats, error) {
 	return &store.Stats{}, nil
 }
+func (m *memStore) GetAdherenceStats(_ context.Context, _ string, _ time.Time, _ int) (*store.AdherenceStats, error) {
+	return &store.AdherenceStats{}, nil
+}
 
 func (m *memStore) SaveSessionEvent(_ context.Context, e *store.SessionEvent) error {
 	m.events = append(m.events, e)
@@ -525,6 +530,25 @@ func TestPostToolUse_NativeReadAnnotation(t *testing.T) {
 	if !strings.Contains(ev.Summary, "NATIVE_READ") {
 		t.Errorf("expected summary to contain NATIVE_READ, got: %q", ev.Summary)
 	}
+}
+
+func TestPostToolUse_RecordsOutputBytes(t *testing.T) {
+	st := newMemStore()
+	output := strings.Repeat("x", 5120)
+	input := HookInput{
+		SessionID:  "s-output-size",
+		Cwd:        "/proj",
+		ToolName:   "Shell",
+		ToolInput:  map[string]any{"command": "go test ./..."},
+		ToolOutput: output,
+	}
+	b, _ := json.Marshal(input)
+	var buf bytes.Buffer
+	require.NoError(t, RunPostToolUse(st, bytes.NewBuffer(b), &buf))
+
+	require.Len(t, st.events, 1)
+	assert.Equal(t, int64(len(output)), st.events[0].OutputBytes)
+	assert.Less(t, len(st.events[0].ToolOutput), len(output))
 }
 
 func TestPreToolUse_SoftNudge_ShellLargeCmd(t *testing.T) {

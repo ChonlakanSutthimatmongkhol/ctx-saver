@@ -152,6 +152,9 @@ func (m *mockStore) ListProjectSessionEvents(_ context.Context, _ string, _ int)
 func (m *mockStore) GetStats(_ context.Context, _ string, _ time.Time) (*store.Stats, error) {
 	return &store.Stats{}, nil
 }
+func (m *mockStore) GetAdherenceStats(_ context.Context, _ string, _ time.Time, _ int) (*store.AdherenceStats, error) {
+	return &store.AdherenceStats{}, nil
+}
 
 func (m *mockStore) FindRecentSameCommand(_ context.Context, _, _ string, _ time.Duration) (*store.OutputMeta, error) {
 	return m.dedupMeta, m.dedupErr

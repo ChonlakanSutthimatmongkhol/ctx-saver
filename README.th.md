@@ -152,6 +152,14 @@ Benchmark snapshot รวม: จาก raw output 391 KB เหลือ summar
 scripts/benchmark.sh
 ```
 
+### สุขภาพ Context Window
+
+`ctx_stats` วัดสุขภาพของ context window ไม่ใช่ความถี่ในการใช้ tool โดย
+`missed_large_outputs` เป็น metric หลักสำหรับ output ที่ใหญ่เกิน threshold
+และหลุดผ่าน native Shell/Read ที่มี annotation ส่วนคำสั่ง git write และ native
+Read ของไฟล์ที่แก้ใน session เดียวกันถือว่า sanctioned และไม่ลด adherence
+ขณะที่ `adherence_score` ยังคงไว้เป็น metric เชิงข้อมูลเพื่อ backward compatibility
+
 ## Features สำคัญ
 
 ### Smart Summary

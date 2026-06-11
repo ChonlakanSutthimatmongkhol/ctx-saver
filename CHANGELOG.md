@@ -2,6 +2,26 @@
 
 All notable changes to ctx-saver will be documented in this file.
 
+## v0.11.0 — Adherence measurement fix
+
+### Added
+- Schema migration v9 adds `session_events.output_bytes`, preserving `0` as
+  unknown for pre-v9 rows.
+- `ctx_stats` now reports `missed_large_outputs`, `missed_large_bytes`,
+  `sanctioned_reads`, and a neutral `savings_note` when nothing needed
+  summarising.
+
+### Fixed
+- Adherence counting now uses the same PostToolUse annotations as the hook, so
+  git-safe native commands excluded since v0.8.4 are no longer counted.
+- Native reads of files edited in the same session are sanctioned instead of
+  reported as violations or missed opportunities.
+
+### Changed
+- `adherence_note` severity is based on large outputs that bypassed ctx-saver,
+  not the raw ratio of native tool calls. `adherence_score` remains available
+  for backward compatibility.
+
 ## v0.10.0 — Cached files in session_init + secret redaction
 
 ### Added

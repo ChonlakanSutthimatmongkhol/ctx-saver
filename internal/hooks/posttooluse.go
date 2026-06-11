@@ -35,10 +35,10 @@ func RunPostToolUse(st store.Store, r io.Reader, w io.Writer) error {
 	// Git write/admin commands are intentionally run natively — skip annotation.
 	if isNativeShellTool(input.ToolName) {
 		if !isGitSafeCommand(extractCmd(input.ToolInput)) {
-			summary = "⚠️  NATIVE_SHELL: " + summary + " (consider ctx_execute)"
+			summary = store.NativeShellAnnotation + " " + summary + " (consider ctx_execute)"
 		}
 	} else if isNativeReadTool(input.ToolName) {
-		summary = "⚠️  NATIVE_READ: " + summary + " (consider ctx_read_file)"
+		summary = store.NativeReadAnnotation + " " + summary + " (consider ctx_read_file)"
 	}
 
 	event := &store.SessionEvent{
@@ -48,6 +48,7 @@ func RunPostToolUse(st store.Store, r io.Reader, w io.Writer) error {
 		ToolName:    input.ToolName,
 		ToolInput:   truncate(toolInputJSON, maxFieldBytes),
 		ToolOutput:  truncate(toolOutputStr, 512),
+		OutputBytes: int64(len(toolOutputStr)),
 		Summary:     summary,
 		CreatedAt:   time.Now().UTC(),
 	}

@@ -290,10 +290,10 @@ func truncateStr(s string, max int) string {
 // sessionRulesText is the condensed rule block returned on ctx_session_init.
 // Kept short to avoid consuming context on every session start.
 const sessionRulesText = `━━━ ctx-saver SESSION RULES ━━━
-1. Commands (build/test/git/kubectl/curl/etc.) → ctx_execute, NOT runInTerminal/Shell/Bash
+1. Commands with potentially large output (build/test/kubectl/curl/etc.) → ctx_execute
 2. Files > 50 lines → ctx_read_file, NOT readFile
 3. Before re-running: check ctx_stats(view=outputs) / ctx_search / ctx_get_section for cached results
-4. Verify every ~20 turns: ctx_stats → saving_percent and adherence_score should be > 80%
+4. Verify every ~20 turns: ctx_stats → missed_large_outputs should be 0
 5. Dangerous commands (rm -rf, curl|bash, eval) are blocked by PreToolUse hook
-Exception: pwd / whoami / echo / date may use native terminal.
+Sanctioned native use: git write/admin commands, reads of files you edit, pwd/whoami/echo/date.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`

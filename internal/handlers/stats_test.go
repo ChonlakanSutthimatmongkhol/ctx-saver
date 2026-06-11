@@ -15,16 +15,28 @@ import (
 
 // statsStore is a minimal store.Store that returns a fixed *store.Stats.
 type statsStore struct {
-	stats    *store.Stats
-	statsErr error
+	stats        *store.Stats
+	statsErr     error
+	adherence    *store.AdherenceStats
+	adherenceErr error
 	// capturedSince records the since value passed to GetStats.
-	capturedSince time.Time
-	mockStore     // embed to satisfy remaining interface methods
+	capturedSince     time.Time
+	capturedThreshold int
+	mockStore         // embed to satisfy remaining interface methods
 }
 
 func (s *statsStore) GetStats(_ context.Context, _ string, since time.Time) (*store.Stats, error) {
 	s.capturedSince = since
 	return s.stats, s.statsErr
+}
+
+func (s *statsStore) GetAdherenceStats(_ context.Context, _ string, since time.Time, threshold int) (*store.AdherenceStats, error) {
+	s.capturedSince = since
+	s.capturedThreshold = threshold
+	if s.adherence == nil {
+		s.adherence = &store.AdherenceStats{}
+	}
+	return s.adherence, s.adherenceErr
 }
 
 func statsCfg() *config.Config {
@@ -42,6 +54,7 @@ func TestStatsHandler_Empty(t *testing.T) {
 	assert.Equal(t, "session", out.Scope)
 	assert.Equal(t, 0, out.OutputsStored)
 	assert.Equal(t, float64(0), out.SavingPercent)
+	assert.Contains(t, out.SavingsNote, "normal")
 }
 
 func TestStatsHandler_Populated(t *testing.T) {
@@ -72,12 +85,14 @@ func TestStatsHandler_Populated(t *testing.T) {
 	assert.Equal(t, 10, out.HookStats.EventsCaptured)
 }
 
-func TestAdherenceScore_High(t *testing.T) {
-	// 9 ctx_execute + 1 runInTerminal → score ~90%
-	st := &statsStore{stats: &store.Stats{
-		CtxExecuteCount:  9,
-		NativeShellCount: 1,
-	}}
+func TestAdherenceScore_BackwardCompatible(t *testing.T) {
+	st := &statsStore{
+		stats: &store.Stats{},
+		adherence: &store.AdherenceStats{
+			CtxExecuteCount:  9,
+			NativeShellCount: 1,
+		},
+	}
 	h := handlers.NewStatsHandler(statsCfg(), st, "/proj", time.Now())
 	_, out, err := h.Handle(context.Background(), nil, handlers.StatsInput{})
 	require.NoError(t, err)
@@ -85,40 +100,44 @@ func TestAdherenceScore_High(t *testing.T) {
 	assert.Contains(t, out.AdherenceNote, "Excellent")
 }
 
-func TestAdherenceScore_Low(t *testing.T) {
-	// 2 ctx_execute + 8 runInTerminal → score ~20%
-	st := &statsStore{stats: &store.Stats{
-		CtxExecuteCount:  2,
-		NativeShellCount: 8,
-	}}
+func TestAdherenceNote_EditHeavySessionHealthy(t *testing.T) {
+	st := &statsStore{
+		stats:     &store.Stats{},
+		adherence: &store.AdherenceStats{CtxExecuteCount: 2, NativeShellCount: 8},
+	}
 	h := handlers.NewStatsHandler(statsCfg(), st, "/proj", time.Now())
 	_, out, err := h.Handle(context.Background(), nil, handlers.StatsInput{})
 	require.NoError(t, err)
 	assert.InDelta(t, 20.0, out.AdherenceScore, 0.01)
-	assert.Contains(t, out.AdherenceNote, "Low")
+	assert.Contains(t, out.AdherenceNote, "Healthy")
+	assert.NotContains(t, out.AdherenceNote, "session may fail early")
 }
 
-func TestAdherenceNote_Thresholds(t *testing.T) {
+func TestAdherenceNote_MissedLargeSeverity(t *testing.T) {
 	cases := []struct {
-		ctx int
-		nat int
-		sub string
+		missed int
+		bytes  int64
+		sub    string
 	}{
-		{9, 1, "Excellent"},  // 90%
-		{7, 3, "Good"},       // 70%
-		{5, 5, "Mixed"},      // 50%
-		{2, 8, "Low"},        // 20%
+		{1, 6 * 1024, "⚠️"},
+		{2, 12 * 1024, "⚠️"},
+		{3, 18 * 1024, "🚨"},
 	}
 	for _, c := range cases {
-		st := &statsStore{stats: &store.Stats{
-			CtxExecuteCount:  c.ctx,
-			NativeShellCount: c.nat,
-		}}
+		st := &statsStore{
+			stats: &store.Stats{},
+			adherence: &store.AdherenceStats{
+				NativeShellCount:   c.missed,
+				MissedLargeOutputs: c.missed,
+				MissedLargeBytes:   c.bytes,
+			},
+		}
 		h := handlers.NewStatsHandler(statsCfg(), st, "/proj", time.Now())
 		_, out, err := h.Handle(context.Background(), nil, handlers.StatsInput{})
 		require.NoError(t, err)
-		assert.Contains(t, out.AdherenceNote, c.sub,
-			"expected %q in note for %d ctx / %d native", c.sub, c.ctx, c.nat)
+		assert.Contains(t, out.AdherenceNote, c.sub)
+		assert.Equal(t, c.missed, out.MissedLargeOutputs)
+		assert.Equal(t, c.bytes, out.MissedLargeBytes)
 	}
 }
 
@@ -129,6 +148,20 @@ func TestAdherenceScore_NoData(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, float64(0), out.AdherenceScore)
 	assert.Empty(t, out.AdherenceNote, "no note when no tool events")
+}
+
+func TestStatsHandler_ReportsSanctionedReadsAndThreshold(t *testing.T) {
+	cfg := statsCfg()
+	st := &statsStore{
+		stats:     &store.Stats{OutputsStored: 1},
+		adherence: &store.AdherenceStats{SanctionedReads: 2},
+	}
+	h := handlers.NewStatsHandler(cfg, st, "/proj", time.Now())
+	_, out, err := h.Handle(context.Background(), nil, handlers.StatsInput{})
+	require.NoError(t, err)
+	assert.Equal(t, 2, out.SanctionedReads)
+	assert.Equal(t, cfg.Summary.AutoIndexThresholdBytes, st.capturedThreshold)
+	assert.Empty(t, out.SavingsNote)
 }
 
 func TestStatsHandler_InvalidScope(t *testing.T) {

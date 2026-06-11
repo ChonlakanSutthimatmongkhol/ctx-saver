@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-const currentSchemaVersion = 8
+const currentSchemaVersion = 9
 
 // runMigrations applies any pending schema migrations to db.
 // It is idempotent and safe to call on every server start.
@@ -39,6 +39,10 @@ func applyMigration(db *sql.DB, version int) error {
 	defer tx.Rollback() //nolint:errcheck
 
 	switch version {
+	case 9:
+		if err := migration9(tx); err != nil {
+			return err
+		}
 	case 8:
 		if err := migration8(tx); err != nil {
 			return err
@@ -79,6 +83,16 @@ func applyMigration(db *sql.DB, version int) error {
 		return fmt.Errorf("recording schema version %d: %w", version, err)
 	}
 	return tx.Commit()
+}
+
+// migration9 records the full native tool output size for adherence reporting.
+// Existing rows receive 0, which is treated as an unknown size.
+func migration9(tx *sql.Tx) error {
+	if _, err := tx.Exec(`ALTER TABLE session_events
+		ADD COLUMN output_bytes INTEGER NOT NULL DEFAULT 0`); err != nil {
+		return fmt.Errorf("migration9 add output_bytes column: %w", err)
+	}
+	return nil
 }
 
 // migration1 creates the initial outputs table, FTS5 virtual table, and indexes.

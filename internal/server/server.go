@@ -250,11 +250,13 @@ Without task, only unscoped notes are returned so unrelated sessions stay clean.
 		Description: `[VERIFICATION + INVENTORY tool] Report ctx-saver state for this project.
 
 View 'stats' (default):
-- Adherence score (how consistently ctx-saver tools are being used vs native)
+- Missed large outputs (primary context-window health metric)
+- Adherence score (informational ratio of ctx-saver vs annotated native calls)
+- Git write commands and reads paired with edits are sanctioned
 - Outputs stored, bytes saved, top commands, hook activity
 - Useful for verifying ctx-saver is working and quantifying savings
 - Scope: session | today | 7d | all (default: session)
-- Call every ~20 turns; if adherence_score < 80, re-read ctx_session_init rules
+- Call every ~20 turns; investigate when missed_large_outputs is non-zero
 
 View 'outputs':
 - Full list of cached outputs newest-first (with output_id, command, size, freshness)

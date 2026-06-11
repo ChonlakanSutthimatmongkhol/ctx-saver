@@ -152,6 +152,15 @@ Run the benchmark locally:
 scripts/benchmark.sh
 ```
 
+### Context-Window Health
+
+`ctx_stats` measures context-window health, not tool-usage frequency.
+`missed_large_outputs` is the primary signal: it counts above-threshold output
+that passed through annotated native Shell/Read tools. Git write commands and
+native reads of files edited in the same session are sanctioned and do not
+lower adherence. `adherence_score` remains as an informational compatibility
+metric.
+
 ## Key Features
 
 ### Smart Summaries

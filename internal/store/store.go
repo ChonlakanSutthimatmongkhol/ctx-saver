@@ -11,6 +11,13 @@ import (
 // rows when listing cached files.
 const ReadFileCommandPrefix = "[read_file] "
 
+// Annotation prefixes written by the PostToolUse hook. Adherence reporting
+// matches these exact strings so the hook remains the source of truth.
+const (
+	NativeShellAnnotation = "⚠️  NATIVE_SHELL:"
+	NativeReadAnnotation  = "⚠️  NATIVE_READ:"
+)
+
 // Output is a complete record of one command execution stored in SQLite.
 type Output struct {
 	OutputID    string
@@ -49,8 +56,8 @@ type OutputMeta struct {
 // used by ctx_session_init to surface reference reads available from turn 1.
 type CachedFileMeta struct {
 	OutputID    string
-	Path        string    // absolute path (stripped of the ReadFileCommandPrefix)
-	SourceHash  string    // SHA-256 hex stored at cache time ("" for old rows)
+	Path        string // absolute path (stripped of the ReadFileCommandPrefix)
+	SourceHash  string // SHA-256 hex stored at cache time ("" for old rows)
 	SourceKind  string
 	RefreshedAt time.Time
 	TTLSeconds  int
@@ -76,6 +83,7 @@ type SessionEvent struct {
 	ToolName    string
 	ToolInput   string // JSON string
 	ToolOutput  string // JSON string or plain text
+	OutputBytes int64  // full output size before truncation; 0 = unknown
 	Summary     string // human-readable one-liner
 	CreatedAt   time.Time
 }
@@ -91,13 +99,17 @@ type Stats struct {
 	DangerousBlocked int
 	RedirectedToMCP  int
 	EventsCaptured   int
+}
 
-	// Tool-usage adherence counts (PostToolUse events, scope-filtered).
-	// These are used to compute the adherence_score in ctx_stats.
-	NativeShellCount int // runInTerminal / Shell / Bash calls
-	NativeReadCount  int // readFile / read_file / Read calls
-	CtxExecuteCount  int // ctx_execute calls
-	CtxReadFileCount int // ctx_read_file calls
+// AdherenceStats is the classified tool-usage breakdown for one scope.
+type AdherenceStats struct {
+	CtxExecuteCount    int
+	CtxReadFileCount   int
+	NativeShellCount   int
+	NativeReadCount    int
+	SanctionedReads    int
+	MissedLargeOutputs int
+	MissedLargeBytes   int64
 }
 
 // CommandStat is the aggregate for one command bucket.
@@ -145,6 +157,10 @@ type Store interface {
 	// belonging to projectPath created at or after since.
 	// A zero since means no time filter (all time).
 	GetStats(ctx context.Context, projectPath string, since time.Time) (*Stats, error)
+
+	// GetAdherenceStats classifies posttooluse events for projectPath.
+	// output_bytes == 0 is unknown and is never counted as missed.
+	GetAdherenceStats(ctx context.Context, projectPath string, since time.Time, largeThresholdBytes int) (*AdherenceStats, error)
 
 	// FindRecentSameCommand returns the most recent output for the same
 	// normalised command within the window. Returns nil, nil if not found.

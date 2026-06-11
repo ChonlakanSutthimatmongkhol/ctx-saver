@@ -133,9 +133,12 @@ Following these rules extends productive session length **5–10×** with minima
 
 Call `ctx_stats` every ~20 turns.
 - `saving_percent` should be > 80%
-- `adherence_score` should be > 80%
+- `missed_large_outputs` should be 0
+- `adherence_score` is an informational raw ratio
 
-If either metric is low, native tools are being over-used — re-read these rules.
+Native reads of files edited in the same session and git write commands are
+sanctioned. If `missed_large_outputs` is non-zero, route above-threshold output
+through `ctx_execute` or `ctx_read_file`.
 
 <!-- ctx-saver -->
 See .ctx-saver/project-knowledge.md for learned project patterns (auto-generated, refresh with `ctx-saver knowledge refresh`).
