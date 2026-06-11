@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-const currentSchemaVersion = 9
+const currentSchemaVersion = 10
 
 // runMigrations applies any pending schema migrations to db.
 // It is idempotent and safe to call on every server start.
@@ -39,6 +39,10 @@ func applyMigration(db *sql.DB, version int) error {
 	defer tx.Rollback() //nolint:errcheck
 
 	switch version {
+	case 10:
+		if err := migration10(tx); err != nil {
+			return err
+		}
 	case 9:
 		if err := migration9(tx); err != nil {
 			return err
@@ -83,6 +87,21 @@ func applyMigration(db *sql.DB, version int) error {
 		return fmt.Errorf("recording schema version %d: %w", version, err)
 	}
 	return tx.Commit()
+}
+
+// migration10 stores exact tokenizer metrics for each cached output.
+func migration10(tx *sql.Tx) error {
+	for _, stmt := range []string{
+		`ALTER TABLE outputs ADD COLUMN raw_tokens INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE outputs ADD COLUMN response_tokens INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE outputs ADD COLUMN response_bytes INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE outputs ADD COLUMN tokenizer TEXT NOT NULL DEFAULT ''`,
+	} {
+		if _, err := tx.Exec(stmt); err != nil {
+			return fmt.Errorf("migration10 token metrics: %w", err)
+		}
+	}
+	return nil
 }
 
 // migration9 records the full native tool output size for adherence reporting.

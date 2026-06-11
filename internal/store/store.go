@@ -20,16 +20,20 @@ const (
 
 // Output is a complete record of one command execution stored in SQLite.
 type Output struct {
-	OutputID    string
-	Command     string // sanitised for display (no secrets)
-	Intent      string
-	FullOutput  string
-	SizeBytes   int64
-	LineCount   int
-	ExitCode    int
-	DurationMs  int64
-	CreatedAt   time.Time
-	ProjectPath string
+	OutputID       string
+	Command        string // sanitised for display (no secrets)
+	Intent         string
+	FullOutput     string
+	SizeBytes      int64
+	LineCount      int
+	ExitCode       int
+	DurationMs     int64
+	CreatedAt      time.Time
+	ProjectPath    string
+	RawTokens      int64
+	ResponseTokens int64
+	ResponseBytes  int64
+	Tokenizer      string
 
 	// Phase 7: freshness metadata
 	SourceKind  string    // e.g. "shell:acli", "shell:kubectl", "python"
@@ -90,15 +94,21 @@ type SessionEvent struct {
 
 // Stats holds aggregate statistics for stored outputs and hook activity.
 type Stats struct {
-	OutputsStored    int
-	RawBytes         int64
-	LargestBytes     int64
-	AvgDurationMs    int64
-	TopCommands      []CommandStat
-	LargestOutputs   []*OutputMeta
-	DangerousBlocked int
-	RedirectedToMCP  int
-	EventsCaptured   int
+	OutputsStored      int
+	RawBytes           int64
+	LargestBytes       int64
+	AvgDurationMs      int64
+	TopCommands        []CommandStat
+	LargestOutputs     []*OutputMeta
+	DangerousBlocked   int
+	RedirectedToMCP    int
+	EventsCaptured     int
+	RawTokens          int64
+	ResponseTokens     int64
+	ResponseBytes      int64
+	TokenizedOutputs   int
+	UntokenizedOutputs int
+	Tokenizer          string
 }
 
 // AdherenceStats is the classified tool-usage breakdown for one scope.

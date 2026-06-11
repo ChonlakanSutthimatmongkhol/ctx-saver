@@ -225,6 +225,10 @@ func initCopilot() error {
 }
 
 func initCopilotInstructions() error {
+	return installCopilotInstructions(true)
+}
+
+func installCopilotInstructions(interactive bool) error {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("getting working directory: %w", err)
@@ -238,6 +242,10 @@ func initCopilotInstructions() error {
 
 	if _, err := os.Stat(targetFile); err == nil {
 		fmt.Printf("  %s already exists.\n", targetFile)
+		if !interactive {
+			fmt.Println("  Left unchanged; merge ctx-saver rules manually if the file is outdated.")
+			return nil
+		}
 		fmt.Print("  Append ctx-saver rules? [y/N] ")
 		reader := bufio.NewReader(os.Stdin)
 		confirm, _ := reader.ReadString('\n')

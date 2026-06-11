@@ -36,6 +36,13 @@ type StatsOutput struct {
 	EstimatedSummaryBytes int64            `json:"estimated_summary_bytes,omitempty"`
 	EstimatedTokensSaved  int64            `json:"estimated_tokens_saved,omitempty"`
 	SavingPercent         float64          `json:"saving_percent,omitempty"`
+	RawTokens             int64            `json:"raw_tokens,omitempty"`
+	ResponseTokens        int64            `json:"response_tokens,omitempty"`
+	TokensSaved           int64            `json:"tokens_saved,omitempty"`
+	TokenSavingPercent    float64          `json:"token_saving_percent,omitempty"`
+	Tokenizer             string           `json:"tokenizer,omitempty"`
+	TokenizedOutputs      int              `json:"tokenized_outputs,omitempty"`
+	UntokenizedOutputs    int              `json:"untokenized_outputs,omitempty"`
 	AvgDurationMs         int64            `json:"avg_duration_ms,omitempty"`
 	TopCommands           []CommandStatOut `json:"top_commands,omitempty"`
 	LargestOutputs        []OutputMetaOut  `json:"largest_outputs,omitempty"`
@@ -145,18 +152,13 @@ func (h *StatsHandler) handleStats(ctx context.Context, input StatsInput) (*mcp.
 		return nil, StatsOutput{}, fmt.Errorf("fetching adherence stats: %w", err)
 	}
 
-	estPerOutput := int64(h.cfg.Summary.HeadLines*80 + h.cfg.Summary.TailLines*80 + 200)
-	estimatedSummaryBytes := estPerOutput * int64(stats.OutputsStored)
-
-	savingPercent := 0.0
-	var estimatedTokensSaved int64
-	if stats.RawBytes > 0 {
-		saved := stats.RawBytes - estimatedSummaryBytes
-		if saved < 0 {
-			saved = 0
-		}
-		savingPercent = float64(saved) / float64(stats.RawBytes) * 100
-		estimatedTokensSaved = saved / 4
+	tokensSaved := stats.RawTokens - stats.ResponseTokens
+	if tokensSaved < 0 {
+		tokensSaved = 0
+	}
+	tokenSavingPercent := 0.0
+	if stats.RawTokens > 0 {
+		tokenSavingPercent = float64(tokensSaved) / float64(stats.RawTokens) * 100
 	}
 
 	// Compute adherence score (0–100).
@@ -173,9 +175,16 @@ func (h *StatsHandler) handleStats(ctx context.Context, input StatsInput) (*mcp.
 		Scope:                 scope,
 		OutputsStored:         stats.OutputsStored,
 		RawBytes:              stats.RawBytes,
-		EstimatedSummaryBytes: estimatedSummaryBytes,
-		EstimatedTokensSaved:  estimatedTokensSaved,
-		SavingPercent:         savingPercent,
+		EstimatedSummaryBytes: stats.ResponseBytes,
+		EstimatedTokensSaved:  tokensSaved,
+		SavingPercent:         tokenSavingPercent,
+		RawTokens:             stats.RawTokens,
+		ResponseTokens:        stats.ResponseTokens,
+		TokensSaved:           tokensSaved,
+		TokenSavingPercent:    tokenSavingPercent,
+		Tokenizer:             stats.Tokenizer,
+		TokenizedOutputs:      stats.TokenizedOutputs,
+		UntokenizedOutputs:    stats.UntokenizedOutputs,
 		AvgDurationMs:         stats.AvgDurationMs,
 		HookStats: HookStatsOut{
 			DangerousBlocked: stats.DangerousBlocked,
@@ -194,6 +203,8 @@ func (h *StatsHandler) handleStats(ctx context.Context, input StatsInput) (*mcp.
 	}
 	if stats.OutputsStored == 0 {
 		out.SavingsNote = "No outputs exceeded auto_index_threshold in this scope — nothing required summarizing. A zero here is normal for edit/commit sessions."
+	} else if stats.TokenizedOutputs == 0 {
+		out.SavingsNote = "Stored outputs predate exact token accounting; they are listed in untokenized_outputs and excluded from token savings."
 	}
 	for _, c := range stats.TopCommands {
 		out.TopCommands = append(out.TopCommands, CommandStatOut{

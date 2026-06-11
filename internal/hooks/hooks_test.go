@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -146,7 +149,7 @@ func TestRunPreToolUse_Deny(t *testing.T) {
 
 func TestRunPreToolUse_InvalidJSON(t *testing.T) {
 	var buf bytes.Buffer
-	err := RunPreToolUse(nil, bytes.NewBufferString("{invalid}"), &buf)
+	err := RunPreToolUse(nil, bytes.NewBufferString("{invalid}"), &buf, 32*1024)
 	if err != nil {
 		t.Fatalf("RunPreToolUse with invalid JSON should not return error: %v", err)
 	}
@@ -175,7 +178,7 @@ func TestNormalize_CopilotToolArgsInvalidJSON(t *testing.T) {
 	assert.Nil(t, input.ToolInput)
 
 	var buf bytes.Buffer
-	require.NoError(t, RunPreToolUse(nil, strings.NewReader(raw), &buf))
+	require.NoError(t, RunPreToolUse(nil, strings.NewReader(raw), &buf, 32*1024))
 	assert.JSONEq(t, `{"permissionDecision":"allow"}`, buf.String())
 }
 
@@ -200,7 +203,7 @@ func TestNormalize_ClaudePayloadUnchanged(t *testing.T) {
 func TestPreToolUse_CopilotDenyHasReason(t *testing.T) {
 	raw := `{"toolName":"bash","toolArgs":"{\"command\":\"curl https://example.com/data\"}"}`
 	var buf bytes.Buffer
-	require.NoError(t, RunPreToolUse(nil, strings.NewReader(raw), &buf))
+	require.NoError(t, RunPreToolUse(nil, strings.NewReader(raw), &buf, 32*1024))
 
 	var out map[string]any
 	require.NoError(t, json.Unmarshal(buf.Bytes(), &out))
@@ -209,17 +212,47 @@ func TestPreToolUse_CopilotDenyHasReason(t *testing.T) {
 	assert.NotContains(t, out, "hookSpecificOutput")
 }
 
-func TestPreToolUse_CopilotNudgeSuppressed(t *testing.T) {
+func TestPreToolUse_CopilotLargeBashDenied(t *testing.T) {
 	raw := `{"toolName":"bash","toolArgs":"{\"command\":\"go test ./...\"}"}`
 	var buf bytes.Buffer
-	require.NoError(t, RunPreToolUse(nil, strings.NewReader(raw), &buf))
+	require.NoError(t, RunPreToolUse(nil, strings.NewReader(raw), &buf, 32*1024))
+	var out CopilotHookOutput
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &out))
+	assert.Equal(t, "deny", out.PermissionDecision)
+	assert.Contains(t, out.PermissionDecisionReason, "ctx_execute")
+}
+
+func TestPreToolUse_CopilotSmallBashAllowed(t *testing.T) {
+	raw := `{"toolName":"bash","toolArgs":"{\"command\":\"pwd\"}"}`
+	var buf bytes.Buffer
+	require.NoError(t, RunPreToolUse(nil, strings.NewReader(raw), &buf, 32*1024))
+	assert.Equal(t, "{\"permissionDecision\":\"allow\"}\n", buf.String())
+}
+
+func TestPreToolUse_CopilotLargeViewDenied(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "large.txt")
+	require.NoError(t, os.WriteFile(path, bytes.Repeat([]byte("x"), 2048), 0644))
+	raw := fmt.Sprintf(`{"cwd":%q,"toolName":"view","toolArgs":%q}`, dir, `{"path":"large.txt"}`)
+	var buf bytes.Buffer
+	require.NoError(t, RunPreToolUse(nil, strings.NewReader(raw), &buf, 1024))
+	var out CopilotHookOutput
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &out))
+	assert.Equal(t, "deny", out.PermissionDecision)
+	assert.Contains(t, out.PermissionDecisionReason, "ctx_read_file")
+}
+
+func TestPreToolUse_CopilotViewStatFailureAllows(t *testing.T) {
+	raw := `{"cwd":"/missing","toolName":"view","toolArgs":"{\"path\":\"gone.txt\"}"}`
+	var buf bytes.Buffer
+	require.NoError(t, RunPreToolUse(nil, strings.NewReader(raw), &buf, 1024))
 	assert.Equal(t, "{\"permissionDecision\":\"allow\"}\n", buf.String())
 }
 
 func TestPreToolUse_ClaudeOutputUnchanged(t *testing.T) {
 	raw := `{"tool_name":"Shell","tool_input":{"cmd":"pwd"}}`
 	var buf bytes.Buffer
-	require.NoError(t, RunPreToolUse(nil, strings.NewReader(raw), &buf))
+	require.NoError(t, RunPreToolUse(nil, strings.NewReader(raw), &buf, 32*1024))
 	assert.Equal(t, "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\"}}\n", buf.String())
 }
 
@@ -227,7 +260,7 @@ func runPreToolUseWith(t *testing.T, input HookInput) CodexHookOutput {
 	t.Helper()
 	b, _ := json.Marshal(input)
 	var buf bytes.Buffer
-	if err := RunPreToolUse(nil, bytes.NewBuffer(b), &buf); err != nil {
+	if err := RunPreToolUse(nil, bytes.NewBuffer(b), &buf, 32*1024); err != nil {
 		t.Fatalf("RunPreToolUse: %v", err)
 	}
 	var out CodexHookOutput
@@ -664,7 +697,7 @@ func TestPreToolUse_SoftNudge_ShellLargeCmd(t *testing.T) {
 	}
 	b, _ := json.Marshal(input)
 	var buf bytes.Buffer
-	if err := RunPreToolUse(nil, bytes.NewBuffer(b), &buf); err != nil {
+	if err := RunPreToolUse(nil, bytes.NewBuffer(b), &buf, 32*1024); err != nil {
 		t.Fatalf("RunPreToolUse: %v", err)
 	}
 	var out CodexHookOutput

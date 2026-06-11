@@ -256,6 +256,7 @@ View 'stats' (default):
 - Missed large outputs (primary context-window health metric)
 - Adherence score (informational ratio of ctx-saver vs annotated native calls)
 - Git write commands and reads paired with edits are sanctioned
+- Exact o200k_base token savings, tokenized/legacy output counts
 - Outputs stored, bytes saved, top commands, hook activity
 - Useful for verifying ctx-saver is working and quantifying savings
 - Scope: session | today | 7d | all (default: session)

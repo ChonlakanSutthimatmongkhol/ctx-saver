@@ -51,6 +51,10 @@ func refreshOutput(ctx context.Context, st store.Store, sb sandbox.Sandbox, work
 	updated.ExitCode = result.ExitCode
 	updated.DurationMs = result.Duration.Milliseconds()
 	updated.RefreshedAt = time.Now()
+	updated.RawTokens = 0
+	updated.ResponseTokens = 0
+	updated.ResponseBytes = 0
+	updated.Tokenizer = ""
 
 	if err := st.UpdateRefreshed(ctx, &updated); err != nil {
 		slog.Warn("auto-refresh store update failed", "output_id", out.OutputID, "err", err)

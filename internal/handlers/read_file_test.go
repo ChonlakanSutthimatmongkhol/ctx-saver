@@ -13,6 +13,7 @@ import (
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/handlers"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/redact"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/store"
+	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/tokenize"
 )
 
 // TestReadFile_HashFromDiskNotRedacted ensures redaction scrubs stored content
@@ -217,6 +218,11 @@ func TestReadFile_FieldsSignatures_SharesCacheKey(t *testing.T) {
 	require.Len(t, ms.saved, 1)
 	require.Contains(t, ms.saved[0].FullOutput, "func Bar()",
 		"DB must store full file content, not filtered signatures")
+	responseTokens, err := tokenize.Count(out1.Summary)
+	require.NoError(t, err)
+	require.Equal(t, int64(responseTokens), ms.saved[0].ResponseTokens)
+	require.Equal(t, int64(len(out1.Summary)), ms.saved[0].ResponseBytes)
+	require.Equal(t, "o200k_base", ms.saved[0].Tokenizer)
 
 	// Second call without fields=signatures — must return from cache (same key).
 	_, out2, err := h.Handle(ctx, nil, handlers.ReadFileInput{Path: file})

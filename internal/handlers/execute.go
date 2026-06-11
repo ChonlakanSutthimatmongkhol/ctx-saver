@@ -159,6 +159,12 @@ func (h *ExecuteHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, inp
 	stats.Lines = sumFmt.TotalLines
 
 	outputID := generateOutputID()
+	statsLine := summary.FormatStats(sumFmt.TotalLines, sumFmt.TotalBytes, result.ExitCode, result.Duration.Milliseconds())
+	out.OutputID = outputID
+	out.Summary = sumFmt.Text + "\n" + statsLine
+	out.Format = sumFmt.Format
+	out.Stats = stats
+	out.SearchHint = fmt.Sprintf("Use ctx_search with output_id=%q to query this output", outputID)
 
 	storeOut := &store.Output{
 		OutputID:    outputID,
@@ -172,16 +178,11 @@ func (h *ExecuteHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, inp
 		CreatedAt:   time.Now(),
 		ProjectPath: h.projectPath,
 	}
+	setTokenMetrics(storeOut, out.Summary)
 	if err := h.st.Save(ctx, storeOut); err != nil {
 		return nil, ExecuteOutput{}, fmt.Errorf("storing output: %w", err)
 	}
 
-	statsLine := summary.FormatStats(sumFmt.TotalLines, sumFmt.TotalBytes, result.ExitCode, result.Duration.Milliseconds())
-	out.OutputID = outputID
-	out.Summary = sumFmt.Text + "\n" + statsLine
-	out.Format = sumFmt.Format
-	out.Stats = stats
-	out.SearchHint = fmt.Sprintf("Use ctx_search with output_id=%q to query this output", outputID)
 	recordToolCall(ctx, h.st, h.projectPath, "ctx_execute", input.Code, out.Summary, "shell: "+input.Code)
 	return nil, out, nil
 }

@@ -52,10 +52,11 @@ VS Code Copilot Preview uses the same version 1 hook configuration as Copilot
 CLI and the coding agent. Install personal hooks with:
 
 ```bash
-ctx-saver init copilot-hooks
+ctx-saver setup copilot
+ctx-saver doctor
 ```
 
-Use `--repo` only when the hooks should apply to every collaborator. Copilot
+Use `--repo-hooks` only when the hooks should apply to every collaborator. Copilot
 ignores SessionStart output, so the instruction to call `ctx_session_init`
 remains required for session restoration.
 

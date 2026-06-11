@@ -36,7 +36,7 @@ flowchart LR
 
 ### 1. ติดตั้ง
 
-ต้องการ Go 1.25+
+ต้องการ Go 1.26+
 
 ```bash
 go install github.com/ChonlakanSutthimatmongkhol/ctx-saver/cmd/ctx-saver@latest
@@ -76,14 +76,14 @@ ctx-saver init agents-md
 **VS Code Copilot**
 
 ```bash
-ctx-saver init copilot
-ctx-saver init copilot-instructions
-ctx-saver init copilot-hooks
+ctx-saver setup copilot
+ctx-saver doctor
 ```
 
-`copilot-hooks` จะติดตั้งระดับผู้ใช้ที่ `$COPILOT_HOME/hooks` หรือ
-`~/.copilot/hooks` เป็นค่าเริ่มต้น ใช้ `ctx-saver init copilot-hooks --repo`
-เฉพาะเมื่อต้องการให้ hook มีผลกับผู้ร่วมงานทุกคน ดูรายละเอียดสำหรับองค์กรได้ที่
+คำสั่ง setup จะติดตั้ง MCP และ instructions ในโปรเจกต์ พร้อม hooks ระดับผู้ใช้
+ที่ `$COPILOT_HOME/hooks` หรือ `~/.copilot/hooks` ใช้
+`ctx-saver setup copilot --repo-hooks` เฉพาะเมื่อต้องการให้ hooks มีผลกับ
+ผู้ร่วมงานทุกคน ดูรายละเอียดสำหรับองค์กรได้ที่
 [Copilot Enterprise Setup](docs/copilot-enterprise-setup.md)
 
 ## ใช้งานประจำวัน
@@ -137,6 +137,10 @@ ctx_get_full(output_id="out_20260508_ab12cd34", line_range=[120, 170])
 ```
 
 ## ลด token ได้เท่าไร
+
+`ctx_stats` นับ raw tokens และ response tokens ในเครื่องด้วย tokenizer
+`o200k_base` โดยไม่เรียก API และไม่ต้องใช้ API key ข้อมูลเก่าก่อน v0.13.0
+จะแสดงใน `untokenized_outputs` และไม่ปนกับเปอร์เซ็นต์แบบ exact
 
 วัดจากคำสั่งจริงที่รันผ่าน `ctx_execute` ใน repository นี้
 
@@ -337,6 +341,10 @@ pre-register tools ไว้แล้ว ถ้าไม่เห็น `ctx_ses
     Your first tool call in every new session must be ctx_session_init.
     If VS Code Copilot has not loaded ctx tools yet, run:
     tool_search("ctx_session_init ctx_execute ctx_read_file ctx_stats ctx_note")
+
+ถ้า Copilot หา `ctx_stats` ไม่เจอ ให้รัน `ctx-saver doctor` ก่อน หาก stdio
+smoke test ผ่าน ให้ Reload Window, restart ctx-saver ใน **MCP: List Servers**,
+เปิดแชตใหม่ แล้วเรียก `tool_search` ด้านบน
 
 ## Design Notes
 

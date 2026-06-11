@@ -36,7 +36,7 @@ The main idea is simple: keep noisy output searchable, but do not spend the whol
 
 ### 1. Install
 
-Requires Go 1.25+.
+Requires Go 1.26+.
 
 ```bash
 go install github.com/ChonlakanSutthimatmongkhol/ctx-saver/cmd/ctx-saver@latest
@@ -76,14 +76,14 @@ Restart Codex CLI after installing hooks.
 **VS Code Copilot**
 
 ```bash
-ctx-saver init copilot
-ctx-saver init copilot-instructions
-ctx-saver init copilot-hooks
+ctx-saver setup copilot
+ctx-saver doctor
 ```
 
-`copilot-hooks` installs at personal level (`$COPILOT_HOME/hooks` or
-`~/.copilot/hooks`) by default. Use `ctx-saver init copilot-hooks --repo` only
-when the hook should apply to every collaborator. See
+The combined setup installs project MCP configuration and instructions plus
+personal hooks (`$COPILOT_HOME/hooks` or `~/.copilot/hooks`). Use
+`ctx-saver setup copilot --repo-hooks` only when hooks should apply to every
+collaborator. See
 [Copilot Enterprise Setup](docs/copilot-enterprise-setup.md) for
 company/enterprise setup notes.
 
@@ -139,7 +139,9 @@ ctx_get_full(output_id="out_20260508_ab12cd34", line_range=[120, 170])
 
 ## Token Savings
 
-Measured from real commands run through `ctx_execute` in this repository.
+`ctx_stats` counts raw and returned tokens locally with the `o200k_base`
+tokenizer. No API call or API key is required. Legacy rows created before
+v0.13.0 are reported as `untokenized_outputs` and excluded from exact savings.
 
 | Command | Raw | Summary | Saving |
 |---------|-----|---------|--------|
@@ -347,6 +349,10 @@ copilot-instructions.md):
     Your first tool call in every new session must be ctx_session_init.
     If VS Code Copilot has not loaded ctx tools yet, run:
     tool_search("ctx_session_init ctx_execute ctx_read_file ctx_stats ctx_note")
+
+When Copilot cannot find `ctx_stats`, run `ctx-saver doctor`. If the local
+stdio smoke check passes, reload VS Code, restart ctx-saver under
+**MCP: List Servers**, open a new chat, and call the `tool_search` fallback.
 
 ## Design Notes
 

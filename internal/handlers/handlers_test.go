@@ -18,6 +18,7 @@ import (
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/sandbox"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/search"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/store"
+	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/tokenize"
 )
 
 const testAWSKey = "AKIAIOSFODNN7EXAMPLE"
@@ -315,6 +316,14 @@ func TestExecuteHandler_LargeOutput_StoredAndSummarised(t *testing.T) {
 	assert.Empty(t, out.DirectOutput)
 	assert.Len(t, st.saved, 1)
 	assert.Equal(t, "test large output", st.saved[0].Intent)
+	rawTokens, err := tokenize.Count(string(bigOut))
+	require.NoError(t, err)
+	responseTokens, err := tokenize.Count(out.Summary)
+	require.NoError(t, err)
+	assert.Equal(t, int64(rawTokens), st.saved[0].RawTokens)
+	assert.Equal(t, int64(responseTokens), st.saved[0].ResponseTokens)
+	assert.Equal(t, int64(len(out.Summary)), st.saved[0].ResponseBytes)
+	assert.Equal(t, "o200k_base", st.saved[0].Tokenizer)
 	assert.Equal(t, 1, st.sessionEventCount, "expected 1 session event recorded")
 }
 

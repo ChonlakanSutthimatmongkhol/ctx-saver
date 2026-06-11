@@ -12,6 +12,8 @@
 //	ctx-saver init copilot-instructions       — install .github/copilot-instructions.md
 //	ctx-saver init copilot-hooks              — install personal GitHub Copilot hooks
 //	ctx-saver init copilot-hooks --repo       — install repository-level GitHub Copilot hooks
+//	ctx-saver setup copilot                   — install Copilot MCP, instructions, and personal hooks
+//	ctx-saver doctor                          — diagnose local MCP and Copilot integration
 //	ctx-saver init codex                      — install MCP server + hooks into ~/.codex/
 //	ctx-saver init agents-md                  — install AGENTS.md (current directory)
 //	ctx-saver knowledge refresh               — generate/update project-knowledge.md
@@ -30,6 +32,8 @@
 //	ctx-saver init copilot-instructions       # Copilot Enterprise instruction rules
 //	ctx-saver init copilot-hooks              # GitHub Copilot hooks (personal)
 //	ctx-saver init copilot-hooks --repo       # GitHub Copilot hooks (repository)
+//	ctx-saver setup copilot                   # combined Copilot setup
+//	ctx-saver doctor                          # verify Copilot/MCP integration
 //	ctx-saver init codex                      # Codex CLI MCP + hooks
 //	ctx-saver init agents-md                  # Codex CLI instruction rules
 package main
@@ -88,6 +92,14 @@ func run() error {
 		return runInit(args[1:])
 	}
 
+	if len(args) >= 1 && args[0] == "setup" {
+		return runSetup(args[1:])
+	}
+
+	if len(args) >= 1 && args[0] == "doctor" {
+		return runDoctor()
+	}
+
 	// ── Knowledge subcommand: ctx-saver knowledge <action> ────────────────────
 	if len(args) >= 1 && args[0] == "knowledge" {
 		return runKnowledge(args[1:])
@@ -130,7 +142,7 @@ func runHook(event string) error {
 
 	switch event {
 	case "pretooluse":
-		return hooks.RunPreToolUse(st, os.Stdin, os.Stdout)
+		return hooks.RunPreToolUse(st, os.Stdin, os.Stdout, cfg.Summary.AutoIndexThresholdBytes)
 	case "posttooluse":
 		return hooks.RunPostToolUse(st, os.Stdin, os.Stdout)
 	case "sessionstart":

@@ -165,8 +165,9 @@ func (s *SQLiteStore) Save(ctx context.Context, output *Output) error {
 		INSERT INTO outputs
 			(output_id, command, intent, full_output, size_bytes, line_count,
 			 exit_code, duration_ms, created_at, project_path,
-			 source_kind, refreshed_at, ttl_seconds, source_hash)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			 source_kind, refreshed_at, ttl_seconds, source_hash,
+			 raw_tokens, response_tokens, response_bytes, tokenizer)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		output.OutputID,
 		output.Command,
 		output.Intent,
@@ -181,6 +182,10 @@ func (s *SQLiteStore) Save(ctx context.Context, output *Output) error {
 		refreshedAt.Unix(),
 		output.TTLSeconds,
 		output.SourceHash,
+		output.RawTokens,
+		output.ResponseTokens,
+		output.ResponseBytes,
+		output.Tokenizer,
 	)
 	if err != nil {
 		return fmt.Errorf("inserting output: %w", err)
@@ -210,8 +215,9 @@ func (s *SQLiteStore) Save(ctx context.Context, output *Output) error {
 func (s *SQLiteStore) Get(ctx context.Context, id string) (*Output, error) {
 	row := s.db.QueryRowContext(ctx, `
 		SELECT output_id, command, intent, full_output, size_bytes, line_count,
-		       exit_code, duration_ms, created_at, project_path,
-		       source_kind, refreshed_at, ttl_seconds, source_hash
+	       exit_code, duration_ms, created_at, project_path,
+	       source_kind, refreshed_at, ttl_seconds, source_hash,
+	       raw_tokens, response_tokens, response_bytes, tokenizer
 		FROM outputs WHERE output_id = ?`, id)
 
 	var o Output
@@ -221,6 +227,7 @@ func (s *SQLiteStore) Get(ctx context.Context, id string) (*Output, error) {
 		&o.SizeBytes, &o.LineCount, &o.ExitCode, &o.DurationMs,
 		&createdAt, &o.ProjectPath,
 		&o.SourceKind, &refreshedAt, &o.TTLSeconds, &o.SourceHash,
+		&o.RawTokens, &o.ResponseTokens, &o.ResponseBytes, &o.Tokenizer,
 	)
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("output %q not found", id)
@@ -245,7 +252,8 @@ func (s *SQLiteStore) UpdateRefreshed(ctx context.Context, output *Output) error
 	_, err = tx.ExecContext(ctx, `
 		UPDATE outputs
 		SET full_output = ?, size_bytes = ?, line_count = ?,
-		    refreshed_at = ?, duration_ms = ?, source_hash = ?
+		    refreshed_at = ?, duration_ms = ?, source_hash = ?,
+		    raw_tokens = ?, response_tokens = ?, response_bytes = ?, tokenizer = ?
 		WHERE output_id = ?`,
 		output.FullOutput,
 		output.SizeBytes,
@@ -253,6 +261,10 @@ func (s *SQLiteStore) UpdateRefreshed(ctx context.Context, output *Output) error
 		output.RefreshedAt.Unix(),
 		output.DurationMs,
 		output.SourceHash,
+		output.RawTokens,
+		output.ResponseTokens,
+		output.ResponseBytes,
+		output.Tokenizer,
 		output.OutputID,
 	)
 	if err != nil {
@@ -625,11 +637,28 @@ func (s *SQLiteStore) GetStats(ctx context.Context, projectPath string, since ti
 			COUNT(*),
 			COALESCE(SUM(size_bytes), 0),
 			COALESCE(MAX(size_bytes), 0),
-			CAST(COALESCE(AVG(duration_ms), 0) AS INTEGER)
+			CAST(COALESCE(AVG(duration_ms), 0) AS INTEGER),
+			COALESCE(SUM(CASE WHEN tokenizer != '' THEN raw_tokens ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN tokenizer != '' THEN response_tokens ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN tokenizer != '' THEN response_bytes ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN tokenizer != '' THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN tokenizer = '' THEN 1 ELSE 0 END), 0),
+			COALESCE(MAX(CASE WHEN tokenizer != '' THEN tokenizer ELSE '' END), '')
 		FROM outputs
 		WHERE project_path = ? AND (? = 0 OR created_at >= ?)`,
 		projectPath, sinceUnix, sinceUnix)
-	if err := row.Scan(&stats.OutputsStored, &stats.RawBytes, &stats.LargestBytes, &stats.AvgDurationMs); err != nil {
+	if err := row.Scan(
+		&stats.OutputsStored,
+		&stats.RawBytes,
+		&stats.LargestBytes,
+		&stats.AvgDurationMs,
+		&stats.RawTokens,
+		&stats.ResponseTokens,
+		&stats.ResponseBytes,
+		&stats.TokenizedOutputs,
+		&stats.UntokenizedOutputs,
+		&stats.Tokenizer,
+	); err != nil {
 		return nil, fmt.Errorf("scanning output aggregates: %w", err)
 	}
 

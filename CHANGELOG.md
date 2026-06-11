@@ -2,6 +2,29 @@
 
 All notable changes to ctx-saver will be documented in this file.
 
+## v0.13.0 — Copilot reliability and exact token accounting
+
+### Added
+- `ctx-saver setup copilot [--repo-hooks]` installs MCP configuration,
+  instructions, and hooks in one command.
+- `ctx-saver doctor` validates the configured binary, version, instructions,
+  hooks, and all 10 MCP tools through a real stdio `tools/list` smoke check.
+- Exact `o200k_base` token accounting for stored outputs and returned summaries,
+  with schema migration v10 and legacy-row visibility in `ctx_stats`.
+- Copilot PreToolUse enforcement redirects large-risk native `bash` commands
+  and oversized `view` reads to ctx-saver tools with actionable reasons.
+
+### Changed
+- The project now requires Go 1.26 and uses
+  `github.com/tiktoken-go/tokenizer` v0.8.0 locally without API calls.
+- Copilot instructions include a `tool_search` fallback when deferred MCP tools
+  such as `ctx_stats` are not visible in a new chat.
+
+### Notes
+- MCP tool count remains 10. `setup` and `doctor` are CLI commands, not tools.
+- Copilot still ignores SessionStart hook output; restoration remains driven by
+  instructions calling `ctx_session_init`.
+
 ## v0.12.0 — GitHub Copilot hooks
 
 ### Added

@@ -60,6 +60,12 @@ Copilot hooks enforce routing and capture tool events, but Copilot ignores
 SessionStart hook output. Session restoration therefore remains
 instruction-driven: always call `ctx_session_init` at the start of the session.
 
+If a ctx-saver tool such as `ctx_stats` is not visible, do not conclude that it
+is unavailable. First call:
+`tool_search("ctx_stats ctx_session_init ctx_execute ctx_read_file ctx_note")`.
+If it is still absent, report that the user should run `ctx-saver doctor`,
+reload VS Code, restart the MCP server, and open a new chat.
+
 If `ctx_session_init` is not exposed by the current MCP client/toolset:
 - State that limitation explicitly.
 - Run a manual init fallback:

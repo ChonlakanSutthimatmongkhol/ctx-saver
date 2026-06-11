@@ -345,7 +345,8 @@ When `found=false` the tool returns successfully — it is **not** an error.
 **Verification tool** — call every ~20 turns to confirm ctx-saver is working effectively. Report aggregate statistics for the current project.
 
 Key metrics:
-- `saving_percent` — should be > 80% in healthy sessions
+- `token_saving_percent` — exact `o200k_base` savings for tokenized outputs
+- `untokenized_outputs` — legacy rows excluded from exact token percentages
 - `missed_large_outputs` — primary health metric; above-threshold native outputs should be 0
 - `adherence_score` — informational 0–100 ratio retained for compatibility
 - `adherence_note` — severity based on missed large outputs, not native-tool frequency
@@ -363,8 +364,15 @@ Key metrics:
 | `scope` | Echo of the requested scope |
 | `outputs_stored` | Number of outputs stored in the scope |
 | `raw_bytes` | Total raw bytes of all stored outputs |
-| `estimated_summary_bytes` | Estimated bytes ctx-saver returned to the AI (summaries only) |
-| `saving_percent` | Percentage of raw bytes saved by summarisation |
+| `estimated_summary_bytes` | Compatibility field populated from measured response bytes |
+| `saving_percent` | Compatibility field populated from exact token savings |
+| `raw_tokens` | Raw output tokens counted with `o200k_base` |
+| `response_tokens` | Tokens in the returned summary/view |
+| `tokens_saved` | `raw_tokens - response_tokens` |
+| `token_saving_percent` | Exact savings percentage for tokenized outputs |
+| `tokenizer` | Tokenizer used, currently `o200k_base` |
+| `tokenized_outputs` | Rows included in exact token totals |
+| `untokenized_outputs` | Legacy rows excluded from exact totals |
 | `avg_duration_ms` | Average command execution time |
 | `top_commands` | Up to 5 most-run commands with count + total bytes |
 | `largest_outputs` | Up to 3 largest stored outputs |
@@ -551,3 +559,6 @@ ctx-saver exposes subcommands for offline/cron use — these are NOT MCP tools:
 | `ctx-saver init copilot-instructions` | Create/update `.github/copilot-instructions.md` |
 | `ctx-saver init copilot-hooks` | Install GitHub Copilot hooks at personal level |
 | `ctx-saver init copilot-hooks --repo` | Install repository-level Copilot hooks with a collaborator warning |
+| `ctx-saver setup copilot` | Install Copilot MCP, instructions, and personal hooks together |
+| `ctx-saver setup copilot --repo-hooks` | Combined setup with repository-level hooks |
+| `ctx-saver doctor` | Read-only config, binary, hooks, instructions, and MCP tools/list diagnostics |

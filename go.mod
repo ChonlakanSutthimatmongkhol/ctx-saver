@@ -1,16 +1,18 @@
 module github.com/ChonlakanSutthimatmongkhol/ctx-saver
 
-go 1.25.0
+go 1.26.0
 
 require (
 	github.com/modelcontextprotocol/go-sdk v1.5.0
 	github.com/stretchr/testify v1.11.1
+	github.com/tiktoken-go/tokenizer v0.8.0
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.49.1
 )
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/dlclark/regexp2/v2 v2.1.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/google/jsonschema-go v0.4.2 // indirect
 	github.com/google/uuid v1.6.0 // indirect

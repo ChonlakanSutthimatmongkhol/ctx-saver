@@ -683,6 +683,7 @@ func TestMigration_v8_AppliesToExistingV7DB(t *testing.T) {
 	require.NoError(t, err)
 	_, err = db.Exec(`INSERT INTO schema_version(version) VALUES (7)`)
 	require.NoError(t, err)
+	createLegacyOutputsTable(t, db)
 	_, err = db.Exec(`CREATE TABLE decisions (
 		id           INTEGER PRIMARY KEY AUTOINCREMENT,
 		decision_id  TEXT    NOT NULL UNIQUE,
@@ -735,6 +736,7 @@ func TestMigration_v9_AppliesToExistingV8DB(t *testing.T) {
 	require.NoError(t, err)
 	_, err = db.Exec(`INSERT INTO schema_version(version) VALUES (8)`)
 	require.NoError(t, err)
+	createLegacyOutputsTable(t, db)
 	_, err = db.Exec(`CREATE TABLE session_events (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		session_id TEXT NOT NULL,
@@ -768,7 +770,98 @@ func TestMigration_v9_AppliesToExistingV8DB(t *testing.T) {
 	defer db.Close()
 	var version int
 	require.NoError(t, db.QueryRow(`SELECT MAX(version) FROM schema_version`).Scan(&version))
-	assert.Equal(t, 9, version)
+	assert.Equal(t, 10, version)
+}
+
+func TestMigration_v10_TokenColumns(t *testing.T) {
+	st := newTestStore(t)
+	out := sampleOutput("out_tokens_001")
+	out.RawTokens = 100
+	out.ResponseTokens = 25
+	out.ResponseBytes = 80
+	out.Tokenizer = "o200k_base"
+	require.NoError(t, st.Save(context.Background(), out))
+
+	got, err := st.Get(context.Background(), out.OutputID)
+	require.NoError(t, err)
+	assert.Equal(t, int64(100), got.RawTokens)
+	assert.Equal(t, int64(25), got.ResponseTokens)
+	assert.Equal(t, int64(80), got.ResponseBytes)
+	assert.Equal(t, "o200k_base", got.Tokenizer)
+}
+
+func TestMigration_v10_AppliesDefaultsToExistingV9Rows(t *testing.T) {
+	dataDir := filepath.Join(t.TempDir(), ".ctx-saver")
+	require.NoError(t, os.MkdirAll(dataDir, 0700))
+	dbFile := filepath.Join(dataDir, "outputs.db")
+	db, err := sql.Open("sqlite", dbFile)
+	require.NoError(t, err)
+	_, err = db.Exec(`CREATE TABLE schema_version (version INTEGER NOT NULL PRIMARY KEY)`)
+	require.NoError(t, err)
+	_, err = db.Exec(`INSERT INTO schema_version(version) VALUES (9)`)
+	require.NoError(t, err)
+	createLegacyOutputsTable(t, db)
+	_, err = db.Exec(`INSERT INTO outputs
+		(output_id, command, full_output, size_bytes, line_count, exit_code,
+		 duration_ms, created_at, project_path)
+		VALUES ('legacy_v9', '[shell] echo old', 'old', 3, 1, 0, 1, 1, '/test/project')`)
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
+
+	st, err := store.NewSQLiteStore(dataDir, "/test/project")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = st.Close() })
+	got, err := st.Get(context.Background(), "legacy_v9")
+	require.NoError(t, err)
+	assert.Zero(t, got.RawTokens)
+	assert.Zero(t, got.ResponseTokens)
+	assert.Zero(t, got.ResponseBytes)
+	assert.Empty(t, got.Tokenizer)
+}
+
+func TestGetStats_ExactTokenAggregationExcludesLegacyRows(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+
+	tokenized := sampleOutput("out_tokens_aggregate")
+	tokenized.RawTokens = 100
+	tokenized.ResponseTokens = 20
+	tokenized.ResponseBytes = 70
+	tokenized.Tokenizer = "o200k_base"
+	require.NoError(t, st.Save(ctx, tokenized))
+
+	legacy := sampleOutput("out_tokens_legacy")
+	require.NoError(t, st.Save(ctx, legacy))
+
+	stats, err := st.GetStats(ctx, "/test/project", time.Time{})
+	require.NoError(t, err)
+	assert.Equal(t, int64(100), stats.RawTokens)
+	assert.Equal(t, int64(20), stats.ResponseTokens)
+	assert.Equal(t, int64(70), stats.ResponseBytes)
+	assert.Equal(t, 1, stats.TokenizedOutputs)
+	assert.Equal(t, 1, stats.UntokenizedOutputs)
+	assert.Equal(t, "o200k_base", stats.Tokenizer)
+}
+
+func createLegacyOutputsTable(t *testing.T, db *sql.DB) {
+	t.Helper()
+	_, err := db.Exec(`CREATE TABLE outputs (
+		output_id TEXT PRIMARY KEY,
+		command TEXT NOT NULL,
+		intent TEXT NOT NULL DEFAULT '',
+		full_output TEXT NOT NULL,
+		size_bytes INTEGER NOT NULL,
+		line_count INTEGER NOT NULL,
+		exit_code INTEGER NOT NULL,
+		duration_ms INTEGER NOT NULL,
+		created_at INTEGER NOT NULL,
+		project_path TEXT NOT NULL,
+		source_kind TEXT NOT NULL DEFAULT '',
+		refreshed_at INTEGER NOT NULL DEFAULT 0,
+		ttl_seconds INTEGER NOT NULL DEFAULT 0,
+		source_hash TEXT NOT NULL DEFAULT ''
+	)`)
+	require.NoError(t, err)
 }
 
 func assertDecisionTaskIndexExists(t *testing.T, dbFile string) {

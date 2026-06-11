@@ -229,6 +229,18 @@ func (h *ReadFileHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, in
 		}
 	}
 
+	statsLine := summary.FormatStats(sum.TotalLines, sum.TotalBytes, exitCode, durationMs)
+	responseSummary := sum.Text + "\n" + statsLine
+	searchHint := fmt.Sprintf("Use ctx_search with output_id=%q to query this output", outputID)
+	if input.Fields == "signatures" {
+		filtered, ferr := applySignaturesFilter(rawOutput, absPath)
+		if ferr != nil {
+			return nil, ReadFileOutput{}, ferr
+		}
+		responseSummary = filtered
+		searchHint = fmt.Sprintf("Signatures view. Use ctx_get_full %q for full file content.", outputID)
+	}
+
 	out := &store.Output{
 		OutputID:    outputID,
 		Command:     displayCmd,
@@ -242,34 +254,18 @@ func (h *ReadFileHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, in
 		ProjectPath: h.projectPath,
 		SourceHash:  sourceHash,
 	}
+	setTokenMetrics(out, responseSummary)
 	if err := h.st.Save(ctx, out); err != nil {
 		return nil, ReadFileOutput{}, fmt.Errorf("storing output: %w", err)
 	}
 
-	statsLine := summary.FormatStats(sum.TotalLines, sum.TotalBytes, exitCode, durationMs)
-	outSummary := sum.Text + "\n" + statsLine
-	recordToolCall(ctx, h.st, h.projectPath, "ctx_read_file", input.Path, outSummary, "read: "+input.Path)
-
-	// Apply signatures filter AFTER saving full content to DB (view-only).
-	if input.Fields == "signatures" {
-		filtered, ferr := applySignaturesFilter(rawOutput, absPath)
-		if ferr != nil {
-			return nil, ReadFileOutput{}, ferr
-		}
-		return nil, ReadFileOutput{
-			OutputID:   outputID,
-			Summary:    filtered,
-			Stats:      stats,
-			SearchHint: fmt.Sprintf("Signatures view. Use ctx_get_full %q for full file content.", outputID),
-			Path:       absPath,
-		}, nil
-	}
+	recordToolCall(ctx, h.st, h.projectPath, "ctx_read_file", input.Path, responseSummary, "read: "+input.Path)
 
 	return nil, ReadFileOutput{
 		OutputID:   outputID,
-		Summary:    outSummary,
+		Summary:    responseSummary,
 		Stats:      stats,
-		SearchHint: fmt.Sprintf("Use ctx_search with output_id=%q to query this output", outputID),
+		SearchHint: searchHint,
 		Path:       absPath,
 	}, nil
 }

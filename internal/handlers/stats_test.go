@@ -59,10 +59,16 @@ func TestStatsHandler_Empty(t *testing.T) {
 
 func TestStatsHandler_Populated(t *testing.T) {
 	st := &statsStore{stats: &store.Stats{
-		OutputsStored: 5,
-		RawBytes:      500_000,
-		AvgDurationMs: 120,
-		TopCommands:   []store.CommandStat{{Command: "[shell] go test", Count: 3, TotalBytes: 300_000}},
+		OutputsStored:      5,
+		RawBytes:           500_000,
+		RawTokens:          100_000,
+		ResponseTokens:     15_000,
+		ResponseBytes:      60_000,
+		Tokenizer:          "o200k_base",
+		TokenizedOutputs:   4,
+		UntokenizedOutputs: 1,
+		AvgDurationMs:      120,
+		TopCommands:        []store.CommandStat{{Command: "[shell] go test", Count: 3, TotalBytes: 300_000}},
 		LargestOutputs: []*store.OutputMeta{
 			{OutputID: "out_abc", Command: "[shell] go test", SizeBytes: 100_000, LineCount: 2000},
 		},
@@ -76,6 +82,11 @@ func TestStatsHandler_Populated(t *testing.T) {
 	assert.Equal(t, "all", out.Scope)
 	assert.Equal(t, 5, out.OutputsStored)
 	assert.Greater(t, out.SavingPercent, float64(0))
+	assert.Equal(t, int64(85_000), out.TokensSaved)
+	assert.InDelta(t, 85.0, out.TokenSavingPercent, 0.01)
+	assert.Equal(t, "o200k_base", out.Tokenizer)
+	assert.Equal(t, 4, out.TokenizedOutputs)
+	assert.Equal(t, 1, out.UntokenizedOutputs)
 	require.Len(t, out.TopCommands, 1)
 	assert.Equal(t, "[shell] go test", out.TopCommands[0].Command)
 	require.Len(t, out.LargestOutputs, 1)
@@ -161,7 +172,7 @@ func TestStatsHandler_ReportsSanctionedReadsAndThreshold(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 2, out.SanctionedReads)
 	assert.Equal(t, cfg.Summary.AutoIndexThresholdBytes, st.capturedThreshold)
-	assert.Empty(t, out.SavingsNote)
+	assert.Contains(t, out.SavingsNote, "predate exact token accounting")
 }
 
 func TestStatsHandler_InvalidScope(t *testing.T) {

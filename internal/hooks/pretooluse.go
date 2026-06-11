@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/store"
 )
@@ -14,7 +17,7 @@ import (
 // Codex CLI PreToolUse only supports "deny" — additionalContext and
 // "allow" are ignored by codex-rs output_parser.rs.  We therefore emit
 // either a deny decision or an empty passthrough object.
-func RunPreToolUse(_ store.Store, r io.Reader, w io.Writer) error {
+func RunPreToolUse(_ store.Store, r io.Reader, w io.Writer, largeThresholdBytes int) error {
 	input, host, err := readInput(r)
 	if err != nil {
 		return allowPassthrough(w, "PreToolUse")
@@ -22,6 +25,9 @@ func RunPreToolUse(_ store.Store, r io.Reader, w io.Writer) error {
 
 	cmd := extractCmd(input.ToolInput)
 	decision := routePreToolUse(input.ToolName, cmd)
+	if decision.allow && host == HostCopilot {
+		decision = routeCopilotNativeTool(input, cmd, largeThresholdBytes)
+	}
 
 	if !decision.allow {
 		if host == HostCopilot {
@@ -55,6 +61,42 @@ func RunPreToolUse(_ store.Store, r io.Reader, w io.Writer) error {
 	}
 
 	return allowPassthrough(w, "PreToolUse")
+}
+
+func routeCopilotNativeTool(input HookInput, cmd string, largeThresholdBytes int) routingDecision {
+	if strings.EqualFold(input.ToolName, "bash") && !isGitSafeCommand(cmd) && looksLargeOutput(cmd) {
+		return routingDecision{
+			allow:  false,
+			reason: "Use ctx_execute for commands likely to produce large output, then inspect the stored result with ctx_search or ctx_get_section.",
+		}
+	}
+	if !strings.EqualFold(input.ToolName, "view") || largeThresholdBytes <= 0 {
+		return routingDecision{allow: true}
+	}
+	path := extractPath(input.ToolInput)
+	if path == "" {
+		return routingDecision{allow: true}
+	}
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(resolveProjectPath(input.Cwd), path)
+	}
+	info, err := os.Stat(path)
+	if err != nil || !info.Mode().IsRegular() || info.Size() <= int64(largeThresholdBytes) {
+		return routingDecision{allow: true}
+	}
+	return routingDecision{
+		allow:  false,
+		reason: fmt.Sprintf("Use ctx_read_file for %s (%d bytes); it exceeds the %d-byte direct-read threshold.", path, info.Size(), largeThresholdBytes),
+	}
+}
+
+func extractPath(input map[string]any) string {
+	for _, key := range []string{"path", "file_path", "filePath"} {
+		if value, ok := input[key].(string); ok {
+			return value
+		}
+	}
+	return ""
 }
 
 // extractCmd pulls the shell command string out of a tool input map.
