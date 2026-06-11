@@ -2,6 +2,22 @@
 
 All notable changes to ctx-saver will be documented in this file.
 
+## v0.12.0 — GitHub Copilot hooks
+
+### Added
+- GitHub Copilot hook payload normalization for Copilot CLI, coding agent, and
+  VS Code Preview, including JSON-string `toolArgs` and camelCase fields.
+- Copilot-native PreToolUse allow/deny responses with redirect reasons,
+  PostToolUse event capture, and `view`/`create` tool recognition.
+- `ctx-saver init copilot-hooks`, installing personal hooks by default with an
+  explicit `--repo` option for repository-level hooks.
+
+### Notes
+- Copilot ignores SessionStart hook output, so session restoration remains
+  instruction-driven through `ctx_session_init`.
+- No schema migration and no new MCP tools; schema version remains 9 and the
+  tool count remains 10.
+
 ## v0.11.1 — Instruction consistency fix
 
 ### Fixed

@@ -78,9 +78,13 @@ ctx-saver init agents-md
 ```bash
 ctx-saver init copilot
 ctx-saver init copilot-instructions
+ctx-saver init copilot-hooks
 ```
 
-Copilot ใช้ MCP tools ของ ctx-saver ได้ แต่ตอนนี้ยังไม่รัน lifecycle hooks อัตโนมัติ ดูรายละเอียดสำหรับองค์กรได้ที่ [Copilot Enterprise Setup](docs/copilot-enterprise-setup.md)
+`copilot-hooks` จะติดตั้งระดับผู้ใช้ที่ `$COPILOT_HOME/hooks` หรือ
+`~/.copilot/hooks` เป็นค่าเริ่มต้น ใช้ `ctx-saver init copilot-hooks --repo`
+เฉพาะเมื่อต้องการให้ hook มีผลกับผู้ร่วมงานทุกคน ดูรายละเอียดสำหรับองค์กรได้ที่
+[Copilot Enterprise Setup](docs/copilot-enterprise-setup.md)
 
 ## ใช้งานประจำวัน
 
@@ -214,13 +218,17 @@ turn 1 แทนการอ่านซ้ำ ถ้า `changed_on_disk=true` 
 
 ### Hooks
 
-Claude Code และ Codex CLI ใช้ hooks เพื่อทำงานอัตโนมัติได้:
+| Host | MCP | Hooks | การกู้ session |
+|------|-----|-------|---------------|
+| Claude Code | มี | มี | inject context ผ่าน SessionStart |
+| Codex CLI | มี | มี | instructions + events ที่บันทึกไว้ |
+| GitHub Copilot | มี | มี | instructions เรียก `ctx_session_init` |
 
 | Hook | ทำอะไร |
 |------|--------|
 | PreToolUse | บล็อกคำสั่งอันตราย และ route output ที่น่าจะใหญ่ผ่าน `ctx_execute` |
 | PostToolUse | บันทึก summary ของ tool call เพื่อกู้ session context |
-| SessionStart | inject project rules และ history ล่าสุดเมื่อเริ่ม session |
+| SessionStart | inject context บน host ที่รองรับ; Copilot บันทึก event แต่ไม่อ่าน output ของ hook |
 
 ## การตั้งค่า
 

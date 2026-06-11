@@ -78,9 +78,14 @@ Restart Codex CLI after installing hooks.
 ```bash
 ctx-saver init copilot
 ctx-saver init copilot-instructions
+ctx-saver init copilot-hooks
 ```
 
-Copilot can use ctx-saver MCP tools, but it does not currently run lifecycle hooks automatically. See [Copilot Enterprise Setup](docs/copilot-enterprise-setup.md) for company/enterprise setup notes.
+`copilot-hooks` installs at personal level (`$COPILOT_HOME/hooks` or
+`~/.copilot/hooks`) by default. Use `ctx-saver init copilot-hooks --repo` only
+when the hook should apply to every collaborator. See
+[Copilot Enterprise Setup](docs/copilot-enterprise-setup.md) for
+company/enterprise setup notes.
 
 ## Daily Usage
 
@@ -219,13 +224,17 @@ can reuse those via `ctx_search` / `ctx_get_full` from turn 1 instead of re-read
 
 ### Hooks
 
-Claude Code and Codex CLI can use hooks for automatic behavior:
+| Host | MCP | Hooks | Session restoration |
+|------|-----|-------|---------------------|
+| Claude Code | Yes | Yes | SessionStart context injection |
+| Codex CLI | Yes | Yes | Instructions + stored events |
+| GitHub Copilot | Yes | Yes | Instructions call `ctx_session_init` |
 
 | Hook | What it does |
 |------|--------------|
 | PreToolUse | Blocks dangerous commands and routes likely-large outputs through `ctx_execute`. |
 | PostToolUse | Records tool-call summaries for session restoration. |
-| SessionStart | Injects project rules and recent history at the start of a session. |
+| SessionStart | Injects context on supported hosts; Copilot records the event but ignores hook output. |
 
 ## Configuration
 

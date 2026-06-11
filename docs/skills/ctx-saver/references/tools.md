@@ -549,3 +549,5 @@ ctx-saver exposes subcommands for offline/cron use — these are NOT MCP tools:
 | `ctx-saver init claude` | Install Claude Code hooks into `~/.claude/settings.json` |
 | `ctx-saver init copilot` | Install MCP entry into `.vscode/mcp.json` |
 | `ctx-saver init copilot-instructions` | Create/update `.github/copilot-instructions.md` |
+| `ctx-saver init copilot-hooks` | Install GitHub Copilot hooks at personal level |
+| `ctx-saver init copilot-hooks --repo` | Install repository-level Copilot hooks with a collaborator warning |

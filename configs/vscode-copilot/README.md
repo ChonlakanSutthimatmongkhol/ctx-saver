@@ -46,6 +46,19 @@ tool_search("ctx_session_init ctx_execute ctx_read_file ctx_stats ctx_note")
 
 After the tools are loaded, the first ctx-saver call should be `ctx_session_init`.
 
+## Hooks (Preview)
+
+VS Code Copilot Preview uses the same version 1 hook configuration as Copilot
+CLI and the coding agent. Install personal hooks with:
+
+```bash
+ctx-saver init copilot-hooks
+```
+
+Use `--repo` only when the hooks should apply to every collaborator. Copilot
+ignores SessionStart output, so the instruction to call `ctx_session_init`
+remains required for session restoration.
+
 ## Available tools
 
 | Tool | Description |
