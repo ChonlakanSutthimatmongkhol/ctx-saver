@@ -32,6 +32,10 @@ ctx-saver is available as an MCP tool — you must use it instead of native tool
 - Source code you will EDIT (need full content for accurate edits)
 - Short config files (< 50 lines)
 
+Check `cached_files` from `ctx_session_init` before calling `ctx_read_file` on a
+reference file — if it is listed and `changed_on_disk` is false, reuse it via
+`ctx_search` / `ctx_get_full`. If `changed_on_disk=true`, re-read with `ctx_read_file`.
+
 ### Rule 3: Use cached outputs before re-running
 
 Before running an expensive command (build / test / spec fetch), check the cache:
@@ -47,6 +51,7 @@ This returns:
 - Project rules (this file, condensed)
 - Recent session events (what was done last time)
 - Cached output inventory (what is already stored, ready for reuse)
+- `cached_files`: previously read reference files with `changed_on_disk` flags
 - Active configuration
 
 Skipping this leads to re-running commands that already have cached results.

@@ -51,3 +51,15 @@ knowledge:
   top_files_limit: 10
   top_commands_limit: 10
   decisions_limit: 10
+
+redaction:
+  # Scrub well-known secrets (private keys, AWS keys, GitHub/GitLab/Slack tokens,
+  # JWTs, Bearer tokens, generic key=value secrets) from output BEFORE it is
+  # summarized, returned, or stored. Replacements are [REDACTED:<rule>].
+  # On by default; set to false to disable entirely.
+  enabled: true
+  # Optional user-defined rules, merged after the built-in defaults.
+  # Invalid regexes are logged and skipped (they never fail startup).
+  extra_patterns:
+    - name: internal_ticket
+      regex: 'INT-[0-9]{6}'

@@ -28,6 +28,14 @@ Full content is always retrievable on demand.
 | `cached_outputs.total_size_bytes` | Total raw bytes stored |
 | `cached_outputs.top_commands` | Up to 5 most-run commands |
 | `cached_outputs.retention_days_left` | Configured retention window |
+| `cached_files` | Up to 10 previously read files (reference reads), newest per path |
+| `cached_files[].path` | Absolute file path |
+| `cached_files[].output_id` | Output ID to reuse via `ctx_search` / `ctx_get_full` |
+| `cached_files[].sha256` | First 12 hex chars of the cached file hash (omitted for legacy rows) |
+| `cached_files[].stale_level` | `fresh` \| `aging` \| `stale` \| `critical` |
+| `cached_files[].ago` | Human-readable age since cached |
+| `cached_files[].size_bytes` | Cached file size |
+| `cached_files[].changed_on_disk` | `true` = file edited/removed since cache → re-read with `ctx_read_file` before relying on it |
 | `active_config.sandbox` | Sandbox type (`subprocess` or `srt`) |
 | `active_config.dedup_enabled` | Whether dedup is active |
 | `active_config.dedup_window_minutes` | Dedup window |
@@ -77,8 +85,11 @@ Run a shell or script command in a sandboxed subprocess. Outputs exceeding the c
 | `stats.size_bytes` | always | Output size in bytes |
 | `stats.exit_code` | always | Process exit code |
 | `stats.duration_ms` | always | Execution time in milliseconds |
+| `stats.redacted_rules` | secrets found | Names of redaction rules that fired before storage (e.g. `aws_access_key`, `jwt`) |
 
 `ctx_execute` uses format-aware summarization when enabled by config (`summary.smart_format: true`).
+
+**Secret redaction:** output is scrubbed of well-known secrets (private keys, AWS keys, GitHub/GitLab/Slack tokens, JWTs, `Bearer` tokens, generic `key=value` secrets) **before** summary/storage/FTS. Replacements are `[REDACTED:<rule>]`; the rule names appear in `stats.redacted_rules`. On by default; configurable via the `redaction` config block.
 
 **Dedup hint:** When `duplicate_hint` appears, the same command was already run within the last 30 minutes (configurable via `dedup.window_minutes`). Prefer `ctx_get_full` or `ctx_search` on `previous_output_id` to reuse the cached result instead of re-executing. The command still runs — the hint is advisory only.
 

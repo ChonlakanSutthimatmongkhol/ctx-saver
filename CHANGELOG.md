@@ -2,6 +2,29 @@
 
 All notable changes to ctx-saver will be documented in this file.
 
+## v0.10.0 — Cached files in session_init + secret redaction
+
+### Added
+- **`cached_files` in `ctx_session_init`**: surfaces previously read files (reference
+  reads) at session start with a short SHA, freshness `stale_level`, age, and a
+  `changed_on_disk` flag. The flag is set when the file was edited or removed since it
+  was cached (the file is re-hashed at init), so the agent can reuse cached content via
+  `ctx_search` / `ctx_get_full` from turn 1 instead of re-reading — or knows to re-read.
+- **Secret redaction before storage**: command and file output is scrubbed of well-known
+  secret patterns (private key blocks, AWS keys, GitHub/GitLab/Slack tokens, JWTs, Bearer
+  tokens, and generic `key=value` secrets) before it is summarised, returned, or stored.
+  Matches are replaced with `[REDACTED:<rule>]` and reported in `stats.redacted_rules`.
+  Enabled by default; configurable via the new `redaction` config block (`enabled`,
+  `extra_patterns`). Invalid user-supplied patterns are logged and skipped, never failing
+  startup.
+
+### Notes
+- No schema migration: `currentSchemaVersion` stays 8 and the tool count stays 10.
+- Redaction applies to **new** output only. Rows already stored before upgrading are not
+  retroactively scrubbed — use `ctx_purge` to clear them if needed.
+- File cache invalidation is unaffected: `SourceHash` is still computed from the on-disk
+  file, not from the redacted content.
+
 ## v0.9.1 — Copilot tool discovery docs
 
 ### Fixed

@@ -229,6 +229,9 @@ Returns:
 • Project rules (how to use ctx-saver tools correctly)
 • Recent session activity (what was done before)
 • Cached output inventory (what is already stored and ready for reuse)
+• cached_files: previously read files with SHA + freshness so you can reuse them
+  via ctx_search / ctx_get_full from turn 1. If changed_on_disk=true, re-read with
+  ctx_read_file before relying on the cached content.
 • Active configuration (sandbox, dedup, smart-format settings)
 
 Skipping this tool leads to:

@@ -88,7 +88,7 @@ Most users only need these tools:
 
 | Tool | Use it for |
 |------|------------|
-| `ctx_session_init` | Start a session with project rules, recent activity, cached outputs, and saved decisions. Pass `task="..."` to resume task-scoped handoffs. |
+| `ctx_session_init` | Start a session with project rules, recent activity, cached outputs, cached reference files (`cached_files`), and saved decisions. Pass `task="..."` to resume task-scoped handoffs. |
 | `ctx_execute` | Run shell, Python, Go, or Node commands while storing large output safely. |
 | `ctx_read_file` | Read large files without flooding the model context. |
 | `ctx_search` | Search stored outputs using full-text search. |
@@ -186,6 +186,28 @@ Retrieval tools include a `freshness` field so the agent knows whether cached da
 | `stale` | 1-7 days | warn and offer refresh |
 | `critical` | over 7 days | ask before using for decisions |
 
+### Secret Redaction
+
+Command and file output is scrubbed of well-known secret patterns **before** it is
+summarised, returned to the model, or written to SQLite. Matches are replaced with
+`[REDACTED:<rule>]` and the rule names are reported in `stats.redacted_rules`.
+
+Default rules cover private key blocks, AWS access keys, GitHub/GitLab/Slack tokens,
+JWTs, `Bearer` tokens, and generic `key=value` secrets (e.g. `password=…`, `api_key: …`).
+Redaction is **on by default**. You can add patterns or turn it off via the `redaction`
+config block. SourceHash for file caching is still computed from the on-disk file, so
+cache invalidation is unaffected.
+
+> Redaction applies to new output only — rows stored before upgrading are not
+> retroactively scrubbed. Use `ctx_purge` to clear them if needed.
+
+### Cached Reference Files
+
+`ctx_session_init` returns a `cached_files` list of previously read files with a short
+SHA, freshness, and a `changed_on_disk` flag (the file is re-hashed at init). The agent
+can reuse those via `ctx_search` / `ctx_get_full` from turn 1 instead of re-reading; when
+`changed_on_disk=true`, it re-reads with `ctx_read_file` first.
+
 ### Hooks
 
 Claude Code and Codex CLI can use hooks for automatic behavior:
@@ -226,6 +248,12 @@ summary:
   tail_lines: 5
   auto_index_threshold_bytes: 32768
   smart_format: true
+
+redaction:
+  enabled: true            # scrub secrets before storage (default: true)
+  extra_patterns:          # optional user-defined rules, merged after defaults
+    - name: internal_ticket
+      regex: 'INT-[0-9]{6}'
 ```
 
 Freshness presets are in [configs/freshness-examples](configs/freshness-examples).
@@ -253,6 +281,7 @@ ctx-saver knowledge reset
 - binary output with null bytes is rejected
 - paths are cleaned with `filepath.Abs` and `filepath.Clean`
 - command strings in logs are truncated to reduce secret exposure
+- secrets are redacted from output before storage (see [Secret Redaction](#secret-redaction))
 - no external service is required
 
 ## Build
