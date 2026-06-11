@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -52,6 +53,8 @@ func runInit(args []string) error {
 		return initCopilot()
 	case "copilot-instructions":
 		return initCopilotInstructions()
+	case "copilot-hooks":
+		return initCopilotHooks(args[1:])
 	case "codex":
 		return initCodex()
 	case "agents-md":
@@ -69,9 +72,74 @@ Platforms:
   claude                — Install hooks into ~/.claude/settings.json
   copilot               — Install MCP server into .vscode/mcp.json (current directory)
   copilot-instructions  — Install .github/copilot-instructions.md (current directory)
+  copilot-hooks         — Install GitHub Copilot hooks (personal by default; use --repo for repository level)
   codex                 — Install MCP server + hooks into ~/.codex/
   agents-md             — Install AGENTS.md (current directory)
 `)
+}
+
+func initCopilotHooks(args []string) error {
+	repoLevel := false
+	for _, arg := range args {
+		switch arg {
+		case "--repo":
+			if repoLevel {
+				return fmt.Errorf("--repo specified more than once")
+			}
+			repoLevel = true
+		default:
+			return fmt.Errorf("unknown copilot-hooks option %q", arg)
+		}
+	}
+
+	var target string
+	if repoLevel {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return fmt.Errorf("getting working directory: %w", err)
+		}
+		target = filepath.Join(cwd, ".github", "hooks", "ctx-saver.json")
+		fmt.Fprintln(os.Stderr, "WARNING: Repository-level Copilot hooks affect every collaborator.")
+		fmt.Fprintln(os.Stderr, "Cloud coding agents require this file on the repository's default branch.")
+	} else {
+		copilotHome := os.Getenv("COPILOT_HOME")
+		if copilotHome == "" {
+			home, err := os.UserHomeDir()
+			if err != nil {
+				return fmt.Errorf("finding home directory: %w", err)
+			}
+			copilotHome = filepath.Join(home, ".copilot")
+		}
+		target = filepath.Join(copilotHome, "hooks", "ctx-saver.json")
+	}
+
+	if _, err := os.Stat(target); err == nil {
+		fmt.Printf("  %s already exists; left unchanged.\n", target)
+		fmt.Println("  Compare it with the ctx-saver Copilot hooks template and merge the entries manually.")
+		return nil
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("checking %s: %w", target, err)
+	}
+
+	if warning := copilotHooksPathWarning(); warning != "" {
+		fmt.Fprintln(os.Stderr, warning)
+	}
+	if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+		return fmt.Errorf("creating Copilot hooks directory: %w", err)
+	}
+	if err := os.WriteFile(target, []byte(configs.CopilotHooksTemplate), 0644); err != nil {
+		return fmt.Errorf("writing %s: %w", target, err)
+	}
+	fmt.Printf("  written: %s\n", target)
+	fmt.Println("Done. Restart or reload Copilot to activate the hooks.")
+	return nil
+}
+
+func copilotHooksPathWarning() string {
+	if _, err := exec.LookPath("ctx-saver"); err == nil {
+		return ""
+	}
+	return "WARNING: ctx-saver is not on PATH; replace ctx-saver/ctx-saver.exe in the hook config with an absolute binary path."
 }
 
 func initClaude() error {

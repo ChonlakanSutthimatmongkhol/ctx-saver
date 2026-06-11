@@ -221,3 +221,78 @@ func TestMergeJSONFile_CodexHooks(t *testing.T) {
 		}
 	}
 }
+
+func TestInitCopilotHooks_PersonalDefault(t *testing.T) {
+	copilotHome := t.TempDir()
+	t.Setenv("COPILOT_HOME", copilotHome)
+
+	if err := initCopilotHooks(nil); err != nil {
+		t.Fatalf("initCopilotHooks: %v", err)
+	}
+
+	target := filepath.Join(copilotHome, "hooks", "ctx-saver.json")
+	data, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != configs.CopilotHooksTemplate {
+		t.Errorf("installed template differs from embedded template\n%s", data)
+	}
+}
+
+func TestInitCopilotHooks_RepoFlag(t *testing.T) {
+	dir := t.TempDir()
+	original, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Chdir(original) }()
+
+	if err := initCopilotHooks([]string{"--repo"}); err != nil {
+		t.Fatalf("initCopilotHooks --repo: %v", err)
+	}
+
+	target := filepath.Join(dir, ".github", "hooks", "ctx-saver.json")
+	data, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != configs.CopilotHooksTemplate {
+		t.Errorf("installed repo template differs from embedded template\n%s", data)
+	}
+}
+
+func TestInitCopilotHooks_NoOverwrite(t *testing.T) {
+	copilotHome := t.TempDir()
+	t.Setenv("COPILOT_HOME", copilotHome)
+	target := filepath.Join(copilotHome, "hooks", "ctx-saver.json")
+	if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+		t.Fatal(err)
+	}
+	const existing = `{"keep":true}`
+	if err := os.WriteFile(target, []byte(existing), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := initCopilotHooks(nil); err != nil {
+		t.Fatalf("initCopilotHooks: %v", err)
+	}
+
+	data, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != existing {
+		t.Errorf("existing hook config was overwritten: %s", data)
+	}
+}
+
+func TestCopilotHooksPathWarning(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	if warning := copilotHooksPathWarning(); !strings.Contains(warning, "absolute binary path") {
+		t.Errorf("warning = %q, want absolute-path guidance", warning)
+	}
+}

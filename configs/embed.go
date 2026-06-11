@@ -14,3 +14,9 @@ var CopilotInstructionsTemplate string
 //
 //go:embed codex/AGENTS.md
 var AgentsMdTemplate string
+
+// CopilotHooksTemplate configures GitHub Copilot CLI, coding agent, and VS
+// Code Preview hooks.
+//
+//go:embed hooks/copilot.json
+var CopilotHooksTemplate string

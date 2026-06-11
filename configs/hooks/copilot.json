@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "type": "command",
+        "bash": "ctx-saver hook sessionstart",
+        "powershell": "ctx-saver.exe hook sessionstart",
+        "timeoutSec": 10
+      }
+    ],
+    "preToolUse": [
+      {
+        "type": "command",
+        "bash": "ctx-saver hook pretooluse",
+        "powershell": "ctx-saver.exe hook pretooluse",
+        "timeoutSec": 10
+      }
+    ],
+    "postToolUse": [
+      {
+        "type": "command",
+        "bash": "ctx-saver hook posttooluse",
+        "powershell": "ctx-saver.exe hook posttooluse",
+        "timeoutSec": 15
+      }
+    ]
+  }
+}

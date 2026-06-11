@@ -10,6 +10,8 @@
 //	ctx-saver init claude                     — install hooks into ~/.claude/settings.json
 //	ctx-saver init copilot                    — install MCP server into .vscode/mcp.json
 //	ctx-saver init copilot-instructions       — install .github/copilot-instructions.md
+//	ctx-saver init copilot-hooks              — install personal GitHub Copilot hooks
+//	ctx-saver init copilot-hooks --repo       — install repository-level GitHub Copilot hooks
 //	ctx-saver init codex                      — install MCP server + hooks into ~/.codex/
 //	ctx-saver init agents-md                  — install AGENTS.md (current directory)
 //	ctx-saver knowledge refresh               — generate/update project-knowledge.md
@@ -26,6 +28,8 @@
 //	ctx-saver init claude                     # Claude Code hooks
 //	ctx-saver init copilot                    # VS Code Copilot MCP entry
 //	ctx-saver init copilot-instructions       # Copilot Enterprise instruction rules
+//	ctx-saver init copilot-hooks              # GitHub Copilot hooks (personal)
+//	ctx-saver init copilot-hooks --repo       # GitHub Copilot hooks (repository)
 //	ctx-saver init codex                      # Codex CLI MCP + hooks
 //	ctx-saver init agents-md                  # Codex CLI instruction rules
 package main
