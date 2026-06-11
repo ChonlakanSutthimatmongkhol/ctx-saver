@@ -17,7 +17,7 @@ import (
 // the tool call summary, persists it to the session DB, and writes an empty
 // acknowledgement to w (Codex ignores PostToolUse output).
 func RunPostToolUse(st store.Store, r io.Reader, w io.Writer) error {
-	input, err := readInput(r)
+	input, _, err := readInput(r)
 	if err != nil {
 		// Non-fatal: swallow errors so the hook never blocks the agent.
 		_, _ = fmt.Fprintln(w, "{}")
@@ -40,7 +40,6 @@ func RunPostToolUse(st store.Store, r io.Reader, w io.Writer) error {
 	} else if isNativeReadTool(input.ToolName) {
 		summary = store.NativeReadAnnotation + " " + summary + " (consider ctx_read_file)"
 	}
-
 	event := &store.SessionEvent{
 		SessionID:   sessionID,
 		ProjectPath: projectPath,

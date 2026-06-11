@@ -157,6 +157,42 @@ func TestRunPreToolUse_InvalidJSON(t *testing.T) {
 	}
 }
 
+func TestNormalize_CopilotPreToolUse(t *testing.T) {
+	raw := `{"timestamp":1770000000000,"cwd":"/repo","sessionId":"copilot-1","toolName":"bash","toolArgs":"{\"command\":\"npm test\"}"}`
+	input, host, err := readInput(strings.NewReader(raw))
+	require.NoError(t, err)
+	assert.Equal(t, HostCopilot, host)
+	assert.Equal(t, "copilot-1", input.SessionID)
+	assert.Equal(t, "bash", input.ToolName)
+	assert.Equal(t, "npm test", extractCmd(input.ToolInput))
+}
+
+func TestNormalize_CopilotToolArgsInvalidJSON(t *testing.T) {
+	raw := `{"toolName":"bash","toolArgs":"{broken"}`
+	input, host, err := readInput(strings.NewReader(raw))
+	require.NoError(t, err)
+	assert.Equal(t, HostCopilot, host)
+	assert.Nil(t, input.ToolInput)
+}
+
+func TestNormalize_ClaudePayloadUnchanged(t *testing.T) {
+	want := HookInput{
+		SessionID:     "claude-1",
+		Cwd:           "/repo",
+		ToolName:      "Bash",
+		ToolInput:     map[string]any{"command": "pwd"},
+		ToolOutput:    "ok",
+		HookEventName: "PreToolUse",
+	}
+	raw, err := json.Marshal(want)
+	require.NoError(t, err)
+
+	got, host, err := readInput(bytes.NewReader(raw))
+	require.NoError(t, err)
+	assert.Equal(t, HostClaudeCodex, host)
+	assert.Equal(t, want, got)
+}
+
 func runPreToolUseWith(t *testing.T, input HookInput) CodexHookOutput {
 	t.Helper()
 	b, _ := json.Marshal(input)

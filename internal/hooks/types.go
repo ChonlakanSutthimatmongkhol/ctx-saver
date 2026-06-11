@@ -4,7 +4,10 @@
 // stdin/stdout JSON.
 package hooks
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 // ── Shared input fields ────────────────────────────────────────────────────
 
@@ -30,6 +33,55 @@ type HookInput struct {
 
 	// HookEventName is echoed back in the output for some platforms.
 	HookEventName string `json:"hook_event_name"`
+
+	// GitHub Copilot sends camelCase fields and encodes toolArgs as a JSON
+	// string. These fields are folded into the canonical fields by normalize.
+	CopilotSessionID string             `json:"sessionId"`
+	CopilotToolName  string             `json:"toolName"`
+	CopilotToolArgs  string             `json:"toolArgs"`
+	CopilotResult    *CopilotToolResult `json:"toolResult"`
+	TimestampMs      int64              `json:"timestamp"`
+	Source           string             `json:"source"`
+	InitialPrompt    string             `json:"initialPrompt"`
+}
+
+// CopilotToolResult is the result envelope sent by GitHub Copilot postToolUse.
+type CopilotToolResult struct {
+	ResultType       string `json:"resultType"`
+	TextResultForLlm string `json:"textResultForLlm"`
+}
+
+// HostFormat identifies the hook protocol used by the agent host.
+type HostFormat int
+
+const (
+	HostClaudeCodex HostFormat = iota
+	HostCopilot
+)
+
+// normalize folds GitHub Copilot fields into the canonical hook fields.
+func (in *HookInput) normalize() HostFormat {
+	isCopilot := in.CopilotToolName != "" || in.CopilotToolArgs != "" ||
+		in.CopilotResult != nil || (in.Source != "" && in.HookEventName == "")
+	if !isCopilot {
+		return HostClaudeCodex
+	}
+	if in.ToolName == "" {
+		in.ToolName = in.CopilotToolName
+	}
+	if in.SessionID == "" {
+		in.SessionID = in.CopilotSessionID
+	}
+	if in.ToolInput == nil && in.CopilotToolArgs != "" {
+		var toolInput map[string]any
+		if err := json.Unmarshal([]byte(in.CopilotToolArgs), &toolInput); err == nil {
+			in.ToolInput = toolInput
+		}
+	}
+	if in.ToolOutput == nil && in.CopilotResult != nil {
+		in.ToolOutput = in.CopilotResult.TextResultForLlm
+	}
+	return HostCopilot
 }
 
 // ── Codex CLI output envelope ──────────────────────────────────────────────

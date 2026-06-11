@@ -29,7 +29,7 @@ Dangerous commands are blocked by the PreToolUse hook:
 // directive, and writes it to w as additionalContext.
 // limit is the maximum number of recent events to include (from config).
 func RunSessionStart(st store.Store, r io.Reader, w io.Writer, limit int) error {
-	input, err := readInput(r)
+	input, _, err := readInput(r)
 	if err != nil {
 		// Still emit routing instructions even if we cannot read session history.
 		return writeSessionStartOutput(w, routingInstructions)
@@ -39,7 +39,6 @@ func RunSessionStart(st store.Store, r io.Reader, w io.Writer, limit int) error 
 	sessionID := resolveSessionID(input.SessionID)
 
 	ctx := context.Background()
-
 	var additionalContext strings.Builder
 	additionalContext.WriteString(routingInstructions)
 

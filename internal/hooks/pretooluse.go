@@ -15,7 +15,7 @@ import (
 // "allow" are ignored by codex-rs output_parser.rs.  We therefore emit
 // either a deny decision or an empty passthrough object.
 func RunPreToolUse(_ store.Store, r io.Reader, w io.Writer) error {
-	input, err := readInput(r)
+	input, _, err := readInput(r)
 	if err != nil {
 		return allowPassthrough(w, "PreToolUse")
 	}
@@ -71,12 +71,12 @@ func allowPassthrough(w io.Writer, eventName string) error {
 }
 
 // readInput decodes a HookInput from r; returns a zero value on parse error.
-func readInput(r io.Reader) (HookInput, error) {
+func readInput(r io.Reader) (HookInput, HostFormat, error) {
 	var input HookInput
 	if err := json.NewDecoder(r).Decode(&input); err != nil {
-		return HookInput{}, fmt.Errorf("decoding hook input: %w", err)
+		return HookInput{}, HostClaudeCodex, fmt.Errorf("decoding hook input: %w", err)
 	}
-	return input, nil
+	return input, input.normalize(), nil
 }
 
 // writeJSON encodes v to w as a single JSON line followed by a newline.
