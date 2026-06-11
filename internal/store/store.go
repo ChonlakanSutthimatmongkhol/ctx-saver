@@ -45,6 +45,19 @@ type OutputMeta struct {
 	TTLSeconds  int
 }
 
+// CachedFileMeta is a lightweight view of one file-backed cached output,
+// used by ctx_session_init to surface reference reads available from turn 1.
+type CachedFileMeta struct {
+	OutputID    string
+	Path        string    // absolute path (stripped of the ReadFileCommandPrefix)
+	SourceHash  string    // SHA-256 hex stored at cache time ("" for old rows)
+	SourceKind  string
+	RefreshedAt time.Time
+	TTLSeconds  int
+	SizeBytes   int64
+	LineCount   int
+}
+
 // Match is a single full-text search hit.
 type Match struct {
 	OutputID string
@@ -105,6 +118,11 @@ type Store interface {
 
 	// List returns metadata for outputs belonging to projectPath, newest first.
 	List(ctx context.Context, projectPath string, limit int) ([]*OutputMeta, error)
+
+	// ListCachedFiles returns the most recent file-backed output per distinct
+	// path for projectPath, newest first, up to limit. File-backed outputs are
+	// rows whose command starts with ReadFileCommandPrefix.
+	ListCachedFiles(ctx context.Context, projectPath string, limit int) ([]*CachedFileMeta, error)
 
 	// Search runs a single FTS5 query and returns up to maxResults matches.
 	// If outputID is non-empty the search is limited to that output.

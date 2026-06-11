@@ -314,6 +314,47 @@ func (s *SQLiteStore) List(ctx context.Context, projectPath string, limit int) (
 	return metas, rows.Err()
 }
 
+// ListCachedFiles returns the most recent file-backed output per distinct path
+// for projectPath, newest first, up to limit. It runs on the read-only
+// connection since session_init calls it as an analytics-style query.
+func (s *SQLiteStore) ListCachedFiles(ctx context.Context, projectPath string, limit int) ([]*CachedFileMeta, error) {
+	if limit <= 0 {
+		limit = 10
+	}
+	// One row per distinct command (= per file path), keeping the newest.
+	rows, err := s.roDB.QueryContext(ctx, `
+		SELECT output_id, command, source_hash, source_kind,
+		       refreshed_at, ttl_seconds, size_bytes, line_count
+		FROM outputs o
+		WHERE project_path = ?
+		  AND command LIKE ?
+		  AND created_at = (
+		      SELECT MAX(created_at) FROM outputs o2
+		      WHERE o2.project_path = o.project_path AND o2.command = o.command
+		  )
+		ORDER BY refreshed_at DESC
+		LIMIT ?`, projectPath, ReadFileCommandPrefix+"%", limit)
+	if err != nil {
+		return nil, fmt.Errorf("listing cached files: %w", err)
+	}
+	defer rows.Close()
+
+	var metas []*CachedFileMeta
+	for rows.Next() {
+		var m CachedFileMeta
+		var command string
+		var refreshedAt int64
+		if err := rows.Scan(&m.OutputID, &command, &m.SourceHash, &m.SourceKind,
+			&refreshedAt, &m.TTLSeconds, &m.SizeBytes, &m.LineCount); err != nil {
+			return nil, fmt.Errorf("scanning cached file meta: %w", err)
+		}
+		m.Path = strings.TrimPrefix(command, ReadFileCommandPrefix)
+		m.RefreshedAt = time.Unix(refreshedAt, 0)
+		metas = append(metas, &m)
+	}
+	return metas, rows.Err()
+}
+
 // Search runs a FTS5 query with automatic phrase-escaping and LIKE fallback.
 // If FTS5 returns a syntax error the query is retried with LIKE; the Mode field
 // on each returned Match reflects which backend served it.

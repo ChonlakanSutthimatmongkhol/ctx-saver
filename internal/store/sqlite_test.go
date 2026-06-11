@@ -675,3 +675,55 @@ func TestUpdateRefreshed(t *testing.T) {
 	// output_id preserved
 	assert.Equal(t, "out_refresh_001", got.OutputID)
 }
+
+// fileOutput builds a file-backed output as produced by ctx_read_file.
+func fileOutput(id, absPath string, createdAt time.Time) *store.Output {
+	return &store.Output{
+		OutputID:    id,
+		Command:     store.ReadFileCommandPrefix + absPath,
+		FullOutput:  "package main\n\nfunc main() {}\n",
+		SizeBytes:   30,
+		LineCount:   3,
+		CreatedAt:   createdAt,
+		ProjectPath: "/test/project",
+		SourceHash:  "deadbeef",
+	}
+}
+
+func TestListCachedFiles_DistinctPaths(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+	base := time.Now()
+
+	// Two reads of the same file at different times + one read of another file.
+	require.NoError(t, st.Save(ctx, fileOutput("out_a1", "/repo/a.go", base)))
+	require.NoError(t, st.Save(ctx, fileOutput("out_a2", "/repo/a.go", base.Add(2*time.Second))))
+	require.NoError(t, st.Save(ctx, fileOutput("out_b1", "/repo/b.go", base.Add(1*time.Second))))
+
+	files, err := st.ListCachedFiles(ctx, "/test/project", 10)
+	require.NoError(t, err)
+	require.Len(t, files, 2, "one entry per distinct path")
+
+	byPath := map[string]*store.CachedFileMeta{}
+	for _, f := range files {
+		byPath[f.Path] = f
+	}
+	require.Contains(t, byPath, "/repo/a.go")
+	require.Contains(t, byPath, "/repo/b.go")
+	// The newest output for the duplicated path must win.
+	assert.Equal(t, "out_a2", byPath["/repo/a.go"].OutputID)
+	assert.Equal(t, "deadbeef", byPath["/repo/a.go"].SourceHash)
+}
+
+func TestListCachedFiles_IgnoresNonFileOutputs(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+
+	require.NoError(t, st.Save(ctx, sampleOutput("out_shell_1")))             // [shell] echo hello
+	require.NoError(t, st.Save(ctx, fileOutput("out_file_1", "/repo/x.go", time.Now())))
+
+	files, err := st.ListCachedFiles(ctx, "/test/project", 10)
+	require.NoError(t, err)
+	require.Len(t, files, 1)
+	assert.Equal(t, "/repo/x.go", files[0].Path)
+}
