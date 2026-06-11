@@ -15,7 +15,7 @@ import (
 // "allow" are ignored by codex-rs output_parser.rs.  We therefore emit
 // either a deny decision or an empty passthrough object.
 func RunPreToolUse(_ store.Store, r io.Reader, w io.Writer) error {
-	input, _, err := readInput(r)
+	input, host, err := readInput(r)
 	if err != nil {
 		return allowPassthrough(w, "PreToolUse")
 	}
@@ -24,12 +24,22 @@ func RunPreToolUse(_ store.Store, r io.Reader, w io.Writer) error {
 	decision := routePreToolUse(input.ToolName, cmd)
 
 	if !decision.allow {
+		if host == HostCopilot {
+			return writeJSON(w, CopilotHookOutput{
+				PermissionDecision:       "deny",
+				PermissionDecisionReason: decision.reason,
+			})
+		}
 		return writeJSON(w, CodexHookOutput{
 			HookSpecificOutput: CodexSpecificOutput{
 				HookEventName:      "PreToolUse",
 				PermissionDecision: "deny",
 			},
 		})
+	}
+
+	if host == HostCopilot {
+		return writeJSON(w, CopilotHookOutput{PermissionDecision: "allow"})
 	}
 
 	// Soft nudge: if a native tool is being used for a large-output command,

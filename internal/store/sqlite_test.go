@@ -520,6 +520,26 @@ func TestGetAdherenceStats_ReadEditPairing(t *testing.T) {
 	assert.Equal(t, int64(9000), stats.MissedLargeBytes)
 }
 
+func TestGetAdherenceStats_DeniedEventsSkipped(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+	event := &store.SessionEvent{
+		SessionID:   "s1",
+		ProjectPath: "/test/project",
+		EventType:   "posttooluse",
+		ToolName:    "bash",
+		Summary:     "[denied] " + store.NativeShellAnnotation + " blocked",
+		OutputBytes: 9000,
+		CreatedAt:   time.Now(),
+	}
+	require.NoError(t, st.SaveSessionEvent(ctx, event))
+
+	stats, err := st.GetAdherenceStats(ctx, "/test/project", time.Time{}, 5000)
+	require.NoError(t, err)
+	assert.Zero(t, stats.NativeShellCount)
+	assert.Zero(t, stats.MissedLargeOutputs)
+}
+
 func TestGetAdherenceStats_PairingDoesNotCrossSessions(t *testing.T) {
 	st := newTestStore(t)
 	ctx := context.Background()

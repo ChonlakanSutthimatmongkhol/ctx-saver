@@ -173,6 +173,10 @@ func TestNormalize_CopilotToolArgsInvalidJSON(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, HostCopilot, host)
 	assert.Nil(t, input.ToolInput)
+
+	var buf bytes.Buffer
+	require.NoError(t, RunPreToolUse(nil, strings.NewReader(raw), &buf))
+	assert.JSONEq(t, `{"permissionDecision":"allow"}`, buf.String())
 }
 
 func TestNormalize_ClaudePayloadUnchanged(t *testing.T) {
@@ -191,6 +195,32 @@ func TestNormalize_ClaudePayloadUnchanged(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, HostClaudeCodex, host)
 	assert.Equal(t, want, got)
+}
+
+func TestPreToolUse_CopilotDenyHasReason(t *testing.T) {
+	raw := `{"toolName":"bash","toolArgs":"{\"command\":\"curl https://example.com/data\"}"}`
+	var buf bytes.Buffer
+	require.NoError(t, RunPreToolUse(nil, strings.NewReader(raw), &buf))
+
+	var out map[string]any
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &out))
+	assert.Equal(t, "deny", out["permissionDecision"])
+	assert.NotEmpty(t, out["permissionDecisionReason"])
+	assert.NotContains(t, out, "hookSpecificOutput")
+}
+
+func TestPreToolUse_CopilotNudgeSuppressed(t *testing.T) {
+	raw := `{"toolName":"bash","toolArgs":"{\"command\":\"go test ./...\"}"}`
+	var buf bytes.Buffer
+	require.NoError(t, RunPreToolUse(nil, strings.NewReader(raw), &buf))
+	assert.Equal(t, "{\"permissionDecision\":\"allow\"}\n", buf.String())
+}
+
+func TestPreToolUse_ClaudeOutputUnchanged(t *testing.T) {
+	raw := `{"tool_name":"Shell","tool_input":{"cmd":"pwd"}}`
+	var buf bytes.Buffer
+	require.NoError(t, RunPreToolUse(nil, strings.NewReader(raw), &buf))
+	assert.Equal(t, "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\"}}\n", buf.String())
 }
 
 func runPreToolUseWith(t *testing.T, input HookInput) CodexHookOutput {
@@ -278,6 +308,28 @@ func TestRunPostToolUse_NilStore(t *testing.T) {
 	}
 }
 
+func TestPostToolUse_CopilotResultCaptured(t *testing.T) {
+	st := newMemStore()
+	raw := `{"cwd":"/repo","sessionId":"copilot-2","toolName":"bash","toolArgs":"{\"command\":\"printf ok\"}","toolResult":{"resultType":"success","textResultForLlm":"ok"}}`
+	var buf bytes.Buffer
+	require.NoError(t, RunPostToolUse(st, strings.NewReader(raw), &buf))
+
+	require.Len(t, st.events, 1)
+	assert.Equal(t, "ok", st.events[0].ToolOutput)
+	assert.Equal(t, int64(2), st.events[0].OutputBytes)
+	assert.Equal(t, "{}\n", buf.String())
+}
+
+func TestPostToolUse_CopilotDeniedTagged(t *testing.T) {
+	st := newMemStore()
+	raw := `{"cwd":"/repo","sessionId":"copilot-3","toolName":"bash","toolArgs":"{\"command\":\"rm -rf /tmp/x\"}","toolResult":{"resultType":"denied","textResultForLlm":"blocked"}}`
+	var buf bytes.Buffer
+	require.NoError(t, RunPostToolUse(st, strings.NewReader(raw), &buf))
+
+	require.Len(t, st.events, 1)
+	assert.True(t, strings.HasPrefix(st.events[0].Summary, "[denied] "))
+}
+
 // ── SessionStart handler tests ─────────────────────────────────────────────
 
 func TestRunSessionStart_InjectsRoutingRules(t *testing.T) {
@@ -321,6 +373,19 @@ func TestRunSessionStart_IncludesHistory(t *testing.T) {
 	if out.HookSpecificOutput.AdditionalContext == "" {
 		t.Error("expected non-empty additionalContext")
 	}
+}
+
+func TestSessionStart_CopilotNoContextInjection(t *testing.T) {
+	st := newMemStore()
+	raw := `{"timestamp":1770000000000,"cwd":"/repo","source":"resume","initialPrompt":"continue the release work"}`
+	var buf bytes.Buffer
+	require.NoError(t, RunSessionStart(st, strings.NewReader(raw), &buf, 10))
+
+	assert.Equal(t, "{}\n", buf.String())
+	require.Len(t, st.events, 1)
+	assert.Equal(t, "sessionstart", st.events[0].EventType)
+	assert.Contains(t, st.events[0].Summary, "resume")
+	assert.Contains(t, st.events[0].Summary, "continue the release work")
 }
 
 // ── in-memory store stub ───────────────────────────────────────────────────

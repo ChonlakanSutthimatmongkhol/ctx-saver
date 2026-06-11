@@ -24,12 +24,14 @@ Dangerous commands are blocked by the PreToolUse hook:
 "rm -rf", pipe-to-shell (curl/wget piped to sh/bash), eval, "sudo -s".
 `
 
-// RunSessionStart reads a Codex CLI SessionStart JSON payload from r,
+// RunSessionStart reads a SessionStart JSON payload from r,
 // retrieves recent session events from the store, builds a context-restoration
-// directive, and writes it to w as additionalContext.
+// directive, and writes it to w as additionalContext for Claude/Codex.
+// Copilot ignores SessionStart output, so restoration there remains driven by
+// copilot-instructions.md calling ctx_session_init.
 // limit is the maximum number of recent events to include (from config).
 func RunSessionStart(st store.Store, r io.Reader, w io.Writer, limit int) error {
-	input, _, err := readInput(r)
+	input, host, err := readInput(r)
 	if err != nil {
 		// Still emit routing instructions even if we cannot read session history.
 		return writeSessionStartOutput(w, routingInstructions)
@@ -39,6 +41,24 @@ func RunSessionStart(st store.Store, r io.Reader, w io.Writer, limit int) error 
 	sessionID := resolveSessionID(input.SessionID)
 
 	ctx := context.Background()
+	if host == HostCopilot {
+		if st != nil {
+			summary := fmt.Sprintf("copilot session %s", input.Source)
+			if prompt := strings.TrimSpace(input.InitialPrompt); prompt != "" {
+				summary += ": " + truncate(prompt, 120)
+			}
+			_ = st.SaveSessionEvent(ctx, &store.SessionEvent{
+				SessionID:   sessionID,
+				ProjectPath: projectPath,
+				EventType:   "sessionstart",
+				Summary:     summary,
+				CreatedAt:   time.Now().UTC(),
+			})
+		}
+		_, _ = fmt.Fprintln(w, "{}")
+		return nil
+	}
+
 	var additionalContext strings.Builder
 	additionalContext.WriteString(routingInstructions)
 

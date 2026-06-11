@@ -40,6 +40,9 @@ func RunPostToolUse(st store.Store, r io.Reader, w io.Writer) error {
 	} else if isNativeReadTool(input.ToolName) {
 		summary = store.NativeReadAnnotation + " " + summary + " (consider ctx_read_file)"
 	}
+	if input.CopilotResult != nil && input.CopilotResult.ResultType == "denied" {
+		summary = "[denied] " + summary
+	}
 	event := &store.SessionEvent{
 		SessionID:   sessionID,
 		ProjectPath: projectPath,

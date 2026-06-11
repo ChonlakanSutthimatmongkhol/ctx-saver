@@ -103,6 +103,13 @@ type CodexSpecificOutput struct {
 	AdditionalContext string `json:"additionalContext,omitempty"`
 }
 
+// CopilotHookOutput is the top-level preToolUse response expected by GitHub
+// Copilot. Copilot ignores postToolUse and sessionStart output.
+type CopilotHookOutput struct {
+	PermissionDecision       string `json:"permissionDecision"`
+	PermissionDecisionReason string `json:"permissionDecisionReason,omitempty"`
+}
+
 // ── Session event ──────────────────────────────────────────────────────────
 
 // Event is a normalised representation of one PostToolUse capture.

@@ -771,6 +771,9 @@ func (s *SQLiteStore) GetAdherenceStats(ctx context.Context, projectPath string,
 
 	stats := &AdherenceStats{}
 	for _, event := range events {
+		if strings.HasPrefix(event.summary, "[denied]") {
+			continue
+		}
 		switch {
 		case event.toolName == "ctx_execute":
 			stats.CtxExecuteCount++
