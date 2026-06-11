@@ -51,6 +51,8 @@ type mockStore struct {
 	sessionEventCount int
 	savedDecisions    int
 	decisions         []*store.Decision
+	cachedFiles       []*store.CachedFileMeta
+	cachedFilesErr    error
 }
 
 func (m *mockStore) Save(_ context.Context, o *store.Output) error {
@@ -75,6 +77,10 @@ func (m *mockStore) Get(_ context.Context, id string) (*store.Output, error) {
 
 func (m *mockStore) List(_ context.Context, _ string, _ int) ([]*store.OutputMeta, error) {
 	return m.listMeta, m.listErr
+}
+
+func (m *mockStore) ListCachedFiles(_ context.Context, _ string, _ int) ([]*store.CachedFileMeta, error) {
+	return m.cachedFiles, m.cachedFilesErr
 }
 
 func (m *mockStore) Search(_ context.Context, _, _ string, _ int) ([]*store.Match, error) {

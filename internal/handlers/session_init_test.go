@@ -2,6 +2,8 @@ package handlers_test
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -10,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/config"
+	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/freshness"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/handlers"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/store"
 )
@@ -224,6 +227,64 @@ func TestSessionInit_ExcludesLowImportance(t *testing.T) {
 	for _, d := range out.RecentDecisions {
 		assert.NotEqual(t, store.ImportanceLow, d.Importance, "low importance decisions must not appear")
 	}
+}
+
+func TestSessionInit_CachedFiles_ChangedOnDisk(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "schema.sql")
+	require.NoError(t, os.WriteFile(path, []byte("CREATE TABLE a (id INT);\n"), 0o600))
+
+	origHash, err := freshness.FileSHA256(path)
+	require.NoError(t, err)
+
+	st := &sessionInitStore{}
+	st.cachedFiles = []*store.CachedFileMeta{
+		{OutputID: "out_f1", Path: path, SourceHash: origHash, RefreshedAt: time.Now()},
+	}
+	h := newSessionInitHandler(st)
+
+	// Unchanged file ⇒ not flagged, and the cached-files hint should fire.
+	_, out, err := h.Handle(context.Background(), nil, handlers.SessionInitInput{})
+	require.NoError(t, err)
+	require.Len(t, out.CachedFiles, 1)
+	assert.False(t, out.CachedFiles[0].ChangedOnDisk)
+	assert.Equal(t, origHash[:12], out.CachedFiles[0].SHA256Short)
+	assert.Contains(t, out.NextActionHint, "cached_files")
+
+	// Edit the file on disk ⇒ now flagged as changed.
+	require.NoError(t, os.WriteFile(path, []byte("CREATE TABLE a (id INT, name TEXT);\n"), 0o600))
+	_, out2, err := h.Handle(context.Background(), nil, handlers.SessionInitInput{})
+	require.NoError(t, err)
+	require.Len(t, out2.CachedFiles, 1)
+	assert.True(t, out2.CachedFiles[0].ChangedOnDisk)
+}
+
+func TestSessionInit_CachedFiles_MissingFile(t *testing.T) {
+	st := &sessionInitStore{}
+	st.cachedFiles = []*store.CachedFileMeta{
+		{OutputID: "out_gone", Path: "/no/such/file.go", SourceHash: "abc123def4567890", RefreshedAt: time.Now()},
+	}
+	h := newSessionInitHandler(st)
+
+	_, out, err := h.Handle(context.Background(), nil, handlers.SessionInitInput{})
+	require.NoError(t, err) // missing file must not fail session_init
+	require.Len(t, out.CachedFiles, 1)
+	assert.True(t, out.CachedFiles[0].ChangedOnDisk)
+}
+
+func TestSessionInit_CachedFiles_EmptyHash(t *testing.T) {
+	st := &sessionInitStore{}
+	st.cachedFiles = []*store.CachedFileMeta{
+		{OutputID: "out_old", Path: "/some/legacy.txt", SourceHash: "", RefreshedAt: time.Now()},
+	}
+	h := newSessionInitHandler(st)
+
+	_, out, err := h.Handle(context.Background(), nil, handlers.SessionInitInput{})
+	require.NoError(t, err)
+	require.Len(t, out.CachedFiles, 1)
+	// No stored hash ⇒ no re-hash, no flag, no SHA short.
+	assert.False(t, out.CachedFiles[0].ChangedOnDisk)
+	assert.Empty(t, out.CachedFiles[0].SHA256Short)
 }
 
 func TestSessionInit_HintMentionsDecisionsCount(t *testing.T) {

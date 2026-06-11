@@ -11,6 +11,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/config"
+	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/freshness"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/store"
 )
 
@@ -26,6 +27,7 @@ type SessionInitOutput struct {
 	RecentEvents     []RecentEventEntry     `json:"recent_events,omitempty"`
 	RecentDecisions  []DecisionDigest       `json:"recent_decisions,omitempty"`
 	CachedOutputs    CachedOutputSummary    `json:"cached_outputs"`
+	CachedFiles      []CachedFileEntry      `json:"cached_files,omitempty"`
 	ActiveConfig     ActiveConfigSummary    `json:"active_config"`
 	FreshnessPolicy  FreshnessPolicySummary `json:"freshness_policy"`
 	NextActionHint   string                 `json:"next_action_hint,omitempty"`
@@ -72,6 +74,18 @@ type CachedOutputSummary struct {
 type CommandRank struct {
 	Command string `json:"command"`
 	Count   int    `json:"count"`
+}
+
+// CachedFileEntry is one cached file (reference read) surfaced at session start
+// so the agent can reuse it via ctx_search/ctx_get_full without re-reading.
+type CachedFileEntry struct {
+	Path          string `json:"path"`
+	OutputID      string `json:"output_id"`
+	SHA256Short   string `json:"sha256,omitempty"`          // first 12 hex chars
+	StaleLevel    string `json:"stale_level"`               // fresh|aging|stale|critical
+	AgoHuman      string `json:"ago"`
+	SizeBytes     int64  `json:"size_bytes"`
+	ChangedOnDisk bool   `json:"changed_on_disk,omitempty"` // true = file edited/removed since cache; re-read before use
 }
 
 // ActiveConfigSummary surfaces key config flags for the agent.
@@ -148,6 +162,34 @@ func (h *SessionInitHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest,
 		}
 	}
 
+	// Populate cached files (reference reads) — best-effort, limit 10.
+	if files, ferr := h.st.ListCachedFiles(ctx, h.projectPath, 10); ferr == nil {
+		now := time.Now()
+		for _, f := range files {
+			fi := freshness.NewFreshnessInfo(f.SourceKind, f.RefreshedAt, f.TTLSeconds, now)
+			entry := CachedFileEntry{
+				Path:       f.Path,
+				OutputID:   f.OutputID,
+				StaleLevel: fi.StaleLevel,
+				AgoHuman:   humanAgeShort(now.Sub(f.RefreshedAt)),
+				SizeBytes:  f.SizeBytes,
+			}
+			if f.SourceHash != "" {
+				if len(f.SourceHash) >= 12 {
+					entry.SHA256Short = f.SourceHash[:12]
+				} else {
+					entry.SHA256Short = f.SourceHash
+				}
+				// Cheap verification: re-hash the file now. A mismatch or a
+				// missing/unreadable file means the cache must not be trusted.
+				if cur, herr := freshness.FileSHA256(f.Path); herr != nil || cur != f.SourceHash {
+					entry.ChangedOnDisk = true
+				}
+			}
+			out.CachedFiles = append(out.CachedFiles, entry)
+		}
+	}
+
 	// Populate recent events, deduplicating by tool + summary prefix.
 	events, err := h.st.ListProjectSessionEvents(ctx, h.projectPath, 20)
 	if err == nil && len(events) > 0 {
@@ -195,6 +237,8 @@ func (h *SessionInitHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest,
 
 	// Choose a next-action hint.
 	switch {
+	case len(out.CachedFiles) > 0 && !anyChangedOnDisk(out.CachedFiles):
+		out.NextActionHint = "Cached files are listed in cached_files — use ctx_search/ctx_get_full with their output_id instead of re-reading fresh files."
 	case len(out.RecentEvents) > 0:
 		out.NextActionHint = "Recent session activity found. Check ctx_stats(view=outputs) to reuse cached results, or ctx_stats to verify adherence_score."
 	case out.CachedOutputs.TotalOutputs > 0:
@@ -218,6 +262,17 @@ func (h *SessionInitHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest,
 
 	recordToolCall(ctx, h.st, h.projectPath, "ctx_session_init", "", "", "session_init")
 	return nil, out, nil
+}
+
+// anyChangedOnDisk reports whether any cached file was edited or removed since
+// it was cached (so the agent should not be told to blindly reuse them).
+func anyChangedOnDisk(files []CachedFileEntry) bool {
+	for _, f := range files {
+		if f.ChangedOnDisk {
+			return true
+		}
+	}
+	return false
 }
 
 // truncateStr returns s truncated to max bytes, appending "…" when truncated.

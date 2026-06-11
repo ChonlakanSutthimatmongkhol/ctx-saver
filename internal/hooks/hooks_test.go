@@ -300,6 +300,9 @@ func (m *memStore) Get(_ context.Context, _ string) (*store.Output, error) {
 func (m *memStore) List(_ context.Context, _ string, _ int) ([]*store.OutputMeta, error) {
 	return nil, nil
 }
+func (m *memStore) ListCachedFiles(_ context.Context, _ string, _ int) ([]*store.CachedFileMeta, error) {
+	return nil, nil
+}
 func (m *memStore) Search(_ context.Context, _, _ string, _ int) ([]*store.Match, error) {
 	return nil, nil
 }
