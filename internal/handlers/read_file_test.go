@@ -11,8 +11,36 @@ import (
 
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/config"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/handlers"
+	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/redact"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/store"
 )
+
+// TestReadFile_HashFromDiskNotRedacted ensures redaction scrubs stored content
+// but cache invalidation still uses the on-disk hash, so a second read of an
+// unchanged file is still a cache hit.
+func TestReadFile_HashFromDiskNotRedacted(t *testing.T) {
+	tmp := t.TempDir()
+	file := filepath.Join(tmp, "config.env")
+	require.NoError(t, os.WriteFile(file, []byte("API_KEY=AKIAIOSFODNN7EXAMPLE\nname=app\n"), 0644))
+
+	ms := &readFileMock{}
+	r, _ := redact.New(nil)
+	h := handlers.NewReadFileHandler(largeCfg(), &mockSandbox{}, ms, "/proj", tmp).WithRedactor(r)
+	ctx := context.Background()
+
+	_, out1, err := h.Handle(ctx, nil, handlers.ReadFileInput{Path: file})
+	require.NoError(t, err)
+	require.NotEmpty(t, out1.OutputID)
+
+	require.Len(t, ms.saved, 1)
+	require.NotContains(t, ms.saved[0].FullOutput, "AKIAIOSFODNN7EXAMPLE", "stored content must be redacted")
+	require.NotEmpty(t, ms.saved[0].SourceHash, "hash must be computed from the on-disk file")
+
+	// Second read of the unchanged file → cache hit (hash matches disk, not redacted content).
+	_, out2, err := h.Handle(ctx, nil, handlers.ReadFileInput{Path: file})
+	require.NoError(t, err)
+	require.Equal(t, out1.OutputID, out2.OutputID, "unchanged file must still cache-hit after redaction")
+}
 
 // readFileMock overrides FindRecentSameCommand to search m.saved by projectPath+command,
 // making cache-hit/miss tests work without pre-seeding dedupMeta.

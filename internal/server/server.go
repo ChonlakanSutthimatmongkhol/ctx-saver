@@ -11,6 +11,7 @@ import (
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/config"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/handlers"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/knowledge"
+	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/redact"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/sandbox"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/search"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/store"
@@ -88,7 +89,22 @@ func RunIdleKnowledgeRefresh(ctx context.Context, st store.Store, projectPath st
 
 // registerTools binds all MCP tool handlers to the server.
 func registerTools(srv *mcp.Server, cfg *config.Config, sb sandbox.Sandbox, st store.Store, projectPath, workdir string, serverStart time.Time) {
-	execH := handlers.NewExecuteHandler(cfg, sb, st, projectPath, workdir)
+	// Build one shared redactor (nil when disabled). Invalid user patterns are
+	// logged and skipped — a bad regex must never fail server startup.
+	var redactor *redact.Redactor
+	if cfg.Redaction.Enabled {
+		extras := make([]redact.ExtraPattern, len(cfg.Redaction.ExtraPatterns))
+		for i, p := range cfg.Redaction.ExtraPatterns {
+			extras[i] = redact.ExtraPattern{Name: p.Name, Regex: p.Regex}
+		}
+		var warnings []string
+		redactor, warnings = redact.New(extras)
+		for _, w := range warnings {
+			slog.Warn("redaction config", "warning", w)
+		}
+	}
+
+	execH := handlers.NewExecuteHandler(cfg, sb, st, projectPath, workdir).WithRedactor(redactor)
 	mcp.AddTool(srv, &mcp.Tool{
 		Name: "ctx_execute",
 		Description: `[PREFERRED for command execution] Run shell, python, go, or node code in a sandboxed subprocess.
@@ -120,7 +136,7 @@ Configuration:
 If unsure whether to use this — USE IT. Over-using ctx_execute is harmless; under-using it silently destroys context.`,
 	}, execH.Handle)
 
-	readFileH := handlers.NewReadFileHandler(cfg, sb, st, projectPath, workdir)
+	readFileH := handlers.NewReadFileHandler(cfg, sb, st, projectPath, workdir).WithRedactor(redactor)
 	mcp.AddTool(srv, &mcp.Tool{
 		Name: "ctx_read_file",
 		Description: `[PREFERRED for reading files] Read a file through the sandbox, storing full content and returning a compact summary.

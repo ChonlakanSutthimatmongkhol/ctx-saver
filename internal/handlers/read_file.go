@@ -14,6 +14,7 @@ import (
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/config"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/freshness"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/handlers/signatures"
+	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/redact"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/sandbox"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/store"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/summary"
@@ -42,6 +43,7 @@ type ReadFileHandler struct {
 	cfg         *config.Config
 	sb          sandbox.Sandbox
 	st          store.Store
+	redactor    *redact.Redactor // nil when redaction is disabled
 	projectPath string
 	workdir     string
 }
@@ -49,6 +51,13 @@ type ReadFileHandler struct {
 // NewReadFileHandler creates a ReadFileHandler.
 func NewReadFileHandler(cfg *config.Config, sb sandbox.Sandbox, st store.Store, projectPath, workdir string) *ReadFileHandler {
 	return &ReadFileHandler{cfg: cfg, sb: sb, st: st, projectPath: projectPath, workdir: workdir}
+}
+
+// WithRedactor enables secret redaction on stored/returned content. A nil
+// redactor leaves redaction disabled. Returns the handler for chaining.
+func (h *ReadFileHandler) WithRedactor(r *redact.Redactor) *ReadFileHandler {
+	h.redactor = r
+	return h
 }
 
 // findCachedOutputForPath returns the most recent cached output for the given
@@ -164,10 +173,19 @@ func (h *ReadFileHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, in
 			len(rawOutput), h.cfg.Storage.MaxOutputSizeMB)
 	}
 
+	// Redact secrets before summarising, storing, or returning. SourceHash is
+	// computed separately from the on-disk file (below), so cache invalidation
+	// keeps working regardless of what redaction changes here.
+	var redactedRules []string
+	if h.redactor != nil {
+		rawOutput, redactedRules = h.redactor.Redact(rawOutput)
+	}
+
 	stats := OutputStats{
-		SizeBytes:  len(rawOutput),
-		ExitCode:   exitCode,
-		DurationMs: durationMs,
+		SizeBytes:     len(rawOutput),
+		ExitCode:      exitCode,
+		DurationMs:    durationMs,
+		RedactedRules: redactedRules,
 	}
 
 	threshold := h.cfg.Summary.AutoIndexThresholdBytes

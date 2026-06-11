@@ -11,6 +11,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/config"
+	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/redact"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/sandbox"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/store"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/summary"
@@ -39,10 +40,11 @@ type ExecuteOutput struct {
 
 // OutputStats carries execution metadata.
 type OutputStats struct {
-	Lines      int   `json:"lines"`
-	SizeBytes  int   `json:"size_bytes"`
-	ExitCode   int   `json:"exit_code"`
-	DurationMs int64 `json:"duration_ms"`
+	Lines         int      `json:"lines"`
+	SizeBytes     int      `json:"size_bytes"`
+	ExitCode      int      `json:"exit_code"`
+	DurationMs    int64    `json:"duration_ms"`
+	RedactedRules []string `json:"redacted_rules,omitempty" jsonschema:"secret patterns redacted from this output before storage"`
 }
 
 // ExecuteHandler handles the ctx_execute MCP tool.
@@ -50,6 +52,7 @@ type ExecuteHandler struct {
 	cfg         *config.Config
 	sb          sandbox.Sandbox
 	st          store.Store
+	redactor    *redact.Redactor // nil when redaction is disabled
 	projectPath string
 	workdir     string
 }
@@ -57,6 +60,13 @@ type ExecuteHandler struct {
 // NewExecuteHandler creates an ExecuteHandler.
 func NewExecuteHandler(cfg *config.Config, sb sandbox.Sandbox, st store.Store, projectPath, workdir string) *ExecuteHandler {
 	return &ExecuteHandler{cfg: cfg, sb: sb, st: st, projectPath: projectPath, workdir: workdir}
+}
+
+// WithRedactor enables secret redaction on stored/returned output. A nil
+// redactor leaves redaction disabled. Returns the handler for chaining.
+func (h *ExecuteHandler) WithRedactor(r *redact.Redactor) *ExecuteHandler {
+	h.redactor = r
+	return h
 }
 
 // Handle implements the ctx_execute tool.
@@ -104,10 +114,18 @@ func (h *ExecuteHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, inp
 			len(result.Output), h.cfg.Storage.MaxOutputSizeMB)
 	}
 
+	// Redact secrets once, before the small/large branch, so direct_output,
+	// summary, the stored FullOutput, and the FTS index all see scrubbed bytes.
+	var redactedRules []string
+	if h.redactor != nil {
+		result.Output, redactedRules = h.redactor.Redact(result.Output)
+	}
+
 	stats := OutputStats{
-		SizeBytes:  len(result.Output),
-		ExitCode:   result.ExitCode,
-		DurationMs: result.Duration.Milliseconds(),
+		SizeBytes:     len(result.Output),
+		ExitCode:      result.ExitCode,
+		DurationMs:    result.Duration.Milliseconds(),
+		RedactedRules: redactedRules,
 	}
 
 	threshold := h.cfg.Summary.AutoIndexThresholdBytes

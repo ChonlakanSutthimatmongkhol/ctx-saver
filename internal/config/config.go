@@ -30,7 +30,22 @@ type Config struct {
 	Dedup        DedupConfig     `yaml:"dedup"`
 	Freshness    FreshnessConfig `yaml:"freshness"`
 	Knowledge    KnowledgeConfig `yaml:"knowledge"`
+	Redaction    RedactionConfig `yaml:"redaction"`
 	DenyCommands []string        `yaml:"deny_commands"`
+}
+
+// RedactionConfig controls secret scrubbing before output storage.
+type RedactionConfig struct {
+	// Enabled turns redaction on. Default: true.
+	Enabled bool `yaml:"enabled"`
+	// ExtraPatterns are user-defined rules merged after the defaults.
+	ExtraPatterns []ExtraPattern `yaml:"extra_patterns"`
+}
+
+// ExtraPattern is one user-defined redaction rule.
+type ExtraPattern struct {
+	Name  string `yaml:"name"`
+	Regex string `yaml:"regex"`
 }
 
 // KnowledgeConfig controls materialized project-knowledge generation.
@@ -165,6 +180,9 @@ func Default() *Config {
 			TopFilesLimit:    10,
 			TopCommandsLimit: 10,
 			DecisionsLimit:   10,
+		},
+		Redaction: RedactionConfig{
+			Enabled: true,
 		},
 		DenyCommands: []string{
 			"rm -rf /",

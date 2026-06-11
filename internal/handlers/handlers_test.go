@@ -14,10 +14,58 @@ import (
 
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/config"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/handlers"
+	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/redact"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/sandbox"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/search"
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/store"
 )
+
+const testAWSKey = "AKIAIOSFODNN7EXAMPLE"
+
+func TestExecute_RedactsDirectOutput(t *testing.T) {
+	cfg := defaultCfg()
+	cfg.Summary.AutoIndexThresholdBytes = 10240 // large threshold → returned directly
+	sb := &mockSandbox{output: []byte("aws key " + testAWSKey + " end\n")}
+	st := &mockStore{}
+	r, _ := redact.New(nil)
+
+	h := handlers.NewExecuteHandler(cfg, sb, st, "/proj", "/proj").WithRedactor(r)
+	_, out, err := h.Handle(context.Background(), nil, handlers.ExecuteInput{Language: "shell", Code: "env"})
+	require.NoError(t, err)
+
+	assert.Contains(t, out.DirectOutput, "[REDACTED:aws_access_key]")
+	assert.NotContains(t, out.DirectOutput, testAWSKey)
+	assert.Contains(t, out.Stats.RedactedRules, "aws_access_key")
+}
+
+func TestExecute_RedactsStoredOutput(t *testing.T) {
+	dir := t.TempDir()
+	st, err := store.NewSQLiteStore(dir, "/proj")
+	require.NoError(t, err)
+	t.Cleanup(func() { st.Close() })
+
+	cfg := defaultCfg() // threshold 512 → large output stored
+	big := []byte(testAWSKey + "\n" + strings.Repeat("padding line\n", 100))
+	sb := &mockSandbox{output: big}
+	r, _ := redact.New(nil)
+
+	h := handlers.NewExecuteHandler(cfg, sb, st, "/proj", "/proj").WithRedactor(r)
+	ctx := context.Background()
+	_, out, err := h.Handle(ctx, nil, handlers.ExecuteInput{Language: "shell", Code: "env"})
+	require.NoError(t, err)
+	require.NotEmpty(t, out.OutputID)
+
+	// Stored FullOutput must be scrubbed.
+	full, err := st.Get(ctx, out.OutputID)
+	require.NoError(t, err)
+	assert.NotContains(t, full.FullOutput, testAWSKey)
+	assert.Contains(t, full.FullOutput, "[REDACTED:aws_access_key]")
+
+	// The secret must not be findable via FTS either.
+	matches, err := st.Search(ctx, testAWSKey, out.OutputID, 10)
+	require.NoError(t, err)
+	assert.Empty(t, matches, "FTS must not surface the redacted secret")
+}
 
 // ── Mocks ─────────────────────────────────────────────────────────────────
 
