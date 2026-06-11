@@ -6,6 +6,11 @@ import (
 	"time"
 )
 
+// ReadFileCommandPrefix marks file-backed outputs created by ctx_read_file.
+// It is used both to construct the cache-lookup key and to identify file-backed
+// rows when listing cached files.
+const ReadFileCommandPrefix = "[read_file] "
+
 // Output is a complete record of one command execution stored in SQLite.
 type Output struct {
 	OutputID    string

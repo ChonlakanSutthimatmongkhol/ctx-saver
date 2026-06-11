@@ -55,7 +55,7 @@ func NewReadFileHandler(cfg *config.Config, sb sandbox.Sandbox, st store.Store, 
 // absolute file path, or nil if none exists. Uses a 2-step lookup:
 // FindRecentSameCommand (returns lightweight meta) → Get (returns full Output with SourceHash).
 func (h *ReadFileHandler) findCachedOutputForPath(ctx context.Context, absPath string) (*store.Output, error) {
-	command := "[read_file] " + absPath
+	command := store.ReadFileCommandPrefix + absPath
 	meta, err := h.st.FindRecentSameCommand(ctx, h.projectPath, command, 24*time.Hour)
 	if err != nil {
 		return nil, err
@@ -197,7 +197,7 @@ func (h *ReadFileHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, in
 	stats.Lines = sum.TotalLines
 
 	outputID := generateOutputID()
-	displayCmd := fmt.Sprintf("[read_file] %s", absPath)
+	displayCmd := store.ReadFileCommandPrefix + absPath
 	if input.ProcessScript != "" {
 		displayCmd = fmt.Sprintf("[read_file|%s] %s | %s", input.Language, absPath, sanitiseCommand(input.Language, input.ProcessScript))
 	}
