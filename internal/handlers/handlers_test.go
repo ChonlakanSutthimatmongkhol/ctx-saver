@@ -310,6 +310,39 @@ func TestExecuteHandler_SmallOutput_ReturnedDirectly(t *testing.T) {
 	assert.Empty(t, st.saved)
 }
 
+func TestExecuteHandler_StripsANSIFromDirectAndStoredOutput(t *testing.T) {
+	t.Run("direct", func(t *testing.T) {
+		cfg := defaultCfg()
+		cfg.Summary.AutoIndexThresholdBytes = 10240
+		sb := &mockSandbox{output: []byte("\x1b[32mhello\x1b[0m\n")}
+		st := &mockStore{}
+
+		h := handlers.NewExecuteHandler(cfg, sb, st, "/proj", "/proj")
+		_, out, err := h.Handle(context.Background(), nil, handlers.ExecuteInput{
+			Language: "shell",
+			Code:     "echo hello",
+		})
+		require.NoError(t, err)
+		assert.Equal(t, "hello\n", out.DirectOutput)
+	})
+
+	t.Run("stored", func(t *testing.T) {
+		cfg := defaultCfg()
+		cfg.Summary.AutoIndexThresholdBytes = 1
+		sb := &mockSandbox{output: []byte("\x1b[31mfailed\x1b[0m\n")}
+		st := &mockStore{}
+
+		h := handlers.NewExecuteHandler(cfg, sb, st, "/proj", "/proj")
+		_, _, err := h.Handle(context.Background(), nil, handlers.ExecuteInput{
+			Language: "shell",
+			Code:     "test command",
+		})
+		require.NoError(t, err)
+		require.Len(t, st.saved, 1)
+		assert.Equal(t, "failed\n", st.saved[0].FullOutput)
+	})
+}
+
 func TestExecuteHandler_LargeOutput_StoredAndSummarised(t *testing.T) {
 	cfg := defaultCfg()
 	// 600 bytes > 512 threshold

@@ -120,6 +120,7 @@ func (h *ExecuteHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, inp
 	if h.redactor != nil {
 		result.Output, redactedRules = h.redactor.Redact(result.Output)
 	}
+	result.Output = summary.StripANSI(result.Output)
 
 	stats := OutputStats{
 		SizeBytes:     len(result.Output),
