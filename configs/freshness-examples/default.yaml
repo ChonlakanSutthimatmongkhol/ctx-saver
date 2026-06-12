@@ -1,5 +1,15 @@
 # Default freshness config (mirrors compiled-in defaults).
 # Copy to ~/.config/ctx-saver/config.yaml or .ctx-saver.yaml to customise.
+storage:
+  # 0 keeps the database unlimited. A positive value evicts least-recently-used
+  # outputs down to 90% of the cap while preserving recent rows and decisions.
+  max_db_size_mb: 0
+
+hooks:
+  # Deny oversized Copilot native reads of non-source reference files.
+  # Source-code files are always exempt; 0 disables this check.
+  view_deny_threshold_bytes: 131072
+
 summary:
   # Files/outputs smaller than this are returned inline (direct_output).
   # Larger ones are stored with an output_id and summarized.

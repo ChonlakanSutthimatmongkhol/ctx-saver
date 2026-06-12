@@ -241,6 +241,7 @@ Project overrides replace (not merge) any builtin entry with the same key.
 |-------|------|----------|-------------|
 | `output_id` | string | Y | ID of the output to retrieve |
 | `line_range` | int[2] | N | `[start, end]` — 1-based, inclusive. Omit to get all lines. |
+| `diff_against` | string | N | Older output ID; return a unified diff instead of raw lines. Mutually exclusive with `line_range`. |
 
 **Output**
 | Field | Description |
@@ -249,12 +250,24 @@ Project overrides replace (not merge) any builtin entry with the same key.
 | `lines` | Array of line strings |
 | `total_lines` | Total lines in the stored output |
 | `returned` | Number of lines actually returned |
+| `diff_against` | Echo of the older output ID in diff mode |
+| `diff_lines` | Unified diff lines, bounded for large changes |
+| `lines_added` / `lines_removed` | Changed-line counts excluding diff headers |
+| `diff_note` | Identical, command mismatch, or truncation note |
 
 **Example**
 ```json
 {
   "output_id": "out_20260422_76b3de65",
   "line_range": [100, 150]
+}
+```
+
+Diff example:
+```json
+{
+  "output_id": "out_new",
+  "diff_against": "out_previous"
 }
 ```
 

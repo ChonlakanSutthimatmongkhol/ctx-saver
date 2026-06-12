@@ -15,7 +15,7 @@ argument-hint: 'Describe the command or file you want to run/read'
 
 # ctx-saver Workflow
 
-ctx-saver is an MCP server that stores large command outputs in SQLite and returns a compact summary. For ctx_execute, summaries are format-aware (flutter_test, go_test, json, git_log, generic). Outputs larger than 2 MiB are tokenized asynchronously after storage, and ctx_stats scalar metrics remain present when their value is zero.
+ctx-saver is an MCP server that stores large command outputs in SQLite and returns a compact summary. For ctx_execute, summaries are format-aware (flutter_test, go_test, pytest, jest, build_log, container_log, lint, json, git_log, generic). Outputs larger than 2 MiB are tokenized asynchronously after storage, and ctx_stats scalar metrics remain present when their value is zero.
 
 ## When to Use
 
@@ -60,6 +60,7 @@ Use `ctx_execute` instead of a raw shell command whenever output may be large.
 - If `direct_output` is set → output was small, use it directly
 - If `output_id` is set → output was stored; check `format` + read `summary` for overview, then use `ctx_search` or `ctx_get_full` if more detail is needed
 - If `duplicate_hint` appears → same command already ran recently; prefer `ctx_get_full` or `ctx_search` on `previous_output_id` to reuse the cached result
+- After rerunning a test/build, call `ctx_get_full` with `diff_against=previous_output_id` to inspect only what changed
 
 ### 2. Reading a large file
 

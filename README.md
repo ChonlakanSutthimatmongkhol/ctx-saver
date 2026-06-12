@@ -181,9 +181,17 @@ metric.
 |--------|------------------|
 | `go_test` | package counts, failed tests, coverage |
 | `flutter_test` | pass/fail/skip counts, failed test names |
+| `pytest` | pass/fail/skip counts, failed tests, duration |
+| `jest` | suite/test counts, failed tests, duration |
+| `build_log` | xcodebuild/Gradle result, diagnostics, warning count |
+| `container_log` | errors/warnings, timeline, first panic block |
+| `lint` | golangci-lint/ESLint issues grouped by rule |
 | `json` | top-level keys, array length, sample values |
 | `git_log` | commit count, newest/oldest commits, top authors |
 | `generic` | head + tail lines with omitted-line count |
+
+ANSI color, cursor, and terminal-title escapes are removed from command output
+before format detection, summary generation, FTS indexing, and storage.
 
 ### Searchable Output
 
@@ -193,6 +201,25 @@ Stored outputs are indexed with SQLite FTS5. `ctx_search` supports:
 - LIKE fallback if FTS5 rejects a query
 - synonym expansion for common engineering terms
 - optional project-specific synonyms in `.ctx-saver-synonyms.yaml`
+
+### Compare Repeated Runs
+
+After rerunning the same test or build command, compare only what changed:
+
+```text
+ctx_get_full(output_id="<new>", diff_against="<previous_output_id>")
+```
+
+The result is a unified diff with three context lines and add/remove counts.
+Large diffs are truncated to a bounded head/tail view.
+
+### Managed Storage
+
+Bodies larger than 4 KiB are compressed with zstd. FTS rows remain plaintext,
+so search behavior is unchanged and compression savings apply only to the
+`full_output` portion of the database. Set `storage.max_db_size_mb` to enable
+LRU eviction; `0` keeps the database unlimited. Recent outputs and decisions
+are preserved.
 
 ### Freshness Checks
 
@@ -265,6 +292,7 @@ storage:
   data_dir: ~/.local/share/ctx-saver
   retention_days: 14
   max_output_size_mb: 50
+  max_db_size_mb: 0       # 0 = unlimited; evict old outputs above this cap
 
 summary:
   head_lines: 20

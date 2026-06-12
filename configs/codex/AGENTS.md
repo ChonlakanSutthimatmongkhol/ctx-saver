@@ -44,6 +44,9 @@ Before running an expensive command (build / test / spec fetch), check the cache
 3. `ctx_get_section` — extract a named section (use `ctx_outline` first to discover heading names)
 4. `ctx_get_full` — retrieve a line range as a last resort
 
+After changing code and rerunning the same test/build command, pass
+`diff_against=previous_output_id` to `ctx_get_full` to inspect only what changed.
+
 ### Rule 4: Start every session with `ctx_session_init`
 
 Your **first tool call** in a new session must be `ctx_session_init`.

@@ -30,7 +30,7 @@ type ExecuteInput struct {
 type ExecuteOutput struct {
 	OutputID         string      `json:"output_id,omitempty"          jsonschema:"ID assigned to this output (only when output was stored)"`
 	Summary          string      `json:"summary,omitempty"            jsonschema:"head+tail summary (only when output was stored)"`
-	Format           string      `json:"format,omitempty"             jsonschema:"summary format used: flutter_test | go_test | json | git_log | generic"`
+	Format           string      `json:"format,omitempty"             jsonschema:"summary format used: flutter_test | go_test | pytest | jest | build_log | container_log | lint | json | git_log | generic"`
 	Stats            OutputStats `json:"stats"                        jsonschema:"execution statistics"`
 	SearchHint       string      `json:"search_hint,omitempty"        jsonschema:"hint on how to search stored output"`
 	DirectOutput     string      `json:"direct_output,omitempty"      jsonschema:"full output (only when output is small enough to return directly)"`

@@ -2,6 +2,31 @@
 
 All notable changes to ctx-saver will be documented in this file.
 
+## v0.14.0 — Structured CI output, diffs, and managed storage
+
+### Added
+- ANSI CSI/OSC stripping before command output is summarized, returned, indexed,
+  or stored.
+- Format-aware summaries for xcodebuild/Gradle, pytest, Jest, kubectl/docker
+  logs, golangci-lint, and ESLint.
+- `ctx_get_full(diff_against=...)` unified diff mode with three context lines,
+  add/remove counts, identical-output detection, and bounded large diffs.
+- Schema migration v11 with zstd body compression, output access tracking, and
+  optional `storage.max_db_size_mb` LRU enforcement.
+
+### Changed
+- Stored bodies larger than 4 KiB use zstd while FTS content remains plaintext,
+  preserving search behavior.
+- Reads update LRU access time asynchronously. Size enforcement protects outputs
+  accessed or refreshed within the last hour and never touches decisions.
+
+### Notes
+- Existing plain rows remain readable. The schema-11 upgrade may run a one-time
+  `VACUUM` to enable incremental auto-vacuum on existing databases.
+- Compression applies to `full_output`, not the separate FTS index, so database
+  savings depend on the relative size of those two components.
+- Schema version is 11 and the MCP tool count remains 10.
+
 ## v0.13.1 — Copilot view routing and latency fixes
 
 ### Added
