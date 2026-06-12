@@ -524,6 +524,9 @@ func (m *memStore) FindRecentSameCommand(_ context.Context, _, _ string, _ time.
 }
 
 func (m *memStore) UpdateRefreshed(_ context.Context, _ *store.Output) error { return nil }
+func (m *memStore) UpdateTokenMetrics(_ context.Context, _ string, _, _, _ int64, _ string) error {
+	return nil
+}
 
 func (m *memStore) SaveDecision(_ context.Context, d *store.Decision) error {
 	if d.DecisionID == "" {

@@ -171,6 +171,19 @@ func (m *mockStore) UpdateRefreshed(_ context.Context, o *store.Output) error {
 	return fmt.Errorf("store: output %q not found", o.OutputID)
 }
 
+func (m *mockStore) UpdateTokenMetrics(_ context.Context, outputID string, rawTokens, responseTokens, responseBytes int64, tokenizer string) error {
+	for _, out := range m.saved {
+		if out.OutputID == outputID {
+			out.RawTokens = rawTokens
+			out.ResponseTokens = responseTokens
+			out.ResponseBytes = responseBytes
+			out.Tokenizer = tokenizer
+			break
+		}
+	}
+	return nil
+}
+
 func (m *mockStore) SaveDecision(_ context.Context, d *store.Decision) error {
 	if d.DecisionID == "" {
 		d.DecisionID = fmt.Sprintf("dec_%d_test", len(m.decisions))

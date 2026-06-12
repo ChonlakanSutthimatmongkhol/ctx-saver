@@ -178,8 +178,7 @@ func (h *ExecuteHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, inp
 		CreatedAt:   time.Now(),
 		ProjectPath: h.projectPath,
 	}
-	setTokenMetrics(storeOut, out.Summary)
-	if err := h.st.Save(ctx, storeOut); err != nil {
+	if err := saveOutput(ctx, h.st, storeOut, out.Summary); err != nil {
 		return nil, ExecuteOutput{}, fmt.Errorf("storing output: %w", err)
 	}
 

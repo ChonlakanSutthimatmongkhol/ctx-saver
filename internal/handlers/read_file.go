@@ -254,8 +254,7 @@ func (h *ReadFileHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, in
 		ProjectPath: h.projectPath,
 		SourceHash:  sourceHash,
 	}
-	setTokenMetrics(out, responseSummary)
-	if err := h.st.Save(ctx, out); err != nil {
+	if err := saveOutput(ctx, h.st, out, responseSummary); err != nil {
 		return nil, ReadFileOutput{}, fmt.Errorf("storing output: %w", err)
 	}
 

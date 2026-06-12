@@ -240,6 +240,26 @@ func (s *SQLiteStore) Get(ctx context.Context, id string) (*Output, error) {
 	return &o, nil
 }
 
+// UpdateTokenMetrics backfills exact token accounting for a stored output.
+// A missing row is expected when retention or purge wins the background race.
+func (s *SQLiteStore) UpdateTokenMetrics(
+	ctx context.Context,
+	outputID string,
+	rawTokens, responseTokens, responseBytes int64,
+	tokenizer string,
+) error {
+	_, err := s.db.ExecContext(ctx, `
+		UPDATE outputs
+		SET raw_tokens = ?, response_tokens = ?, response_bytes = ?, tokenizer = ?
+		WHERE output_id = ?`,
+		rawTokens, responseTokens, responseBytes, tokenizer, outputID,
+	)
+	if err != nil {
+		return fmt.Errorf("updating token metrics for %s: %w", outputID, err)
+	}
+	return nil
+}
+
 // UpdateRefreshed updates an existing output's content and refreshed_at in-place,
 // preserving the original output_id. Also re-indexes FTS rows for the output.
 func (s *SQLiteStore) UpdateRefreshed(ctx context.Context, output *Output) error {

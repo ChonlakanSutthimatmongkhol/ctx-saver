@@ -180,6 +180,10 @@ type Store interface {
 	// timestamp in-place, preserving the original output_id.
 	UpdateRefreshed(ctx context.Context, output *Output) error
 
+	// UpdateTokenMetrics backfills exact token accounting for a stored output.
+	// Implementations must treat a missing output as a successful no-op.
+	UpdateTokenMetrics(ctx context.Context, outputID string, rawTokens, responseTokens, responseBytes int64, tokenizer string) error
+
 	// SaveDecision stores a new decision/note. Generates decision_id if empty.
 	SaveDecision(ctx context.Context, d *Decision) error
 
