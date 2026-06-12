@@ -94,6 +94,10 @@ type HooksConfig struct {
 	// SessionHistoryLimit is the maximum number of recent session events injected
 	// into additionalContext by the SessionStart hook.  Defaults to 10.
 	SessionHistoryLimit int `yaml:"session_history_limit"`
+	// ViewDenyThresholdBytes is the minimum native reference-read size denied
+	// on hosts without a soft-nudge channel. Source files are always exempt.
+	// Set to 0 to disable view denial. Defaults to 128 KiB.
+	ViewDenyThresholdBytes int `yaml:"view_deny_threshold_bytes"`
 }
 
 // SandboxConfig controls how commands are executed.
@@ -153,7 +157,8 @@ func Default() *Config {
 			File:  "", // resolved to <DataDir>/server.log after projectPath is known
 		},
 		Hooks: HooksConfig{
-			SessionHistoryLimit: 10,
+			SessionHistoryLimit:    10,
+			ViewDenyThresholdBytes: 128 * 1024,
 		},
 		Dedup: DedupConfig{
 			Enabled:       true,
@@ -267,6 +272,9 @@ func validate(cfg *Config) error {
 	}
 	if cfg.Hooks.SessionHistoryLimit < 1 {
 		return fmt.Errorf("hooks.session_history_limit must be >= 1, got %d", cfg.Hooks.SessionHistoryLimit)
+	}
+	if cfg.Hooks.ViewDenyThresholdBytes < 0 {
+		return fmt.Errorf("hooks.view_deny_threshold_bytes must be >= 0, got %d", cfg.Hooks.ViewDenyThresholdBytes)
 	}
 	if cfg.Knowledge.IdleMinutes < 0 {
 		return fmt.Errorf("knowledge.idle_minutes must be >= 0, got %d", cfg.Knowledge.IdleMinutes)

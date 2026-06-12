@@ -11,6 +11,13 @@ import (
 	"github.com/ChonlakanSutthimatmongkhol/ctx-saver/internal/store"
 )
 
+var sourceExtensions = map[string]struct{}{
+	".go": {}, ".dart": {}, ".ts": {}, ".tsx": {}, ".js": {}, ".jsx": {},
+	".py": {}, ".java": {}, ".kt": {}, ".swift": {}, ".rs": {}, ".c": {},
+	".cc": {}, ".cpp": {}, ".h": {}, ".hpp": {}, ".cs": {}, ".rb": {},
+	".php": {}, ".sh": {}, ".sql": {}, ".proto": {}, ".vue": {}, ".svelte": {},
+}
+
 // RunPreToolUse reads a Codex CLI PreToolUse JSON payload from r, applies
 // routing rules, and writes the decision JSON to w.
 //
@@ -77,6 +84,9 @@ func routeCopilotNativeTool(input HookInput, cmd string, largeThresholdBytes int
 	if path == "" {
 		return routingDecision{allow: true}
 	}
+	if _, ok := sourceExtensions[strings.ToLower(filepath.Ext(path))]; ok {
+		return routingDecision{allow: true}
+	}
 	if !filepath.IsAbs(path) {
 		path = filepath.Join(resolveProjectPath(input.Cwd), path)
 	}
@@ -85,8 +95,12 @@ func routeCopilotNativeTool(input HookInput, cmd string, largeThresholdBytes int
 		return routingDecision{allow: true}
 	}
 	return routingDecision{
-		allow:  false,
-		reason: fmt.Sprintf("Use ctx_read_file for %s (%d bytes); it exceeds the %d-byte direct-read threshold.", path, info.Size(), largeThresholdBytes),
+		allow: false,
+		reason: fmt.Sprintf(
+			"This looks like a reference read of %s (%d bytes, above the %d-byte threshold). "+
+				"Use ctx_read_file to cache it, then ctx_search or ctx_get_section to consult it.",
+			path, info.Size(), largeThresholdBytes,
+		),
 	}
 }
 

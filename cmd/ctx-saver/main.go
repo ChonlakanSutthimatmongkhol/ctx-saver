@@ -142,7 +142,7 @@ func runHook(event string) error {
 
 	switch event {
 	case "pretooluse":
-		return hooks.RunPreToolUse(st, os.Stdin, os.Stdout, cfg.Summary.AutoIndexThresholdBytes)
+		return hooks.RunPreToolUse(st, os.Stdin, os.Stdout, cfg.Hooks.ViewDenyThresholdBytes)
 	case "posttooluse":
 		return hooks.RunPostToolUse(st, os.Stdin, os.Stdout)
 	case "sessionstart":

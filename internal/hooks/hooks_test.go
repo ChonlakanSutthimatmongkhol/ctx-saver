@@ -242,6 +242,49 @@ func TestPreToolUse_CopilotLargeViewDenied(t *testing.T) {
 	assert.Contains(t, out.PermissionDecisionReason, "ctx_read_file")
 }
 
+func TestPreToolUse_CopilotSourceFileAllowed(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "large.GO")
+	require.NoError(t, os.WriteFile(path, bytes.Repeat([]byte("x"), 1024*1024), 0644))
+	raw := fmt.Sprintf(`{"cwd":%q,"toolName":"view","toolArgs":%q}`, dir, `{"path":"large.GO"}`)
+	var buf bytes.Buffer
+	require.NoError(t, RunPreToolUse(nil, strings.NewReader(raw), &buf, 1024))
+	assert.Equal(t, `{"permissionDecision":"allow"}`+"\n", buf.String())
+}
+
+func TestPreToolUse_CopilotSmallViewAllowed(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "small.json")
+	require.NoError(t, os.WriteFile(path, bytes.Repeat([]byte("x"), 512), 0644))
+	raw := fmt.Sprintf(`{"cwd":%q,"toolName":"view","toolArgs":%q}`, dir, `{"path":"small.json"}`)
+	var buf bytes.Buffer
+	require.NoError(t, RunPreToolUse(nil, strings.NewReader(raw), &buf, 1024))
+	assert.Equal(t, `{"permissionDecision":"allow"}`+"\n", buf.String())
+}
+
+func TestPreToolUse_CopilotLargeExtensionlessViewDenied(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "BUILD")
+	require.NoError(t, os.WriteFile(path, bytes.Repeat([]byte("x"), 2048), 0644))
+	raw := fmt.Sprintf(`{"cwd":%q,"toolName":"view","toolArgs":%q}`, dir, `{"path":"BUILD"}`)
+	var buf bytes.Buffer
+	require.NoError(t, RunPreToolUse(nil, strings.NewReader(raw), &buf, 1024))
+	var out CopilotHookOutput
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &out))
+	assert.Equal(t, "deny", out.PermissionDecision)
+	assert.Contains(t, out.PermissionDecisionReason, "ctx_get_section")
+}
+
+func TestPreToolUse_CopilotViewDenyDisabled(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "large.json")
+	require.NoError(t, os.WriteFile(path, bytes.Repeat([]byte("x"), 2048), 0644))
+	raw := fmt.Sprintf(`{"cwd":%q,"toolName":"view","toolArgs":%q}`, dir, `{"path":"large.json"}`)
+	var buf bytes.Buffer
+	require.NoError(t, RunPreToolUse(nil, strings.NewReader(raw), &buf, 0))
+	assert.Equal(t, `{"permissionDecision":"allow"}`+"\n", buf.String())
+}
+
 func TestPreToolUse_CopilotViewStatFailureAllows(t *testing.T) {
 	raw := `{"cwd":"/missing","toolName":"view","toolArgs":"{\"path\":\"gone.txt\"}"}`
 	var buf bytes.Buffer

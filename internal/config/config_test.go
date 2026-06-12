@@ -20,6 +20,7 @@ func TestDefault_HasSaneValues(t *testing.T) {
 	assert.Equal(t, 20, cfg.Summary.HeadLines)
 	assert.Equal(t, 5, cfg.Summary.TailLines)
 	assert.Equal(t, 32768, cfg.Summary.AutoIndexThresholdBytes)
+	assert.Equal(t, 128*1024, cfg.Hooks.ViewDenyThresholdBytes)
 	assert.NotEmpty(t, cfg.DenyCommands)
 	assert.Equal(t, 14400, cfg.Freshness.DefaultMaxAgeSeconds)
 	assert.Equal(t, 600, cfg.Freshness.Sources["shell:git"].MaxAgeSeconds)
@@ -72,4 +73,21 @@ func TestValidate_RejectsZeroTimeout(t *testing.T) {
 	_, err := config.Load()
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "timeout_seconds")
+}
+
+func TestValidate_RejectsNegativeViewDenyThreshold(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	cfgDir := filepath.Join(home, ".config", "ctx-saver")
+	require.NoError(t, os.MkdirAll(cfgDir, 0755))
+
+	yaml := `hooks:
+  view_deny_threshold_bytes: -1
+`
+	require.NoError(t, os.WriteFile(filepath.Join(cfgDir, "config.yaml"), []byte(yaml), 0600))
+
+	_, err := config.Load()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "view_deny_threshold_bytes")
 }

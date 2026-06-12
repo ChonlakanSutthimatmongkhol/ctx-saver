@@ -32,6 +32,12 @@ ctx-saver is available as an MCP tool — you must use it instead of native tool
 - Source code you will EDIT (need full content for accurate edits)
 - Short config files (< 50 lines)
 
+The Copilot PreToolUse hook enforces this split for reference reads: data,
+log, and specification files larger than 128 KiB are denied with guidance to
+use `ctx_read_file`. Source-code extensions are exempt at every size so native
+view-to-edit workflows remain available. Set `hooks.view_deny_threshold_bytes`
+to `0` to disable this enforcement.
+
 Check `cached_files` from `ctx_session_init` before calling `ctx_read_file` on a
 reference file — if it is listed and `changed_on_disk` is false, reuse it via
 `ctx_search` / `ctx_get_full`. If `changed_on_disk=true`, re-read with `ctx_read_file`.
