@@ -260,6 +260,7 @@ View 'stats' (default):
 - Outputs stored, bytes saved, top commands, hook activity
 - Useful for verifying ctx-saver is working and quantifying savings
 - Scope: session | today | 7d | all (default: session)
+- Metric fields are always present; zero means no data in the selected scope
 - Call every ~20 turns; investigate when missed_large_outputs is non-zero
 
 View 'outputs':

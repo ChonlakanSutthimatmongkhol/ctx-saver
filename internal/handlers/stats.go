@@ -30,34 +30,34 @@ type StatsOutput struct {
 	View string `json:"view"`
 
 	// Stats view fields (when View == "stats").
-	Scope                 string           `json:"scope,omitempty"`
-	OutputsStored         int              `json:"outputs_stored,omitempty"`
-	RawBytes              int64            `json:"raw_bytes,omitempty"`
-	EstimatedSummaryBytes int64            `json:"estimated_summary_bytes,omitempty"`
-	EstimatedTokensSaved  int64            `json:"estimated_tokens_saved,omitempty"`
-	SavingPercent         float64          `json:"saving_percent,omitempty"`
-	RawTokens             int64            `json:"raw_tokens,omitempty"`
-	ResponseTokens        int64            `json:"response_tokens,omitempty"`
-	TokensSaved           int64            `json:"tokens_saved,omitempty"`
-	TokenSavingPercent    float64          `json:"token_saving_percent,omitempty"`
-	Tokenizer             string           `json:"tokenizer,omitempty"`
-	TokenizedOutputs      int              `json:"tokenized_outputs,omitempty"`
-	UntokenizedOutputs    int              `json:"untokenized_outputs,omitempty"`
-	AvgDurationMs         int64            `json:"avg_duration_ms,omitempty"`
+	Scope                 string           `json:"scope"`
+	OutputsStored         int              `json:"outputs_stored"`
+	RawBytes              int64            `json:"raw_bytes"`
+	EstimatedSummaryBytes int64            `json:"estimated_summary_bytes"`
+	EstimatedTokensSaved  int64            `json:"estimated_tokens_saved"`
+	SavingPercent         float64          `json:"saving_percent"`
+	RawTokens             int64            `json:"raw_tokens"`
+	ResponseTokens        int64            `json:"response_tokens"`
+	TokensSaved           int64            `json:"tokens_saved"`
+	TokenSavingPercent    float64          `json:"token_saving_percent"`
+	Tokenizer             string           `json:"tokenizer"`
+	TokenizedOutputs      int              `json:"tokenized_outputs"`
+	UntokenizedOutputs    int              `json:"untokenized_outputs"`
+	AvgDurationMs         int64            `json:"avg_duration_ms"`
 	TopCommands           []CommandStatOut `json:"top_commands,omitempty"`
 	LargestOutputs        []OutputMetaOut  `json:"largest_outputs,omitempty"`
-	HookStats             HookStatsOut     `json:"hook_stats,omitempty"`
+	HookStats             HookStatsOut     `json:"hook_stats"`
 
 	// Adherence fields — how consistently ctx-saver tools are being used.
-	AdherenceScore     float64 `json:"adherence_score,omitempty"`
-	NativeShellCount   int     `json:"native_shell_count,omitempty"`
-	NativeReadCount    int     `json:"native_read_count,omitempty"`
-	CtxExecuteCount    int     `json:"ctx_execute_count,omitempty"`
-	CtxReadFileCount   int     `json:"ctx_read_file_count,omitempty"`
+	AdherenceScore     float64 `json:"adherence_score"`
+	NativeShellCount   int     `json:"native_shell_count"`
+	NativeReadCount    int     `json:"native_read_count"`
+	CtxExecuteCount    int     `json:"ctx_execute_count"`
+	CtxReadFileCount   int     `json:"ctx_read_file_count"`
 	AdherenceNote      string  `json:"adherence_note,omitempty"`
 	MissedLargeOutputs int     `json:"missed_large_outputs"`
-	MissedLargeBytes   int64   `json:"missed_large_bytes,omitempty"`
-	SanctionedReads    int     `json:"sanctioned_reads,omitempty"`
+	MissedLargeBytes   int64   `json:"missed_large_bytes"`
+	SanctionedReads    int     `json:"sanctioned_reads"`
 	SavingsNote        string  `json:"savings_note,omitempty"`
 
 	// Outputs view field (when View == "outputs").

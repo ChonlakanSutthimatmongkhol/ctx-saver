@@ -2,6 +2,7 @@ package handlers_test
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -55,6 +56,40 @@ func TestStatsHandler_Empty(t *testing.T) {
 	assert.Equal(t, 0, out.OutputsStored)
 	assert.Equal(t, float64(0), out.SavingPercent)
 	assert.Contains(t, out.SavingsNote, "normal")
+}
+
+func TestStatsHandler_AllScalarMetricFieldsPresent(t *testing.T) {
+	for _, scope := range []string{"session", "today", "7d", "all"} {
+		t.Run(scope, func(t *testing.T) {
+			st := &statsStore{stats: &store.Stats{}}
+			h := handlers.NewStatsHandler(statsCfg(), st, "/proj", time.Now())
+			_, out, err := h.Handle(context.Background(), nil, handlers.StatsInput{Scope: scope})
+			require.NoError(t, err)
+
+			raw, err := json.Marshal(out)
+			require.NoError(t, err)
+			var fields map[string]json.RawMessage
+			require.NoError(t, json.Unmarshal(raw, &fields))
+
+			for _, key := range []string{
+				"scope", "outputs_stored", "raw_bytes", "estimated_summary_bytes",
+				"estimated_tokens_saved", "saving_percent", "raw_tokens",
+				"response_tokens", "tokens_saved", "token_saving_percent",
+				"tokenizer", "tokenized_outputs", "untokenized_outputs",
+				"avg_duration_ms", "hook_stats", "adherence_score",
+				"native_shell_count", "native_read_count", "ctx_execute_count",
+				"ctx_read_file_count", "missed_large_outputs",
+				"missed_large_bytes", "sanctioned_reads",
+			} {
+				assert.Contains(t, fields, key)
+			}
+			assert.Contains(t, fields, "savings_note")
+			assert.NotContains(t, fields, "adherence_note")
+			assert.NotContains(t, fields, "top_commands")
+			assert.NotContains(t, fields, "largest_outputs")
+			assert.NotContains(t, fields, "outputs")
+		})
+	}
 }
 
 func TestStatsHandler_Populated(t *testing.T) {
