@@ -2,6 +2,16 @@
 
 All notable changes to ctx-saver will be documented in this file.
 
+## v0.14.1 — ANSI redaction ordering fix
+
+### Added
+- Regression coverage for bounded diff output at the 400-line truncation
+  threshold while preserving full add/remove counts.
+
+### Fixed
+- ANSI escape sequences are now stripped before secret redaction, so color
+  codes interleaved within a secret can no longer bypass redaction patterns.
+
 ## v0.14.0 — Structured CI output, diffs, and managed storage
 
 ### Added
