@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-const currentSchemaVersion = 10
+const currentSchemaVersion = 11
 
 // runMigrations applies any pending schema migrations to db.
 // It is idempotent and safe to call on every server start.
@@ -39,6 +39,10 @@ func applyMigration(db *sql.DB, version int) error {
 	defer tx.Rollback() //nolint:errcheck
 
 	switch version {
+	case 11:
+		if err := migration11(tx); err != nil {
+			return err
+		}
 	case 10:
 		if err := migration10(tx); err != nil {
 			return err
@@ -87,6 +91,21 @@ func applyMigration(db *sql.DB, version int) error {
 		return fmt.Errorf("recording schema version %d: %w", version, err)
 	}
 	return tx.Commit()
+}
+
+// migration11 adds body encoding metadata and LRU access tracking.
+func migration11(tx *sql.Tx) error {
+	for _, stmt := range []string{
+		`ALTER TABLE outputs ADD COLUMN body_encoding TEXT NOT NULL DEFAULT 'plain'`,
+		`ALTER TABLE outputs ADD COLUMN last_accessed_at INTEGER NOT NULL DEFAULT 0`,
+		`UPDATE outputs SET last_accessed_at = created_at WHERE last_accessed_at = 0`,
+		`CREATE INDEX idx_outputs_last_accessed ON outputs(last_accessed_at)`,
+	} {
+		if _, err := tx.Exec(stmt); err != nil {
+			return fmt.Errorf("migration11 storage metadata: %w", err)
+		}
+	}
+	return nil
 }
 
 // migration10 stores exact tokenizer metrics for each cached output.

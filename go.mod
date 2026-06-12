@@ -3,6 +3,7 @@ module github.com/ChonlakanSutthimatmongkhol/ctx-saver
 go 1.26.0
 
 require (
+	github.com/klauspost/compress v1.18.6
 	github.com/modelcontextprotocol/go-sdk v1.5.0
 	github.com/pmezard/go-difflib v1.0.0
 	github.com/stretchr/testify v1.11.1

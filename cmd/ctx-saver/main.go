@@ -183,7 +183,11 @@ func runServer() error {
 	config.ResolveDataDir(cfg, projectPath)
 
 	// ── Storage ────────────────────────────────────────────────────────────────
-	st, err := store.NewSQLiteStore(cfg.Storage.DataDir, projectPath)
+	st, err := store.NewSQLiteStoreWithConfig(
+		cfg.Storage.DataDir,
+		projectPath,
+		cfg.Storage.MaxDBSizeMB,
+	)
 	if err != nil {
 		return fmt.Errorf("opening store: %w", err)
 	}

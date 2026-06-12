@@ -112,6 +112,7 @@ type StorageConfig struct {
 	DataDir         string `yaml:"data_dir"`
 	RetentionDays   int    `yaml:"retention_days"`
 	MaxOutputSizeMB int    `yaml:"max_output_size_mb"`
+	MaxDBSizeMB     int    `yaml:"max_db_size_mb"` // 0 = unlimited
 }
 
 // SummaryConfig controls how outputs are summarised before returning to the AI.
@@ -144,6 +145,7 @@ func Default() *Config {
 			DataDir:         ".ctx-saver",
 			RetentionDays:   14,
 			MaxOutputSizeMB: 50,
+			MaxDBSizeMB:     0,
 		},
 		Summary: SummaryConfig{
 			HeadLines:               20,
@@ -260,6 +262,9 @@ func validate(cfg *Config) error {
 	}
 	if cfg.Storage.MaxOutputSizeMB <= 0 {
 		return fmt.Errorf("storage.max_output_size_mb must be > 0, got %d", cfg.Storage.MaxOutputSizeMB)
+	}
+	if cfg.Storage.MaxDBSizeMB < 0 {
+		return fmt.Errorf("storage.max_db_size_mb must be >= 0, got %d", cfg.Storage.MaxDBSizeMB)
 	}
 	if cfg.Summary.HeadLines <= 0 {
 		return fmt.Errorf("summary.head_lines must be > 0, got %d", cfg.Summary.HeadLines)

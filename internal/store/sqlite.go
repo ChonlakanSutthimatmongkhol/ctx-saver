@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	_ "modernc.org/sqlite" // register the "sqlite" database driver
@@ -20,8 +21,12 @@ import (
 
 // SQLiteStore implements Store using a per-project SQLite database.
 type SQLiteStore struct {
-	db   *sql.DB // write connection — single writer
-	roDB *sql.DB // read-only connection — for analytics/background queries
+	db             *sql.DB // write connection — single writer
+	roDB           *sql.DB // read-only connection — for analytics/background queries
+	dbFile         string
+	maxDBSizeBytes int64
+	readOnly       bool
+	touchWG        sync.WaitGroup
 }
 
 // NewReadOnlySQLiteStore opens an existing database in read-only mode.
@@ -48,16 +53,28 @@ func NewReadOnlySQLiteStore(dataDir, projectPath string) (*SQLiteStore, error) {
 	roDB.SetMaxIdleConns(2)
 
 	// Return a store with db == roDB so all paths work; callers must not write.
-	return &SQLiteStore{db: roDB, roDB: roDB}, nil
+	return &SQLiteStore{db: roDB, roDB: roDB, dbFile: dbFile, readOnly: true}, nil
 }
 
-// inside dataDir, runs pending migrations, and cleans up old outputs.
+// NewSQLiteStore opens an unlimited store for backward-compatible callers.
 func NewSQLiteStore(dataDir, projectPath string) (*SQLiteStore, error) {
+	return NewSQLiteStoreWithConfig(dataDir, projectPath, 0)
+}
+
+// NewSQLiteStoreWithConfig opens a store and enforces maxDBSizeMB when nonzero.
+func NewSQLiteStoreWithConfig(dataDir, projectPath string, maxDBSizeMB int) (*SQLiteStore, error) {
+	if maxDBSizeMB < 0 {
+		return nil, fmt.Errorf("max database size must be >= 0, got %d MB", maxDBSizeMB)
+	}
 	if err := os.MkdirAll(dataDir, 0700); err != nil {
 		return nil, fmt.Errorf("creating data directory %s: %w", dataDir, err)
 	}
 
 	dbFile := dbPath(dataDir, projectPath)
+	isNewDB := true
+	if info, statErr := os.Stat(dbFile); statErr == nil && info.Size() > 0 {
+		isNewDB = false
+	}
 
 	// Open with WAL mode for better concurrent read performance.
 	// Note: modernc.org/sqlite ignores _busy_timeout in the DSN.
@@ -76,7 +93,23 @@ func NewSQLiteStore(dataDir, projectPath string) (*SQLiteStore, error) {
 		return nil, fmt.Errorf("setting busy_timeout: %w", err)
 	}
 
-	// Read-only connection for background analytics queries (KnowledgeStats).
+	if isNewDB {
+		if _, err := db.Exec(`PRAGMA auto_vacuum = INCREMENTAL`); err != nil {
+			db.Close()
+			return nil, fmt.Errorf("enabling incremental auto_vacuum: %w", err)
+		}
+	}
+
+	if err := runMigrations(db); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("running migrations: %w", err)
+	}
+	if err := ensureIncrementalAutoVacuum(db); err != nil {
+		db.Close()
+		return nil, err
+	}
+
+	// Open analytics reads only after migrations and any one-time VACUUM finish.
 	roDB, err := sql.Open("sqlite", dbFile+"?_journal_mode=WAL&_foreign_keys=on")
 	if err != nil {
 		db.Close()
@@ -90,11 +123,6 @@ func NewSQLiteStore(dataDir, projectPath string) (*SQLiteStore, error) {
 		return nil, fmt.Errorf("setting roDB busy_timeout: %w", err)
 	}
 
-	if err := runMigrations(db); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("running migrations: %w", err)
-	}
-
 	// Restrict permissions to owner only after migrations have created the file.
 	if err := os.Chmod(dbFile, 0600); err != nil {
 		roDB.Close()
@@ -102,7 +130,33 @@ func NewSQLiteStore(dataDir, projectPath string) (*SQLiteStore, error) {
 		return nil, fmt.Errorf("setting database file permissions: %w", err)
 	}
 
-	return &SQLiteStore{db: db, roDB: roDB}, nil
+	st := &SQLiteStore{
+		db:             db,
+		roDB:           roDB,
+		dbFile:         dbFile,
+		maxDBSizeBytes: int64(maxDBSizeMB) * 1024 * 1024,
+	}
+	if err := st.enforceConfiguredSize(); err != nil {
+		slog.Warn("startup database size enforcement failed", "error", err)
+	}
+	return st, nil
+}
+
+func ensureIncrementalAutoVacuum(db *sql.DB) error {
+	var mode int
+	if err := db.QueryRow(`PRAGMA auto_vacuum`).Scan(&mode); err != nil {
+		return fmt.Errorf("reading auto_vacuum mode: %w", err)
+	}
+	if mode == 2 {
+		return nil
+	}
+	if _, err := db.Exec(`PRAGMA auto_vacuum = INCREMENTAL`); err != nil {
+		return fmt.Errorf("setting incremental auto_vacuum: %w", err)
+	}
+	if _, err := db.Exec(`VACUUM`); err != nil {
+		return fmt.Errorf("converting database to incremental auto_vacuum: %w", err)
+	}
+	return nil
 }
 
 // dbPath returns the SQLite file path.
@@ -146,6 +200,10 @@ func ClassifySource(command string) string {
 
 // Save stores an Output and inserts each line into the FTS index.
 func (s *SQLiteStore) Save(ctx context.Context, output *Output) error {
+	body, bodyEncoding, err := encodeBody(output.FullOutput)
+	if err != nil {
+		return fmt.Errorf("encoding output body: %w", err)
+	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("beginning transaction: %w", err)
@@ -166,12 +224,13 @@ func (s *SQLiteStore) Save(ctx context.Context, output *Output) error {
 			(output_id, command, intent, full_output, size_bytes, line_count,
 			 exit_code, duration_ms, created_at, project_path,
 			 source_kind, refreshed_at, ttl_seconds, source_hash,
-			 raw_tokens, response_tokens, response_bytes, tokenizer)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			 raw_tokens, response_tokens, response_bytes, tokenizer,
+			 body_encoding, last_accessed_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		output.OutputID,
 		output.Command,
 		output.Intent,
-		output.FullOutput,
+		body,
 		output.SizeBytes,
 		output.LineCount,
 		output.ExitCode,
@@ -186,6 +245,8 @@ func (s *SQLiteStore) Save(ctx context.Context, output *Output) error {
 		output.ResponseTokens,
 		output.ResponseBytes,
 		output.Tokenizer,
+		bodyEncoding,
+		refreshedAt.Unix(),
 	)
 	if err != nil {
 		return fmt.Errorf("inserting output: %w", err)
@@ -208,7 +269,13 @@ func (s *SQLiteStore) Save(ctx context.Context, output *Output) error {
 		}
 	}
 
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	if err := s.enforceConfiguredSize(); err != nil {
+		slog.Warn("database size enforcement after save failed", "error", err)
+	}
+	return nil
 }
 
 // Get retrieves a single Output by ID.
@@ -217,17 +284,20 @@ func (s *SQLiteStore) Get(ctx context.Context, id string) (*Output, error) {
 		SELECT output_id, command, intent, full_output, size_bytes, line_count,
 	       exit_code, duration_ms, created_at, project_path,
 	       source_kind, refreshed_at, ttl_seconds, source_hash,
-	       raw_tokens, response_tokens, response_bytes, tokenizer
+	       raw_tokens, response_tokens, response_bytes, tokenizer, body_encoding
 		FROM outputs WHERE output_id = ?`, id)
 
 	var o Output
 	var createdAt, refreshedAt int64
+	var rawBody []byte
+	var bodyEncoding string
 	err := row.Scan(
-		&o.OutputID, &o.Command, &o.Intent, &o.FullOutput,
+		&o.OutputID, &o.Command, &o.Intent, &rawBody,
 		&o.SizeBytes, &o.LineCount, &o.ExitCode, &o.DurationMs,
 		&createdAt, &o.ProjectPath,
 		&o.SourceKind, &refreshedAt, &o.TTLSeconds, &o.SourceHash,
 		&o.RawTokens, &o.ResponseTokens, &o.ResponseBytes, &o.Tokenizer,
+		&bodyEncoding,
 	)
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("output %q not found", id)
@@ -235,8 +305,20 @@ func (s *SQLiteStore) Get(ctx context.Context, id string) (*Output, error) {
 	if err != nil {
 		return nil, fmt.Errorf("scanning output row: %w", err)
 	}
+	decoded, err := decodeBody(bodyEncoding, rawBody)
+	if err != nil {
+		return nil, fmt.Errorf("decoding output %q: %w", id, err)
+	}
+	o.FullOutput = string(decoded)
 	o.CreatedAt = time.Unix(createdAt, 0)
 	o.RefreshedAt = time.Unix(refreshedAt, 0)
+	if !s.readOnly {
+		s.touchWG.Add(1)
+		go func() {
+			defer s.touchWG.Done()
+			s.touchOutput(id)
+		}()
+	}
 	return &o, nil
 }
 
@@ -263,6 +345,10 @@ func (s *SQLiteStore) UpdateTokenMetrics(
 // UpdateRefreshed updates an existing output's content and refreshed_at in-place,
 // preserving the original output_id. Also re-indexes FTS rows for the output.
 func (s *SQLiteStore) UpdateRefreshed(ctx context.Context, output *Output) error {
+	body, bodyEncoding, err := encodeBody(output.FullOutput)
+	if err != nil {
+		return fmt.Errorf("encoding refreshed output body: %w", err)
+	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("beginning transaction: %w", err)
@@ -273,9 +359,10 @@ func (s *SQLiteStore) UpdateRefreshed(ctx context.Context, output *Output) error
 		UPDATE outputs
 		SET full_output = ?, size_bytes = ?, line_count = ?,
 		    refreshed_at = ?, duration_ms = ?, source_hash = ?,
-		    raw_tokens = ?, response_tokens = ?, response_bytes = ?, tokenizer = ?
+		    raw_tokens = ?, response_tokens = ?, response_bytes = ?, tokenizer = ?,
+		    body_encoding = ?, last_accessed_at = ?
 		WHERE output_id = ?`,
-		output.FullOutput,
+		body,
 		output.SizeBytes,
 		output.LineCount,
 		output.RefreshedAt.Unix(),
@@ -285,6 +372,8 @@ func (s *SQLiteStore) UpdateRefreshed(ctx context.Context, output *Output) error
 		output.ResponseTokens,
 		output.ResponseBytes,
 		output.Tokenizer,
+		bodyEncoding,
+		output.RefreshedAt.Unix(),
 		output.OutputID,
 	)
 	if err != nil {
@@ -313,7 +402,13 @@ func (s *SQLiteStore) UpdateRefreshed(ctx context.Context, output *Output) error
 		}
 	}
 
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	if err := s.enforceConfiguredSize(); err != nil {
+		slog.Warn("database size enforcement after refresh failed", "error", err)
+	}
+	return nil
 }
 
 // List returns lightweight metadata for outputs belonging to projectPath.
@@ -1384,6 +1479,7 @@ func (s *SQLiteStore) KnowledgeStats(ctx context.Context, projectPath string) (*
 
 // Close releases both database connections.
 func (s *SQLiteStore) Close() error {
+	s.touchWG.Wait()
 	if err := s.roDB.Close(); err != nil {
 		slog.Warn("closing read-only database connection", "error", err)
 	}

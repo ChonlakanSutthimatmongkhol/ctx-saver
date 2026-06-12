@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -770,7 +771,10 @@ func TestMigration_v9_AppliesToExistingV8DB(t *testing.T) {
 	defer db.Close()
 	var version int
 	require.NoError(t, db.QueryRow(`SELECT MAX(version) FROM schema_version`).Scan(&version))
-	assert.Equal(t, 10, version)
+	assert.Equal(t, 11, version)
+	var autoVacuum int
+	require.NoError(t, db.QueryRow(`PRAGMA auto_vacuum`).Scan(&autoVacuum))
+	assert.Equal(t, 2, autoVacuum)
 }
 
 func TestMigration_v10_TokenColumns(t *testing.T) {
@@ -817,6 +821,257 @@ func TestMigration_v10_AppliesDefaultsToExistingV9Rows(t *testing.T) {
 	assert.Zero(t, got.ResponseTokens)
 	assert.Zero(t, got.ResponseBytes)
 	assert.Empty(t, got.Tokenizer)
+}
+
+func TestMigration_v11_CompressionMetadataBackfillsExistingV10Rows(t *testing.T) {
+	dataDir := filepath.Join(t.TempDir(), ".ctx-saver")
+	require.NoError(t, os.MkdirAll(dataDir, 0700))
+	dbFile := filepath.Join(dataDir, "outputs.db")
+	db, err := sql.Open("sqlite", dbFile)
+	require.NoError(t, err)
+	_, err = db.Exec(`CREATE TABLE schema_version (version INTEGER NOT NULL PRIMARY KEY)`)
+	require.NoError(t, err)
+	_, err = db.Exec(`INSERT INTO schema_version(version) VALUES (10)`)
+	require.NoError(t, err)
+	createLegacyOutputsTable(t, db)
+	for _, stmt := range []string{
+		`ALTER TABLE outputs ADD COLUMN raw_tokens INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE outputs ADD COLUMN response_tokens INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE outputs ADD COLUMN response_bytes INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE outputs ADD COLUMN tokenizer TEXT NOT NULL DEFAULT ''`,
+	} {
+		_, err = db.Exec(stmt)
+		require.NoError(t, err)
+	}
+	_, err = db.Exec(`INSERT INTO outputs
+		(output_id, command, full_output, size_bytes, line_count, exit_code,
+		 duration_ms, created_at, project_path, refreshed_at)
+		VALUES ('legacy_v10', '[shell] echo old', 'old body', 8, 1, 0, 1, 123, '/test/project', 123)`)
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
+
+	st, err := store.NewSQLiteStore(dataDir, "/test/project")
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, st.Close()) })
+
+	db, err = sql.Open("sqlite", dbFile)
+	require.NoError(t, err)
+	defer db.Close()
+	_, err = db.Exec(`PRAGMA busy_timeout = 5000`)
+	require.NoError(t, err)
+	var encoding string
+	var lastAccessed int64
+	require.NoError(t, db.QueryRow(
+		`SELECT body_encoding, last_accessed_at FROM outputs WHERE output_id = 'legacy_v10'`,
+	).Scan(&encoding, &lastAccessed))
+	assert.Equal(t, "plain", encoding)
+	assert.Equal(t, int64(123), lastAccessed)
+	var version int
+	require.NoError(t, db.QueryRow(`SELECT MAX(version) FROM schema_version`).Scan(&version))
+	assert.Equal(t, 11, version)
+
+	got, err := st.Get(context.Background(), "legacy_v10")
+	require.NoError(t, err)
+	assert.Equal(t, "old body", got.FullOutput)
+}
+
+func TestSQLiteStore_BodyCompressionRoundTrip(t *testing.T) {
+	dataDir := filepath.Join(t.TempDir(), ".ctx-saver")
+	st, err := store.NewSQLiteStore(dataDir, "/test/project")
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, st.Close()) })
+
+	small := sampleOutput("plain_body")
+	small.FullOutput = "small body"
+	small.SizeBytes = int64(len(small.FullOutput))
+	require.NoError(t, st.Save(context.Background(), small))
+
+	large := sampleOutput("zstd_body")
+	large.FullOutput = strings.Repeat("compressible build output line\n", 1000)
+	large.SizeBytes = int64(len(large.FullOutput))
+	require.NoError(t, st.Save(context.Background(), large))
+
+	got, err := st.Get(context.Background(), large.OutputID)
+	require.NoError(t, err)
+	assert.Equal(t, large.FullOutput, got.FullOutput)
+
+	db, err := sql.Open("sqlite", filepath.Join(dataDir, "outputs.db"))
+	require.NoError(t, err)
+	defer db.Close()
+	_, err = db.Exec(`PRAGMA busy_timeout = 5000`)
+	require.NoError(t, err)
+	var plainEncoding, compressedEncoding, storageType string
+	require.NoError(t, db.QueryRow(
+		`SELECT body_encoding FROM outputs WHERE output_id = ?`, small.OutputID,
+	).Scan(&plainEncoding))
+	require.NoError(t, db.QueryRow(
+		`SELECT body_encoding, typeof(full_output) FROM outputs WHERE output_id = ?`, large.OutputID,
+	).Scan(&compressedEncoding, &storageType))
+	assert.Equal(t, "plain", plainEncoding)
+	assert.Equal(t, "zstd", compressedEncoding)
+	assert.Equal(t, "blob", storageType)
+	matches, err := st.Search(context.Background(), "compressible", large.OutputID, 5)
+	require.NoError(t, err)
+	assert.NotEmpty(t, matches)
+}
+
+func TestSQLiteStore_UpdateRefreshedCompressesBody(t *testing.T) {
+	dataDir := filepath.Join(t.TempDir(), ".ctx-saver")
+	st, err := store.NewSQLiteStore(dataDir, "/test/project")
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, st.Close()) })
+
+	out := sampleOutput("refresh_compressed")
+	require.NoError(t, st.Save(context.Background(), out))
+	body := strings.Repeat("refreshed output\n", 1000)
+	require.NoError(t, st.UpdateRefreshed(context.Background(), &store.Output{
+		OutputID:    out.OutputID,
+		FullOutput:  body,
+		SizeBytes:   int64(len(body)),
+		LineCount:   1000,
+		RefreshedAt: time.Now(),
+	}))
+
+	got, err := st.Get(context.Background(), out.OutputID)
+	require.NoError(t, err)
+	assert.Equal(t, body, got.FullOutput)
+
+	db, err := sql.Open("sqlite", filepath.Join(dataDir, "outputs.db"))
+	require.NoError(t, err)
+	defer db.Close()
+	_, err = db.Exec(`PRAGMA busy_timeout = 5000`)
+	require.NoError(t, err)
+	var encoding string
+	require.NoError(t, db.QueryRow(
+		`SELECT body_encoding FROM outputs WHERE output_id = ?`, out.OutputID,
+	).Scan(&encoding))
+	assert.Equal(t, "zstd", encoding)
+}
+
+func TestSQLiteStore_GetTouchesLastAccessed(t *testing.T) {
+	dataDir := filepath.Join(t.TempDir(), ".ctx-saver")
+	st, err := store.NewSQLiteStore(dataDir, "/test/project")
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, st.Close()) })
+
+	out := sampleOutput("touch_access")
+	out.CreatedAt = time.Now().Add(-24 * time.Hour)
+	require.NoError(t, st.Save(context.Background(), out))
+
+	db, err := sql.Open("sqlite", filepath.Join(dataDir, "outputs.db"))
+	require.NoError(t, err)
+	defer db.Close()
+	_, err = db.Exec(`PRAGMA busy_timeout = 5000`)
+	require.NoError(t, err)
+	var before int64
+	require.NoError(t, db.QueryRow(
+		`SELECT last_accessed_at FROM outputs WHERE output_id = ?`, out.OutputID,
+	).Scan(&before))
+
+	_, err = st.Get(context.Background(), out.OutputID)
+	require.NoError(t, err)
+	require.Eventually(t, func() bool {
+		var after int64
+		if scanErr := db.QueryRow(
+			`SELECT last_accessed_at FROM outputs WHERE output_id = ?`, out.OutputID,
+		).Scan(&after); scanErr != nil {
+			return false
+		}
+		return after > before
+	}, 3*time.Second, 20*time.Millisecond)
+}
+
+func TestSQLiteStore_ConfiguredSizeEvictsLRUAndPreservesNotes(t *testing.T) {
+	dataDir := filepath.Join(t.TempDir(), ".ctx-saver")
+	projectPath := "/test/project"
+	st, err := store.NewSQLiteStore(dataDir, projectPath)
+	require.NoError(t, err)
+	decision := &store.Decision{ProjectPath: projectPath, Text: "keep this decision"}
+	require.NoError(t, st.SaveDecision(context.Background(), decision))
+	require.NoError(t, st.Close())
+
+	dbFile := filepath.Join(dataDir, "outputs.db")
+	db, err := sql.Open("sqlite", dbFile)
+	require.NoError(t, err)
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	oldTime := time.Now().Add(-2 * time.Hour).Unix()
+	body := strings.Repeat("x", 3500)
+	for i := range 400 {
+		id := fmt.Sprintf("old_%03d", i)
+		_, err = tx.Exec(`INSERT INTO outputs
+			(output_id, command, intent, full_output, size_bytes, line_count,
+			 exit_code, duration_ms, created_at, project_path, source_kind,
+			 refreshed_at, ttl_seconds, source_hash, raw_tokens, response_tokens,
+			 response_bytes, tokenizer, body_encoding, last_accessed_at)
+			VALUES (?, '[shell] test', '', ?, ?, 1, 0, 1, ?, ?, 'shell:test',
+			 ?, 0, '', 0, 0, 0, '', 'plain', ?)`,
+			id, []byte(body), len(body), oldTime+int64(i), projectPath,
+			oldTime+int64(i), oldTime+int64(i),
+		)
+		require.NoError(t, err)
+		_, err = tx.Exec(
+			`INSERT INTO outputs_fts(output_id, line_no, content) VALUES (?, 1, ?)`,
+			id, body,
+		)
+		require.NoError(t, err)
+	}
+	now := time.Now().Unix()
+	_, err = tx.Exec(`INSERT INTO outputs
+		(output_id, command, intent, full_output, size_bytes, line_count,
+		 exit_code, duration_ms, created_at, project_path, source_kind,
+		 refreshed_at, ttl_seconds, source_hash, raw_tokens, response_tokens,
+		 response_bytes, tokenizer, body_encoding, last_accessed_at)
+		VALUES ('recent', '[shell] test', '', 'recent', 6, 1, 0, 1, ?, ?,
+		 'shell:test', ?, 0, '', 0, 0, 0, '', 'plain', ?)`,
+		now, projectPath, now, now,
+	)
+	require.NoError(t, err)
+	require.NoError(t, tx.Commit())
+	require.NoError(t, db.Close())
+
+	st, err = store.NewSQLiteStoreWithConfig(dataDir, projectPath, 1)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, st.Close()) })
+
+	_, err = st.Get(context.Background(), "old_000")
+	require.Error(t, err)
+	_, err = st.Get(context.Background(), "recent")
+	require.NoError(t, err)
+	gotDecision, err := st.GetDecision(context.Background(), decision.DecisionID)
+	require.NoError(t, err)
+	require.NotNil(t, gotDecision)
+	assert.Equal(t, decision.Text, gotDecision.Text)
+
+	db, err = sql.Open("sqlite", dbFile)
+	require.NoError(t, err)
+	defer db.Close()
+	_, err = db.Exec(`PRAGMA busy_timeout = 5000`)
+	require.NoError(t, err)
+	var orphanCount int
+	require.NoError(t, db.QueryRow(`
+		SELECT COUNT(*)
+		FROM outputs_fts
+		LEFT JOIN outputs ON outputs.output_id = outputs_fts.output_id
+		WHERE outputs.output_id IS NULL`,
+	).Scan(&orphanCount))
+	assert.Zero(t, orphanCount)
+}
+
+func TestSQLiteStore_MaxDBSizeZeroDoesNotEvict(t *testing.T) {
+	dataDir := filepath.Join(t.TempDir(), ".ctx-saver")
+	st, err := store.NewSQLiteStoreWithConfig(dataDir, "/test/project", 0)
+	require.NoError(t, err)
+	out := sampleOutput("unlimited_old")
+	out.CreatedAt = time.Now().Add(-48 * time.Hour)
+	require.NoError(t, st.Save(context.Background(), out))
+	require.NoError(t, st.Close())
+
+	st, err = store.NewSQLiteStoreWithConfig(dataDir, "/test/project", 0)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, st.Close()) })
+	_, err = st.Get(context.Background(), out.OutputID)
+	require.NoError(t, err)
 }
 
 func TestGetStats_ExactTokenAggregationExcludesLegacyRows(t *testing.T) {
