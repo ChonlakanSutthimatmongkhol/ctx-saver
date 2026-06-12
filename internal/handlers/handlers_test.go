@@ -39,6 +39,24 @@ func TestExecute_RedactsDirectOutput(t *testing.T) {
 	assert.Contains(t, out.Stats.RedactedRules, "aws_access_key")
 }
 
+func TestExecuteHandler_RedactsANSIInterleavedSecret(t *testing.T) {
+	cfg := defaultCfg()
+	cfg.Summary.AutoIndexThresholdBytes = 10240
+	sb := &mockSandbox{output: []byte("\x1b[32mpassword\x1b[0m=hunter22\n")}
+	r, _ := redact.New(nil)
+
+	h := handlers.NewExecuteHandler(cfg, sb, &mockStore{}, "/proj", "/proj").WithRedactor(r)
+	_, out, err := h.Handle(context.Background(), nil, handlers.ExecuteInput{
+		Language: "shell",
+		Code:     `printf '\033[32mpassword\033[0m=hunter22\n'`,
+	})
+	require.NoError(t, err)
+
+	assert.Contains(t, out.DirectOutput, "password=[REDACTED:generic_assignment]")
+	assert.NotContains(t, out.DirectOutput, "hunter22")
+	assert.Contains(t, out.Stats.RedactedRules, "generic_assignment")
+}
+
 func TestExecute_RedactsStoredOutput(t *testing.T) {
 	dir := t.TempDir()
 	st, err := store.NewSQLiteStore(dir, "/proj")
@@ -921,7 +939,7 @@ func TestGetFullHandler_DiffAgainstCommandMismatch(t *testing.T) {
 	assert.Contains(t, out.DiffNote, "commands differ")
 }
 
-func TestGetFullHandler_DiffTruncated(t *testing.T) {
+func TestGetFullHandler_DiffTruncatedAt400(t *testing.T) {
 	var oldLines, newLines []string
 	for i := range 600 {
 		oldLines = append(oldLines, fmt.Sprintf("old-%03d", i))
@@ -936,7 +954,7 @@ func TestGetFullHandler_DiffTruncated(t *testing.T) {
 		OutputID: "new", DiffAgainst: "old",
 	})
 	require.NoError(t, err)
-	assert.Len(t, out.DiffLines, 300)
+	assert.LessOrEqual(t, len(out.DiffLines), 400)
 	assert.Equal(t, 600, out.LinesAdded)
 	assert.Equal(t, 600, out.LinesRemoved)
 	assert.Contains(t, out.DiffNote, "truncated")

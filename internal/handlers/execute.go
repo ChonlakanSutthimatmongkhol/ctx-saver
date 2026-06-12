@@ -114,13 +114,14 @@ func (h *ExecuteHandler) Handle(ctx context.Context, _ *mcp.CallToolRequest, inp
 			len(result.Output), h.cfg.Storage.MaxOutputSizeMB)
 	}
 
-	// Redact secrets once, before the small/large branch, so direct_output,
-	// summary, the stored FullOutput, and the FTS index all see scrubbed bytes.
+	// Strip ANSI before redaction so interleaved color codes cannot split a
+	// secret across a pattern boundary. Redact once before the small/large
+	// branch so every returned, stored, and indexed form sees scrubbed bytes.
+	result.Output = summary.StripANSI(result.Output)
 	var redactedRules []string
 	if h.redactor != nil {
 		result.Output, redactedRules = h.redactor.Redact(result.Output)
 	}
-	result.Output = summary.StripANSI(result.Output)
 
 	stats := OutputStats{
 		SizeBytes:     len(result.Output),
