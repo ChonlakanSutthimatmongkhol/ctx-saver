@@ -142,6 +142,9 @@ ctx_get_full(output_id="out_20260508_ab12cd34", line_range=[120, 170])
 `ctx_stats` counts raw and returned tokens locally with the `o200k_base`
 tokenizer. No API call or API key is required. Legacy rows created before
 v0.13.0 are reported as `untokenized_outputs` and excluded from exact savings.
+Outputs larger than 2 MiB are stored immediately and tokenized in the
+background; they may appear temporarily in `untokenized_outputs`. Scalar metric
+fields remain present at zero when the selected scope has no matching data.
 
 | Command | Raw | Summary | Saving |
 |---------|-----|---------|--------|
@@ -268,6 +271,10 @@ summary:
   tail_lines: 5
   auto_index_threshold_bytes: 32768
   smart_format: true
+
+hooks:
+  session_history_limit: 10
+  view_deny_threshold_bytes: 131072  # 0 disables Copilot reference-read denial
 
 redaction:
   enabled: true            # scrub secrets before storage (default: true)

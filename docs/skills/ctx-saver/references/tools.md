@@ -16,6 +16,9 @@ Full content is always retrievable on demand.
 | `task` | string | N | Optional task scope. When set, `recent_decisions` contains notes for that task. When omitted, only unscoped notes are returned. |
 
 **Output**
+Scalar metric fields are always present. A value of zero means the selected
+scope has no matching data; it does not mean the field is unsupported.
+
 | Field | Description |
 |-------|-------------|
 | `project_path` | Resolved project path |

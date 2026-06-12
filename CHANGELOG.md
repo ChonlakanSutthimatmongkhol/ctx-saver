@@ -2,6 +2,25 @@
 
 All notable changes to ctx-saver will be documented in this file.
 
+## v0.13.1 — Copilot view routing and latency fixes
+
+### Added
+- `hooks.view_deny_threshold_bytes`, defaulting to 128 KiB and supporting `0`
+  to disable Copilot native-view enforcement independently of output storage.
+- Background token-metric backfill for stored outputs larger than 2 MiB.
+
+### Fixed
+- Copilot native `view` calls now always allow source-code files, preserving
+  exact native read-to-edit workflows while redirecting only oversized
+  reference files to `ctx_read_file`.
+- `ctx_stats` scalar metric fields are present for every scope even when zero,
+  so callers no longer need to retry with broader scopes to discover fields.
+- Large stored outputs no longer block request completion on tokenization;
+  purged rows and worker failures are handled without affecting requests.
+
+### Notes
+- Schema version remains 10 and the MCP tool count remains 10.
+
 ## v0.13.0 — Copilot reliability and exact token accounting
 
 ### Added

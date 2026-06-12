@@ -15,7 +15,7 @@ argument-hint: 'Describe the command or file you want to run/read'
 
 # ctx-saver Workflow
 
-ctx-saver is an MCP server that stores large command outputs in SQLite and returns a compact summary. For ctx_execute, summaries are format-aware (flutter_test, go_test, json, git_log, generic).
+ctx-saver is an MCP server that stores large command outputs in SQLite and returns a compact summary. For ctx_execute, summaries are format-aware (flutter_test, go_test, json, git_log, generic). Outputs larger than 2 MiB are tokenized asynchronously after storage, and ctx_stats scalar metrics remain present when their value is zero.
 
 ## When to Use
 

@@ -125,6 +125,7 @@ Following these rules extends productive session length **5–10×** with minima
 ## Verification
 
 Call `ctx_stats` every ~20 turns.
+- Scalar metrics are always present; zero means no data in the selected scope.
 - `saving_percent` should be > 80%
 - `missed_large_outputs` should be 0
 - `adherence_score` is an informational raw ratio

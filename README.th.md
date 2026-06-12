@@ -141,6 +141,9 @@ ctx_get_full(output_id="out_20260508_ab12cd34", line_range=[120, 170])
 `ctx_stats` นับ raw tokens และ response tokens ในเครื่องด้วย tokenizer
 `o200k_base` โดยไม่เรียก API และไม่ต้องใช้ API key ข้อมูลเก่าก่อน v0.13.0
 จะแสดงใน `untokenized_outputs` และไม่ปนกับเปอร์เซ็นต์แบบ exact
+output ที่ใหญ่กว่า 2 MiB จะถูกเก็บก่อนแล้วนับ token ใน background จึงอาจแสดง
+ใน `untokenized_outputs` ชั่วคราว ส่วน metric แบบ scalar จะแสดงค่า `0`
+เสมอเมื่อ scope ที่เลือกยังไม่มีข้อมูล
 
 วัดจากคำสั่งจริงที่รันผ่าน `ctx_execute` ใน repository นี้
 
@@ -264,6 +267,10 @@ summary:
   tail_lines: 5
   auto_index_threshold_bytes: 32768
   smart_format: true
+
+hooks:
+  session_history_limit: 10
+  view_deny_threshold_bytes: 131072  # 0 = ปิด Copilot reference-read denial
 
 redaction:
   enabled: true            # ลบ secret ก่อนเก็บ (default: true)

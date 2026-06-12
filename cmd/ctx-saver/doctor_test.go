@@ -45,7 +45,7 @@ func TestDoctor_VersionMismatchFails(t *testing.T) {
 
 	var output bytes.Buffer
 	require.Error(t, doctorProject(dir, &output))
-	assert.Contains(t, output.String(), "expected ctx-saver 0.13.0")
+	assert.Contains(t, output.String(), "expected ctx-saver 0.13.1")
 }
 
 func TestDoctor_MissingInstructionsAndHooksAreWarnings(t *testing.T) {
