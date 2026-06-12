@@ -205,6 +205,8 @@ Returns freshness.stale_level field — see ctx_session_init for usage policy.`,
 Use this only when ctx_search and ctx_get_section are insufficient (e.g., you need raw diff output or a region without a heading).
 Prefer ctx_get_section for named sections and ctx_search for keyword retrieval — both return less context than ctx_get_full.
 Parameters: output_id (required), start_line / end_line (optional, 1-based).
+Pass diff_against=<older output_id> (for example previous_output_id from
+ctx_execute) to return a unified diff instead of full content.
 
 Returns freshness.stale_level field — see ctx_session_init for usage policy.`,
 	}, getFullH.Handle)

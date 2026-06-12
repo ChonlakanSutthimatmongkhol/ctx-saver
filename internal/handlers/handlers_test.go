@@ -874,6 +874,97 @@ func TestGetFullHandler_LineRange_ClampedToTotalLines(t *testing.T) {
 	assert.Equal(t, 2, out.Returned) // lines 2 and 3
 }
 
+func TestGetFullHandler_DiffAgainst(t *testing.T) {
+	st := &mockStore{saved: []*store.Output{
+		{OutputID: "old", Command: "[shell] go test", FullOutput: "one\ntwo\nthree\n"},
+		{OutputID: "new", Command: "[shell] go test", FullOutput: "one\nTWO\nthree\nfour\n"},
+	}}
+	h := handlers.NewGetFullHandler(st, "/proj")
+	_, out, err := h.Handle(context.Background(), nil, handlers.GetFullInput{
+		OutputID: "new", DiffAgainst: "old",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "old", out.DiffAgainst)
+	assert.Equal(t, 2, out.LinesAdded)
+	assert.Equal(t, 1, out.LinesRemoved)
+	assert.NotEmpty(t, out.DiffLines)
+	assert.Empty(t, out.Lines)
+	assert.Contains(t, strings.Join(out.DiffLines, "\n"), "+TWO")
+	assert.Contains(t, strings.Join(out.DiffLines, "\n"), "-two")
+}
+
+func TestGetFullHandler_DiffIdentical(t *testing.T) {
+	st := &mockStore{saved: []*store.Output{
+		{OutputID: "old", Command: "same", FullOutput: "unchanged\n"},
+		{OutputID: "new", Command: "same", FullOutput: "unchanged\n"},
+	}}
+	h := handlers.NewGetFullHandler(st, "/proj")
+	_, out, err := h.Handle(context.Background(), nil, handlers.GetFullInput{
+		OutputID: "new", DiffAgainst: "old",
+	})
+	require.NoError(t, err)
+	assert.NotNil(t, out.DiffLines)
+	assert.Empty(t, out.DiffLines)
+	assert.Contains(t, out.DiffNote, "identical")
+}
+
+func TestGetFullHandler_DiffAgainstCommandMismatch(t *testing.T) {
+	st := &mockStore{saved: []*store.Output{
+		{OutputID: "old", Command: "go test ./old", FullOutput: "old\n"},
+		{OutputID: "new", Command: "go test ./new", FullOutput: "new\n"},
+	}}
+	h := handlers.NewGetFullHandler(st, "/proj")
+	_, out, err := h.Handle(context.Background(), nil, handlers.GetFullInput{
+		OutputID: "new", DiffAgainst: "old",
+	})
+	require.NoError(t, err)
+	assert.Contains(t, out.DiffNote, "commands differ")
+}
+
+func TestGetFullHandler_DiffTruncated(t *testing.T) {
+	var oldLines, newLines []string
+	for i := range 600 {
+		oldLines = append(oldLines, fmt.Sprintf("old-%03d", i))
+		newLines = append(newLines, fmt.Sprintf("new-%03d", i))
+	}
+	st := &mockStore{saved: []*store.Output{
+		{OutputID: "old", Command: "test", FullOutput: strings.Join(oldLines, "\n")},
+		{OutputID: "new", Command: "test", FullOutput: strings.Join(newLines, "\n")},
+	}}
+	h := handlers.NewGetFullHandler(st, "/proj")
+	_, out, err := h.Handle(context.Background(), nil, handlers.GetFullInput{
+		OutputID: "new", DiffAgainst: "old",
+	})
+	require.NoError(t, err)
+	assert.Len(t, out.DiffLines, 300)
+	assert.Equal(t, 600, out.LinesAdded)
+	assert.Equal(t, 600, out.LinesRemoved)
+	assert.Contains(t, out.DiffNote, "truncated")
+	assert.Contains(t, out.DiffNote, "line_range")
+}
+
+func TestGetFullHandler_DiffAndLineRangeMutuallyExclusive(t *testing.T) {
+	h := handlers.NewGetFullHandler(&mockStore{}, "/proj")
+	_, _, err := h.Handle(context.Background(), nil, handlers.GetFullInput{
+		OutputID: "new", DiffAgainst: "old", LineRange: []int{1, 2},
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "mutually exclusive")
+}
+
+func TestGetFullHandler_DiffAgainstMissing(t *testing.T) {
+	st := &mockStore{saved: []*store.Output{
+		{OutputID: "new", Command: "test", FullOutput: "new\n"},
+	}}
+	h := handlers.NewGetFullHandler(st, "/proj")
+	_, _, err := h.Handle(context.Background(), nil, handlers.GetFullInput{
+		OutputID: "new", DiffAgainst: "purged",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "diff_against")
+	assert.Contains(t, err.Error(), "purged")
+}
+
 // ── GetSectionHandler tests (Task 5.4) ───────────────────────────────────
 
 func sectionOutput(t *testing.T, content string) *store.SQLiteStore {
