@@ -1,0 +1,8 @@
+Command line invocation:
+    /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild -scheme Runner build
+
+CompileSwift normal arm64 /workspace/ios/Runner/AppDelegate.swift
+/workspace/ios/Runner/AppDelegate.swift:42:17: warning: immutable value was never used
+/workspace/ios/Runner/AppDelegate.swift:58:9: error: cannot find 'missingValue' in scope
+
+** BUILD FAILED **

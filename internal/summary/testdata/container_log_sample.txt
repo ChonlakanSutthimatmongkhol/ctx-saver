@@ -1,0 +1,8 @@
+2026-06-12T08:00:00Z INFO server starting
+2026-06-12T08:00:01Z WARN retrying database connection
+2026-06-12T08:00:02Z ERROR request failed status=500
+2026-06-12T08:00:03Z panic: runtime error: index out of range
+goroutine 42 [running]:
+main.handleRequest()
+    /app/main.go:84 +0x120
+2026-06-12T08:00:04Z FATAL server stopped

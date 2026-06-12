@@ -1,0 +1,7 @@
+internal/store/sqlite.go:215:2: error return value not checked (errcheck)
+internal/handlers/execute.go:118:1: line is 124 characters (lll)
+internal/hooks/pretooluse.go:72:3: S1008: should use return condition directly (staticcheck)
+3 issues:
+* errcheck: 1
+* lll: 1
+* staticcheck: 1

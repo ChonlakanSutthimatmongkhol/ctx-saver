@@ -9,6 +9,11 @@ import (
 var registeredFormatters = []formats.Formatter{
 	&formats.FlutterTestFormatter{},
 	&formats.GoTestFormatter{},
+	&formats.PytestFormatter{},
+	&formats.JestFormatter{},
+	&formats.ContainerLogFormatter{},
+	&formats.LintFormatter{},
+	&formats.BuildLogFormatter{},
 	&formats.JSONFormatter{},
 	&formats.GitLogFormatter{},
 }

@@ -1,0 +1,15 @@
+FAIL src/sum.test.ts
+  sum
+    ✓ adds positive numbers (3 ms)
+    ✕ rejects an invalid total (5 ms)
+
+  ● sum › rejects an invalid total
+
+    expect(received).toBe(expected)
+    Expected: 4
+    Received: 3
+
+Test Suites: 1 failed, 2 passed, 3 total
+Tests:       1 failed, 8 passed, 9 total
+Snapshots:   0 total
+Time:        1.234 s

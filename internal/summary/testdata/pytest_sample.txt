@@ -1,0 +1,13 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.13.1, pytest-8.3.4
+collected 3 items
+
+tests/test_math.py .F.                                                   [100%]
+
+=================================== FAILURES ===================================
+______________________________ test_divide_zero _______________________________
+E   ZeroDivisionError: division by zero
+
+=========================== short test summary info ============================
+FAILED tests/test_math.py::test_divide_zero - ZeroDivisionError: division by zero
+========================= 1 failed, 2 passed in 0.12s ==========================
